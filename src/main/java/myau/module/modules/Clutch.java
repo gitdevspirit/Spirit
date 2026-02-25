@@ -19,16 +19,11 @@ import net.minecraft.util.MathHelper;
 public class Clutch extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    // ── Settings ──────────────────────────────────────────────────────────────
-
-    public final SliderSetting   triggerDepth = register(new SliderSetting("Trigger Depth", 3.0, 1.0, 10.0, 0.5));
+    public final SliderSetting   triggerDepth = register(new SliderSetting("Trigger Depth", 4.0, 1.0, 10.0, 0.5));
     public final SliderSetting   speed        = register(new SliderSetting("Speed",         1.0, 0.5,  3.0, 0.05));
     public final SliderSetting   bridgePitch  = register(new SliderSetting("Bridge Pitch",  80,  60,   90,   1));
-    public final DropdownSetting mode         = register(new DropdownSetting("Mode", 0, "STOP", "SNEAK", "BRIDGE"));
-    public final BooleanSetting  swing        = register(new BooleanSetting("Swing",        true));
-    public final BooleanSetting  onlyFalling  = register(new BooleanSetting("Only Falling", false));
-
-    // ── State ─────────────────────────────────────────────────────────────────
+    public final DropdownSetting mode         = register(new DropdownSetting("Mode", 0, "CLUTCH", "SNEAK", "BRIDGE"));
+    public final BooleanSetting  swing        = register(new BooleanSetting("Swing", true));
 
     private boolean clutching = false;
     private int     blockSlot = -1;
@@ -43,23 +38,17 @@ public class Clutch extends Module {
         blockSlot = -1;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /** True when there are no solid blocks within triggerDepth below feet */
+    // ── no solid block within triggerDepth below feet ─────────────────────────
     private boolean isOverVoid() {
         double px = mc.thePlayer.posX;
         double py = mc.thePlayer.posY;
         double pz = mc.thePlayer.posZ;
-        double depth = triggerDepth.getValue();
-
-        for (double d = 0.25; d <= depth; d += 0.25) {
-            BlockPos check = new BlockPos(px, py - d, pz);
-            if (!BlockUtil.isReplaceable(check)) return false;
+        for (double d = 0.25; d <= triggerDepth.getValue(); d += 0.25) {
+            if (!BlockUtil.isReplaceable(new BlockPos(px, py - d, pz))) return false;
         }
         return true;
     }
 
-    /** Find first hotbar slot holding a solid placeable block */
     private int findBlockSlot() {
         for (int i = 0; i < 9; i++) {
             if (ItemUtil.isBlock(mc.thePlayer.inventory.getStackInSlot(i))) return i;
@@ -68,45 +57,61 @@ public class Clutch extends Module {
     }
 
     /**
-     * Places a block at exactly foot-level below the player.
+     * Scans from current foot-Y downward (up to triggerDepth blocks) looking
+     * for any surface we can place against right now.  This means the block
+     * gets placed the instant a valid face enters reach — no waiting to land.
      *
-     * Strategy (in priority order):
-     *   1. Place on top of the block that is at (footY - 1) directly below  → UP face
-     *   2. Place against a horizontal neighbour at exactly footY - 1         → side face
-     *
-     * We NEVER go below footY - 1 so the result is always a flat floor.
+     * Priority per Y level:
+     *   1. TOP face of the block one below that Y  (most reliable, flat result)
+     *   2. SIDE face of a horizontal neighbour at that Y
      */
-    private boolean placeBelow() {
+    private boolean placeFalling() {
         if (blockSlot < 0) return false;
 
-        // The block position that should become our floor
-        // MathHelper.floor_double gives us the correct integer Y regardless of sub-block offset
-        int floorX = MathHelper.floor_double(mc.thePlayer.posX);
-        int floorY = MathHelper.floor_double(mc.thePlayer.posY) - 1;
-        int floorZ = MathHelper.floor_double(mc.thePlayer.posZ);
-        BlockPos targetPos = new BlockPos(floorX, floorY, floorZ);
+        double px = mc.thePlayer.posX;
+        double py = mc.thePlayer.posY;
+        double pz = mc.thePlayer.posZ;
+        double reach = mc.playerController.getBlockReachDistance();
+        double depth = triggerDepth.getValue();
 
-        // ── 1. Block directly below the floor position (place on its UP face) ─
-        BlockPos beneath = targetPos.down(); // floorY - 1
-        if (!BlockUtil.isReplaceable(beneath)) {
-            if (doPlace(beneath, EnumFacing.UP)) return true;
-        }
+        // Walk down from feet, one block at a time
+        int startY = MathHelper.floor_double(py) - 1;
+        int endY   = MathHelper.floor_double(py - depth);
 
-        // ── 2. Horizontal neighbours at exactly floorY (place on their side face) ─
-        for (EnumFacing face : new EnumFacing[]{
-                EnumFacing.NORTH, EnumFacing.SOUTH, EnumFacing.EAST, EnumFacing.WEST }) {
+        for (int scanY = startY; scanY >= endY; scanY--) {
+            int scanX = MathHelper.floor_double(px);
+            int scanZ = MathHelper.floor_double(pz);
+            BlockPos targetPos = new BlockPos(scanX, scanY, scanZ);
 
-            BlockPos neighbour = targetPos.offset(face);
-            if (!BlockUtil.isReplaceable(neighbour)) {
-                // Place against the face of the neighbour that points back toward targetPos
-                if (doPlace(neighbour, face.getOpposite())) return true;
+            // ── 1. TOP face of block directly beneath targetPos ───────────────
+            BlockPos beneath = targetPos.down();
+            if (!BlockUtil.isReplaceable(beneath)) {
+                double dist = mc.thePlayer.getDistanceSq(
+                        scanX + 0.5, scanY - 1 + 1.0, scanZ + 0.5);
+                if (dist <= reach * reach) {
+                    if (doPlace(beneath, EnumFacing.UP)) return true;
+                }
+            }
+
+            // ── 2. SIDE faces of horizontal neighbours at this Y ──────────────
+            for (EnumFacing face : new EnumFacing[]{
+                    EnumFacing.NORTH, EnumFacing.SOUTH,
+                    EnumFacing.EAST,  EnumFacing.WEST }) {
+                BlockPos neighbour = targetPos.offset(face);
+                if (!BlockUtil.isReplaceable(neighbour)) {
+                    double dist = mc.thePlayer.getDistanceSq(
+                            neighbour.getX() + 0.5,
+                            neighbour.getY() + 0.5,
+                            neighbour.getZ() + 0.5);
+                    if (dist <= reach * reach) {
+                        if (doPlace(neighbour, face.getOpposite())) return true;
+                    }
+                }
             }
         }
-
         return false;
     }
 
-    /** Perform the actual block placement against the given block+face, switching slots silently */
     private boolean doPlace(BlockPos against, EnumFacing face) {
         Vec3 hitVec = BlockUtil.getClickVec(against, face);
         int prev = mc.thePlayer.inventory.currentItem;
@@ -125,22 +130,19 @@ public class Clutch extends Module {
         return placed;
     }
 
-    // ── Events ────────────────────────────────────────────────────────────────
-
     @EventTarget
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
-        // Landed — disengage
         if (mc.thePlayer.onGround) {
             clutching = false;
             blockSlot = -1;
             return;
         }
 
-        // Only Falling gate
-        if (onlyFalling.getValue() && mc.thePlayer.motionY >= 0) {
+        // Only activate when actually falling downward
+        if (mc.thePlayer.motionY >= 0) {
             clutching = false;
             return;
         }
@@ -156,32 +158,34 @@ public class Clutch extends Module {
 
         int modeIdx = mode.getIndex();
 
-        // ── STOP ─────────────────────────────────────────────────────────────
+        // ── CLUTCH mode ───────────────────────────────────────────────────────
+        // Silently rotate view downward so placement packets are valid,
+        // then aggressively try to place at every reachable Y level below us.
+        // Horizontal movement is preserved — this feels like a natural catch.
         if (modeIdx == 0) {
-            // Bleed off horizontal speed then place
-            double spd = MoveUtil.getSpeed();
-            if (spd > 0.01) MoveUtil.setSpeed(spd * (0.25 * speed.getValue()));
-            placeBelow();
+            // Silent rotation — look straight down so server accepts the placement
+            Myau.rotationManager.setRotation(
+                    mc.thePlayer.rotationYaw, 89.9f, 1, false);
+            placeFalling();
         }
 
-        // ── SNEAK ─────────────────────────────────────────────────────────────
+        // ── SNEAK mode ────────────────────────────────────────────────────────
         else if (modeIdx == 1) {
-            placeBelow();
-            // edge-stop handled by SafeWalkEvent
+            Myau.rotationManager.setRotation(
+                    mc.thePlayer.rotationYaw, 89.9f, 1, false);
+            placeFalling();
+            // edge-stop via SafeWalkEvent
         }
 
-        // ── BRIDGE ────────────────────────────────────────────────────────────
+        // ── BRIDGE mode ───────────────────────────────────────────────────────
         else if (modeIdx == 2) {
-            // Look straight down enough to place
             Myau.rotationManager.setRotation(
                     mc.thePlayer.rotationYaw,
                     (float) bridgePitch.getValue(),
                     1, false);
-
             double moveSpeed = MoveUtil.getBaseMoveSpeed() * speed.getValue();
             MoveUtil.setSpeed(moveSpeed, MoveUtil.getMoveYaw());
-
-            placeBelow();
+            placeFalling();
         }
     }
 
