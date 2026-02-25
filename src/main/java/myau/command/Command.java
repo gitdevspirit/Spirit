@@ -11,9 +11,8 @@ public abstract class Command {
         this.aliases = aliases;
     }
 
-    public Command(String description, String... aliases) {
-        this.aliases = aliases;
-        this.description = description;
+    protected void setDescription(String desc) {
+        this.description = desc;
     }
 
     /** Called with the arguments AFTER the command name. e.g. ".b Sprint R" → args = ["Sprint", "R"] */
