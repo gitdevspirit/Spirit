@@ -16,12 +16,7 @@ public class BindCommand extends Command {
 
     public BindCommand() {
         super("b", "bind");
-        // set description via field since we use varargs constructor
-    }
-
-    @Override
-    public String getDescription() {
-        return "Bind a module to a key. Usage: .b <module> <key|none>";
+        setDescription("Bind a module to a key. Usage: .b <module> <key|none>");
     }
 
     @Override
@@ -85,7 +80,6 @@ public class BindCommand extends Command {
     }
 
     private void saveConfig() {
-        // Triggers a config save using the same Config approach as the rest of the client
         new myau.config.Config("default", false).save();
     }
 }
