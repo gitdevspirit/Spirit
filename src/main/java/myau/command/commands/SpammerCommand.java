@@ -39,7 +39,7 @@ public class SpammerCommand extends Command {
             String newText = sb.toString();
             spammer.text.setValue(newText);
             reply("&7Spammer text set to: &f" + newText);
-            new myau.config.Config("default", false).save();
+            new myau.config.Config(myau.config.Config.lastConfig != null ? myau.config.Config.lastConfig : "default", false).save();
             return;
         }
 
