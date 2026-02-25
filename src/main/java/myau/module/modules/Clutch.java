@@ -1,12 +1,10 @@
 package myau.module.modules;
 
-import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.SafeWalkEvent;
-import myau.events.TickEvent;
+import myau.events.UpdateEvent;
 import myau.module.BooleanSetting;
-import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.util.*;
@@ -19,14 +17,21 @@ import net.minecraft.util.MathHelper;
 public class Clutch extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   triggerDepth = register(new SliderSetting("Trigger Depth", 4.0, 1.0, 10.0, 0.5));
-    public final SliderSetting   speed        = register(new SliderSetting("Speed",         1.0, 0.5,  3.0, 0.05));
-    public final SliderSetting   bridgePitch  = register(new SliderSetting("Bridge Pitch",  80,  60,   90,   1));
-    public final DropdownSetting mode         = register(new DropdownSetting("Mode", 0, "CLUTCH", "SNEAK", "BRIDGE"));
-    public final BooleanSetting  swing        = register(new BooleanSetting("Swing", true));
+    // How many air blocks below feet before clutch activates
+    public final SliderSetting  triggerDepth = register(new SliderSetting("Trigger Depth", 4.0, 1.0, 10.0, 0.5));
+    // Bridge forward speed multiplier (1.0 = normal walk speed)
+    public final SliderSetting  speed        = register(new SliderSetting("Speed",         1.0, 0.5,  3.0, 0.05));
+    // Whether to actively bridge forward while clutching
+    public final BooleanSetting bridge       = register(new BooleanSetting("Bridge",       false));
+    // Swing arm on placement
+    public final BooleanSetting swing        = register(new BooleanSetting("Swing",        true));
 
     private boolean clutching = false;
     private int     blockSlot = -1;
+
+    // Stored placement target for this tick — set in UpdateEvent, used in placeBelow
+    private BlockPos   pendingBlock = null;
+    private EnumFacing pendingFace  = null;
 
     public Clutch() {
         super("Clutch", false);
@@ -36,9 +41,12 @@ public class Clutch extends Module {
     public void onDisabled() {
         clutching = false;
         blockSlot = -1;
+        pendingBlock = null;
+        pendingFace  = null;
     }
 
-    // ── no solid block within triggerDepth below feet ─────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private boolean isOverVoid() {
         double px = mc.thePlayer.posX;
         double py = mc.thePlayer.posY;
@@ -57,91 +65,117 @@ public class Clutch extends Module {
     }
 
     /**
-     * Scans from current foot-Y downward (up to triggerDepth blocks) looking
-     * for any surface we can place against right now.  This means the block
-     * gets placed the instant a valid face enters reach — no waiting to land.
+     * Finds the best block+face to place against right now.
+     * Scans from current foot-Y downward so it triggers the instant
+     * any surface enters reach — no waiting to land.
      *
-     * Priority per Y level:
-     *   1. TOP face of the block one below that Y  (most reliable, flat result)
-     *   2. SIDE face of a horizontal neighbour at that Y
+     * Priority:
+     *   1. TOP of block directly beneath each scan Y  (always flat)
+     *   2. SIDE of a horizontal neighbour at each scan Y
      */
-    private boolean placeFalling() {
-        if (blockSlot < 0) return false;
-
-        double px = mc.thePlayer.posX;
-        double py = mc.thePlayer.posY;
-        double pz = mc.thePlayer.posZ;
+    private boolean findPlacement() {
+        double px   = mc.thePlayer.posX;
+        double py   = mc.thePlayer.posY;
+        double pz   = mc.thePlayer.posZ;
         double reach = mc.playerController.getBlockReachDistance();
         double depth = triggerDepth.getValue();
 
-        // Walk down from feet, one block at a time
         int startY = MathHelper.floor_double(py) - 1;
         int endY   = MathHelper.floor_double(py - depth);
 
         for (int scanY = startY; scanY >= endY; scanY--) {
             int scanX = MathHelper.floor_double(px);
             int scanZ = MathHelper.floor_double(pz);
-            BlockPos targetPos = new BlockPos(scanX, scanY, scanZ);
 
-            // ── 1. TOP face of block directly beneath targetPos ───────────────
-            BlockPos beneath = targetPos.down();
+            // 1. TOP face of block one below this Y
+            BlockPos beneath = new BlockPos(scanX, scanY - 1, scanZ);
             if (!BlockUtil.isReplaceable(beneath)) {
-                double dist = mc.thePlayer.getDistanceSq(
-                        scanX + 0.5, scanY - 1 + 1.0, scanZ + 0.5);
-                if (dist <= reach * reach) {
-                    if (doPlace(beneath, EnumFacing.UP)) return true;
+                if (inReach(beneath, reach)) {
+                    pendingBlock = beneath;
+                    pendingFace  = EnumFacing.UP;
+                    return true;
                 }
             }
 
-            // ── 2. SIDE faces of horizontal neighbours at this Y ──────────────
+            // 2. Horizontal neighbours at this exact Y
             for (EnumFacing face : new EnumFacing[]{
                     EnumFacing.NORTH, EnumFacing.SOUTH,
                     EnumFacing.EAST,  EnumFacing.WEST }) {
-                BlockPos neighbour = targetPos.offset(face);
+                BlockPos neighbour = new BlockPos(scanX, scanY, scanZ).offset(face);
                 if (!BlockUtil.isReplaceable(neighbour)) {
-                    double dist = mc.thePlayer.getDistanceSq(
-                            neighbour.getX() + 0.5,
-                            neighbour.getY() + 0.5,
-                            neighbour.getZ() + 0.5);
-                    if (dist <= reach * reach) {
-                        if (doPlace(neighbour, face.getOpposite())) return true;
+                    if (inReach(neighbour, reach)) {
+                        pendingBlock = neighbour;
+                        pendingFace  = face.getOpposite();
+                        return true;
                     }
                 }
             }
         }
+
+        pendingBlock = null;
+        pendingFace  = null;
         return false;
     }
 
-    private boolean doPlace(BlockPos against, EnumFacing face) {
-        Vec3 hitVec = BlockUtil.getClickVec(against, face);
+    private boolean inReach(BlockPos pos, double reach) {
+        return mc.thePlayer.getDistanceSq(
+                pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) <= reach * reach;
+    }
+
+    /** Computes the yaw/pitch required to be looking at pendingBlock's pendingFace */
+    private float[] getPlacementRotation() {
+        Vec3 eyes   = mc.thePlayer.getPositionEyes(1.0f);
+        Vec3 target = BlockUtil.getClickVec(pendingBlock, pendingFace);
+        double dx   = target.xCoord - eyes.xCoord;
+        double dy   = target.yCoord - eyes.yCoord;
+        double dz   = target.zCoord - eyes.zCoord;
+        double horiz = Math.sqrt(dx * dx + dz * dz);
+        float yaw   = (float)(Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0f;
+        float pitch = (float)(-Math.atan2(dy, horiz) * 180.0 / Math.PI);
+        return new float[]{ yaw, MathHelper.clamp_float(pitch, -90f, 90f) };
+    }
+
+    private void doPlace() {
+        if (pendingBlock == null || blockSlot < 0) return;
+        Vec3 hitVec = BlockUtil.getClickVec(pendingBlock, pendingFace);
         int prev = mc.thePlayer.inventory.currentItem;
         mc.thePlayer.inventory.currentItem = blockSlot;
-
         ItemStack held = mc.thePlayer.inventory.getCurrentItem();
         boolean placed = mc.playerController.onPlayerRightClick(
-                mc.thePlayer, mc.theWorld, held, against, face, hitVec);
-
+                mc.thePlayer, mc.theWorld, held, pendingBlock, pendingFace, hitVec);
         mc.thePlayer.inventory.currentItem = prev;
-
         if (placed) {
             if (swing.getValue()) mc.thePlayer.swingItem();
             else PacketUtil.sendPacket(new C0APacketAnimation());
         }
-        return placed;
     }
 
+    // ── Events ────────────────────────────────────────────────────────────────
+
+    /**
+     * UpdateEvent fires during onUpdate() — this is where we:
+     * 1. Decide if we should be clutching
+     * 2. Find a placement target
+     * 3. Set a SILENT server-side rotation toward the placement face
+     *    using event.setRotation() — this does NOT move the camera visually
+     * 4. Place the block (server will accept it because the sent rotation matches)
+     * 5. If Bridge is on, push movement forward
+     */
     @EventTarget
-    public void onTick(TickEvent event) {
+    public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
+        // Reset when landed
         if (mc.thePlayer.onGround) {
-            clutching = false;
-            blockSlot = -1;
+            clutching    = false;
+            blockSlot    = -1;
+            pendingBlock = null;
+            pendingFace  = null;
             return;
         }
 
-        // Only activate when actually falling downward
+        // Only activate while falling
         if (mc.thePlayer.motionY >= 0) {
             clutching = false;
             return;
@@ -156,42 +190,26 @@ public class Clutch extends Module {
         blockSlot = findBlockSlot();
         if (blockSlot < 0) return;
 
-        int modeIdx = mode.getIndex();
+        // Find what to place against
+        if (!findPlacement()) return;
 
-        // ── CLUTCH mode ───────────────────────────────────────────────────────
-        // Silently rotate view downward so placement packets are valid,
-        // then aggressively try to place at every reachable Y level below us.
-        // Horizontal movement is preserved — this feels like a natural catch.
-        if (modeIdx == 0) {
-            // Silent rotation — look straight down so server accepts the placement
-            Myau.rotationManager.setRotation(
-                    mc.thePlayer.rotationYaw, 89.9f, 1, false);
-            placeFalling();
-        }
+        // ── Silent rotation — server-side only, camera stays where the player left it ──
+        float[] rots = getPlacementRotation();
+        event.setRotation(rots[0], rots[1], 2);
 
-        // ── SNEAK mode ────────────────────────────────────────────────────────
-        else if (modeIdx == 1) {
-            Myau.rotationManager.setRotation(
-                    mc.thePlayer.rotationYaw, 89.9f, 1, false);
-            placeFalling();
-            // edge-stop via SafeWalkEvent
-        }
+        // Place the block
+        doPlace();
 
-        // ── BRIDGE mode ───────────────────────────────────────────────────────
-        else if (modeIdx == 2) {
-            Myau.rotationManager.setRotation(
-                    mc.thePlayer.rotationYaw,
-                    (float) bridgePitch.getValue(),
-                    1, false);
+        // ── Bridge: push forward at walking speed in the direction the player faces ──
+        if (bridge.getValue()) {
             double moveSpeed = MoveUtil.getBaseMoveSpeed() * speed.getValue();
             MoveUtil.setSpeed(moveSpeed, MoveUtil.getMoveYaw());
-            placeFalling();
         }
     }
 
+    /** Edge-stop so you don't slide off the placed block */
     @EventTarget
     public void onSafeWalk(SafeWalkEvent event) {
-        if (!isEnabled() || !clutching) return;
-        if (mode.getIndex() >= 1) event.setSafeWalk(true);
+        if (isEnabled() && clutching) event.setSafeWalk(true);
     }
 }
