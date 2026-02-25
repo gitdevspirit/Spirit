@@ -21,14 +21,18 @@ import java.util.stream.Collectors;
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final TimerUtil timer = new TimerUtil();
+
+    // Tracks the current smooth visual yaw/pitch being sent to the rotation manager.
+    // These ease toward the exact target rotation each tick.
     private float smoothedYaw   = Float.NaN;
     private float smoothedPitch = Float.NaN;
 
-    public final SliderSetting  hSpeed    = new SliderSetting("H-Speed",    2.0, 0.0, 10.0, 0.1);
-    public final SliderSetting  vSpeed    = new SliderSetting("V-Speed",    0.0, 0.0, 10.0, 0.1);
-    public final SliderSetting  smoothing = new SliderSetting("Smoothing",  85,  0,   100,   1);  // 85 = very smooth, less detectable
-    public final SliderSetting  range     = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
-    public final SliderSetting  fov       = new SliderSetting("FOV",        90,  30,  360,   1);
+    public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",    2.0, 0.0, 10.0, 0.1);
+    public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",    0.0, 0.0, 10.0, 0.1);
+    // Smoothing: higher = more gradual/human-looking camera movement, 0 = instant snap
+    public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  70,  0,   100,   1);
+    public final SliderSetting  range      = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
+    public final SliderSetting  fov        = new SliderSetting("FOV",        90,  30,  360,   1);
     public final BooleanSetting weaponOnly = new BooleanSetting("Weapons Only", true);
     public final BooleanSetting allowTools = new BooleanSetting("Allow Tools",  false);
     public final BooleanSetting botChecks  = new BooleanSetting("Bot Check",    true);
@@ -45,6 +49,12 @@ public class AimAssist extends Module {
         register(allowTools);
         register(botChecks);
         register(team);
+    }
+
+    @Override
+    public void onDisabled() {
+        smoothedYaw   = Float.NaN;
+        smoothedPitch = Float.NaN;
     }
 
     private boolean isValidTarget(EntityPlayer p) {
@@ -71,40 +81,80 @@ public class AimAssist extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (isEnabled() && event.getType() == EventType.POST && mc.currentScreen == null) {
-            if (!weaponOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant()
-                    || allowTools.getValue() && ItemUtil.isHoldingTool()) {
-                boolean attacking = PlayerUtil.isAttacking();
-                if (!attacking || !isLookingAtBlock()) {
-                    if (attacking || !timer.hasTimeElapsed(350L)) {
-                        List<EntityPlayer> inRange = mc.theWorld.loadedEntityList.stream()
-                                .filter(e -> e instanceof EntityPlayer)
-                                .map(e -> (EntityPlayer) e)
-                                .filter(this::isValidTarget)
-                                .sorted(Comparator.comparingDouble(RotationUtil::distanceToEntity))
-                                .collect(Collectors.toList());
-                        if (!inRange.isEmpty()) {
-                            if (inRange.stream().anyMatch(this::isInReach))
-                                inRange.removeIf(p -> !isInReach(p));
-                            EntityPlayer player = inRange.get(0);
-                            if (RotationUtil.distanceToEntity(player) > 0.0) {
-                                AxisAlignedBB bb = player.getEntityBoundingBox();
-                                float border = player.getCollisionBorderSize();
-                                float[] rotation = RotationUtil.getRotationsToBox(
-                                        bb.expand(border, border, border),
-                                        mc.thePlayer.rotationYaw,
-                                        mc.thePlayer.rotationPitch,
-                                        180.0F,
-                                        (float) smoothing.getValue() / 100.0F);
-                                float yaw   = Math.min((float) Math.abs(hSpeed.getValue()), 10.0F);
-                                float pitch = Math.min((float) Math.abs(vSpeed.getValue()), 10.0F);
-                                Myau.rotationManager.setRotation(
-                                        mc.thePlayer.rotationYaw   + (rotation[0] - mc.thePlayer.rotationYaw)   * 0.1F * yaw,
-                                        mc.thePlayer.rotationPitch + (rotation[1] - mc.thePlayer.rotationPitch) * 0.1F * pitch,
-                                        0, false);
-                            }
-                        }
+        if (!isEnabled() || event.getType() != EventType.POST || mc.currentScreen != null) return;
+        if (!weaponOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant()
+                || (allowTools.getValue() && ItemUtil.isHoldingTool())) {
+
+            boolean attacking = PlayerUtil.isAttacking();
+            if (!attacking || !isLookingAtBlock()) {
+                if (attacking || !timer.hasTimeElapsed(350L)) {
+
+                    List<EntityPlayer> inRange = mc.theWorld.loadedEntityList.stream()
+                            .filter(e -> e instanceof EntityPlayer)
+                            .map(e -> (EntityPlayer) e)
+                            .filter(this::isValidTarget)
+                            .sorted(Comparator.comparingDouble(RotationUtil::distanceToEntity))
+                            .collect(Collectors.toList());
+
+                    if (inRange.isEmpty()) {
+                        // No target — reset smooth tracking so next target starts fresh
+                        smoothedYaw   = Float.NaN;
+                        smoothedPitch = Float.NaN;
+                        return;
                     }
+
+                    if (inRange.stream().anyMatch(this::isInReach))
+                        inRange.removeIf(p -> !isInReach(p));
+
+                    EntityPlayer player = inRange.get(0);
+                    if (RotationUtil.distanceToEntity(player) <= 0.0) return;
+
+                    // ── Compute the exact rotation to the hitbox (no smoothing lerp) ──
+                    AxisAlignedBB bb     = player.getEntityBoundingBox();
+                    float         border = player.getCollisionBorderSize();
+                    float[] exactRots = RotationUtil.getRotationsToBox(
+                            bb.expand(border, border, border),
+                            mc.thePlayer.rotationYaw,
+                            mc.thePlayer.rotationPitch,
+                            180.0F,
+                            1.0f);  // 1.0 = reach the target in one step (no damping)
+
+                    // ── Initialise smooth tracking on first tick / after target change ──
+                    if (Float.isNaN(smoothedYaw)) {
+                        smoothedYaw   = mc.thePlayer.rotationYaw;
+                        smoothedPitch = mc.thePlayer.rotationPitch;
+                    }
+
+                    // ── Ease smoothed rotation toward exact target ────────────────────
+                    // lerpFactor: smoothing=0 → 1.0 (instant), smoothing=100 → 0.05 (very gradual)
+                    float lerpFactor = (float)(1.0 - smoothing.getValue() / 100.0 * 0.95);
+
+                    float dyaw = exactRots[0] - smoothedYaw;
+                    while (dyaw >  180) dyaw -= 360;
+                    while (dyaw < -180) dyaw += 360;
+
+                    float targetYaw   = smoothedYaw   + dyaw              * lerpFactor;
+                    float targetPitch = smoothedPitch + (exactRots[1] - smoothedPitch) * lerpFactor;
+
+                    // ── Cap per-tick delta by h/v speed sliders ───────────────────────
+                    float maxYaw   = (float) hSpeed.getValue();
+                    float maxPitch = (float) vSpeed.getValue();
+
+                    float moveYaw = targetYaw - mc.thePlayer.rotationYaw;
+                    while (moveYaw >  180) moveYaw -= 360;
+                    while (moveYaw < -180) moveYaw += 360;
+                    moveYaw = Math.max(-maxYaw, Math.min(maxYaw, moveYaw));
+
+                    float movePitch = targetPitch - mc.thePlayer.rotationPitch;
+                    if (maxPitch > 0)
+                        movePitch = Math.max(-maxPitch, Math.min(maxPitch, movePitch));
+                    else
+                        movePitch = 0;
+
+                    smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
+                    smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
+
+                    Myau.rotationManager.setRotation(smoothedYaw, smoothedPitch, 0, false);
                 }
             }
         }
