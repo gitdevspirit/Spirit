@@ -73,6 +73,7 @@ public class Myau {
         moduleManager.modules.put(BedNuker.class,        new BedNuker());
         moduleManager.modules.put(BedESP.class,          new BedESP());
         moduleManager.modules.put(BedTracker.class,      new BedTracker());
+        moduleManager.modules.put(BedPlates.class,       new BedPlates());
         moduleManager.modules.put(Blink.class,           new Blink());
         moduleManager.modules.put(BackTrack.class,       new BackTrack());
         moduleManager.modules.put(FPScounter.class,      new FPScounter());
