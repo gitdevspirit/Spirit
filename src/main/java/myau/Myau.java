@@ -7,7 +7,7 @@ import myau.command.CommandManager;
 import myau.command.commands.BindCommand;
 import myau.command.commands.HideCommand;
 import myau.command.commands.SpammerCommand;
-import myau.command.commands.HelpCommand;
+import myau.command.commands.ConfigCommand;
 import myau.config.Config;
 import myau.event.EventManager;
 import myau.management.*;
@@ -61,7 +61,7 @@ public class Myau {
         commandManager.register(new HideCommand(true));   // .hide
         commandManager.register(new HideCommand(false));  // .show
         commandManager.register(new SpammerCommand());
-        commandManager.register(new HelpCommand(commandManager));
+        commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
         EventManager.register(rotationManager);
