@@ -16,6 +16,12 @@ public class BindCommand extends Command {
 
     public BindCommand() {
         super("b", "bind");
+        // set description via field since we use varargs constructor
+    }
+
+    @Override
+    public String getDescription() {
+        return "Bind a module to a key. Usage: .b <module> <key|none>";
     }
 
     @Override
