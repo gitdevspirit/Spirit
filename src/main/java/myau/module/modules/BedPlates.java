@@ -33,7 +33,7 @@ public class BedPlates extends Module {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     // Bed tracking state
-    private final Map<String, Map<String, Object>> bedPositions  = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Object>> bedPositions   = new ConcurrentHashMap<>();
     private final Map<String, Boolean>             searchedBlocks = new ConcurrentHashMap<>();
     private final Set<Integer>                     yLevels        = ConcurrentHashMap.newKeySet();
 
@@ -106,7 +106,9 @@ public class BedPlates extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         int ticks = mc.thePlayer.ticksExisted;
+        // Always scan — don't require yLevels to be populated first
         if (ticks % 3   == 0) findYLevels();
+        if (ticks % 10  == 0) scanAroundSelf();   // NEW: also find beds near local player
         if (ticks % 20  == 0) searchForBeds();
         if (ticks % 300 == 0) searchedBlocks.clear();
         updateBeds();
@@ -115,8 +117,7 @@ public class BedPlates extends Module {
     @EventTarget
     public void onRender3D(Render3DEvent event) {
         if (!isEnabled()) return;
-        // Capture the GL transform while the world matrix is active so we can
-        // project world positions to screen coords during Render2D
+        // Capture the GL transform while the world matrix is active
         modelview.clear();  projection.clear();  viewport.clear();
         GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
         GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projection);
@@ -131,8 +132,11 @@ public class BedPlates extends Module {
     @SuppressWarnings("unchecked")
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !matricesCaptured || bedPositions.isEmpty()) return;
+        if (!isEnabled() || !matricesCaptured) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        // If no beds found yet, nothing to render (but don't bail on empty map — keep scanning)
+        if (bedPositions.isEmpty()) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
         int sf = sr.getScaleFactor();
@@ -153,11 +157,12 @@ public class BedPlates extends Module {
             if (distance > maxDist) continue;
 
             Map<String, Integer> layers = (Map<String, Integer>) bed.getOrDefault("layers", Collections.emptyMap());
-            if (layers.isEmpty()) continue;
+            // Render even if layers is empty (bed exists but no defence blocks)
 
             BlockPos p1 = (BlockPos) bed.get("position1");
             BlockPos p2 = (BlockPos) bed.get("position2");
-            if (p1 == null || p2 == null) continue;
+            if (p1 == null) continue;
+            if (p2 == null) p2 = p1;
 
             // Centre of the two bed blocks, offset upward by Y Offset setting
             double wx = (p1.getX() + p2.getX()) / 2.0 + 0.5;
@@ -180,6 +185,19 @@ public class BedPlates extends Module {
             float itemSize = 16 * currentScale;
             float padding  =  2 * currentScale;
             float boxSize  = itemSize + padding;
+
+            // If no defence blocks, render a small indicator dot/label
+            if (layerKeys.isEmpty()) {
+                GlStateManager.pushMatrix();
+                GlStateManager.enableBlend();
+                GlStateManager.disableDepth();
+                drawRect(sx - 4, sy - 4, sx + 4, sy + 4, 0xCC44FF44);
+                GlStateManager.enableDepth();
+                GlStateManager.disableBlend();
+                GlStateManager.popMatrix();
+                continue;
+            }
+
             float totalW   = layerKeys.size() * boxSize;
             float startX   = sx - totalW / 2f;
             float startY   = sy - boxSize / 2f;
@@ -200,7 +218,6 @@ public class BedPlates extends Module {
 
                 ItemStack stack = stackFromBlockName(blockName);
                 if (stack != null) {
-                    // Item icon
                     GlStateManager.pushMatrix();
                     GlStateManager.translate(ix, iy, 150);
                     GlStateManager.scale(currentScale, currentScale, currentScale);
@@ -239,17 +256,12 @@ public class BedPlates extends Module {
         bedPositions.clear();
         searchedBlocks.clear();
         yLevels.clear();
+        matricesCaptured = false;
     }
 
     // ── Rendering helpers ─────────────────────────────────────────────────────
 
-    /**
-     * Projects a world position to 2D window pixel coordinates.
-     * The GL matrices must have been captured during Render3D.
-     * Returns null if the position is behind the camera.
-     */
     private float[] worldToScreen(double wx, double wy, double wz) {
-        // Minecraft's GL matrices are set up relative to renderPos, so subtract it
         float rx = (float)(wx - renderPosX);
         float ry = (float)(wy - renderPosY);
         float rz = (float)(wz - renderPosZ);
@@ -260,7 +272,7 @@ public class BedPlates extends Module {
         if (!ok) return null;
 
         float wz2 = win.get(2);
-        if (wz2 < 0 || wz2 >= 1.0003684f) return null; // behind near/far plane
+        if (wz2 < 0 || wz2 >= 1.0003684f) return null;
 
         return new float[]{ win.get(0), win.get(1) };
     }
@@ -307,19 +319,25 @@ public class BedPlates extends Module {
     // ── Async scanning ────────────────────────────────────────────────────────
 
     /**
-     * Scans near all visible players for bed Y levels, so we know
-     * which Y slices to search for beds.
+     * Scans near all visible players AND the local player for bed Y levels.
+     * This ensures we find beds even if no other players are near them.
      */
     private void findYLevels() {
-        if (mc.theWorld == null) return;
+        if (mc.theWorld == null || mc.thePlayer == null) return;
         List<?> players = new ArrayList<>(mc.theWorld.playerEntities);
         executor.execute(() -> {
             try {
+                // Include local player in the scan
+                List<net.minecraft.entity.player.EntityPlayer> toScan = new ArrayList<>();
+                toScan.add(mc.thePlayer);
                 for (Object o : players) {
-                    if (!(o instanceof net.minecraft.entity.player.EntityPlayer)) continue;
-                    net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
-                    if (p == mc.thePlayer) continue;
+                    if (o instanceof net.minecraft.entity.player.EntityPlayer) {
+                        net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
+                        if (p != mc.thePlayer) toScan.add(p);
+                    }
+                }
 
+                for (net.minecraft.entity.player.EntityPlayer p : toScan) {
                     int px = (int) p.posX, py = (int) p.posY, pz = (int) p.posZ;
                     for (int x = px - 4; x <= px + 4; x++) {
                         for (int y = py - 4; y <= py + 4; y++) {
@@ -337,12 +355,52 @@ public class BedPlates extends Module {
     }
 
     /**
+     * NEW: Scans a wide radius around the local player for beds regardless
+     * of known yLevels. This is the primary discovery mechanism.
+     */
+    private void scanAroundSelf() {
+        if (mc.theWorld == null || mc.thePlayer == null) return;
+        int maxDist = (int) renderDistance.getValue();
+        double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
+        int px = (int) myX, py = (int) myY, pz = (int) myZ;
+
+        executor.execute(() -> {
+            try {
+                // Scan a horizontal slice around the player at all reasonable Y values
+                int scanRadius = Math.min(maxDist, 64);
+                for (int y = Math.max(0, py - 5); y <= Math.min(255, py + 10); y++) {
+                    for (int x = px - scanRadius; x <= px + scanRadius; x += 2) {
+                        for (int z = pz - scanRadius; z <= pz + scanRadius; z += 2) {
+                            String key = "3" + x + "," + y + "," + z;
+                            if (searchedBlocks.containsKey(key)) continue;
+                            searchedBlocks.put(key, Boolean.TRUE);
+
+                            if (getBlockAt(x, y, z) != Blocks.bed) continue;
+
+                            // Found a bed — register its y level and process it immediately
+                            yLevels.add(y);
+                            registerBedAt(x, y, z, myX, myY, myZ);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        });
+    }
+
+    /**
      * Searches a 40×40 radius around each player on known Y levels for beds.
      */
     private void searchForBeds() {
-        if (mc.theWorld == null || yLevels.isEmpty()) return;
+        if (mc.theWorld == null) return;
         List<?> players = new ArrayList<>(mc.theWorld.playerEntities);
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
+
+        // If no yLevels yet, run a quick broad scan on common bed heights
+        Set<Integer> levelsToSearch = new HashSet<>(yLevels);
+        if (levelsToSearch.isEmpty()) {
+            // Default scan heights for typical BedWars maps
+            for (int y = 60; y <= 90; y++) levelsToSearch.add(y);
+        }
 
         executor.execute(() -> {
             try {
@@ -351,7 +409,7 @@ public class BedPlates extends Module {
                     net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
                     int px = (int) p.posX, pz = (int) p.posZ;
 
-                    for (int yLevel : new HashSet<>(yLevels)) {
+                    for (int yLevel : levelsToSearch) {
                         for (int x = px - 20; x <= px + 20; x++) {
                             for (int z = pz - 20; z <= pz + 20; z++) {
                                 String key = "1" + x + "," + yLevel + "," + z;
@@ -359,37 +417,44 @@ public class BedPlates extends Module {
                                 searchedBlocks.put(key, Boolean.TRUE);
 
                                 if (getBlockAt(x, yLevel, z) != Blocks.bed) continue;
-
-                                // Only process the "foot" half of the bed to avoid double-counting
-                                if (getBlockAt(x + 1, yLevel, z) == Blocks.bed) continue;
-                                if (getBlockAt(x, yLevel, z + 1) == Blocks.bed) continue;
-
-                                BlockPos pos1 = new BlockPos(x, yLevel, z);
-                                BlockPos pos2 = pos1;
-                                if (getBlockAt(x - 1, yLevel, z) == Blocks.bed)
-                                    pos2 = new BlockPos(x - 1, yLevel, z);
-                                else if (getBlockAt(x, yLevel, z - 1) == Blocks.bed)
-                                    pos2 = new BlockPos(x, yLevel, z - 1);
-
-                                double dist = Math.sqrt(
-                                        (x - myX) * (x - myX) +
-                                        (yLevel - myY) * (yLevel - myY) +
-                                        (z - myZ) * (z - myZ));
-
-                                Map<String, Object> bedData = new ConcurrentHashMap<>();
-                                bedData.put("visible",   Boolean.TRUE);
-                                bedData.put("distance",  dist);
-                                bedData.put("position1", pos1);
-                                bedData.put("position2", pos2);
-                                bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
-                                bedData.put("lastcheck", System.currentTimeMillis());
-                                bedPositions.put(key, bedData);
+                                registerBedAt(x, yLevel, z, myX, myY, myZ);
                             }
                         }
                     }
                 }
             } catch (Exception ignored) {}
         });
+    }
+
+    /**
+     * Registers or updates a bed entry found at the given coordinates.
+     */
+    private void registerBedAt(int x, int yLevel, int z, double myX, double myY, double myZ) {
+        // Only process the "foot" half of the bed to avoid double-counting
+        if (getBlockAt(x + 1, yLevel, z) == Blocks.bed) return;
+        if (getBlockAt(x, yLevel, z + 1) == Blocks.bed) return;
+
+        BlockPos pos1 = new BlockPos(x, yLevel, z);
+        BlockPos pos2 = pos1;
+        if (getBlockAt(x - 1, yLevel, z) == Blocks.bed)
+            pos2 = new BlockPos(x - 1, yLevel, z);
+        else if (getBlockAt(x, yLevel, z - 1) == Blocks.bed)
+            pos2 = new BlockPos(x, yLevel, z - 1);
+
+        double dist = Math.sqrt(
+                (x - myX) * (x - myX) +
+                (yLevel - myY) * (yLevel - myY) +
+                (z - myZ) * (z - myZ));
+
+        String mapKey = "1" + x + "," + yLevel + "," + z;
+        Map<String, Object> bedData = new ConcurrentHashMap<>();
+        bedData.put("visible",   Boolean.TRUE);
+        bedData.put("distance",  dist);
+        bedData.put("position1", pos1);
+        bedData.put("position2", pos2);
+        bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
+        bedData.put("lastcheck", System.currentTimeMillis());
+        bedPositions.put(mapKey, bedData);
     }
 
     /**
@@ -402,9 +467,12 @@ public class BedPlates extends Module {
 
         executor.execute(() -> {
             try {
-                for (Map<String, Object> bed : bedPositions.values()) {
+                Iterator<Map.Entry<String, Map<String, Object>>> iter = bedPositions.entrySet().iterator();
+                while (iter.hasNext()) {
+                    Map.Entry<String, Map<String, Object>> entry = iter.next();
+                    Map<String, Object> bed = entry.getValue();
                     BlockPos p1 = (BlockPos) bed.get("position1");
-                    if (p1 == null) continue;
+                    if (p1 == null) { iter.remove(); continue; }
 
                     double dist = Math.sqrt(
                             (p1.getX() - myX) * (p1.getX() - myX) +
@@ -422,6 +490,9 @@ public class BedPlates extends Module {
                             bed.put("layers",    getBedDefenseLayers(p1, p2 != null ? p2 : p1));
                             bed.put("lastcheck", System.currentTimeMillis());
                         }
+                    } else {
+                        // Remove destroyed beds from the map so they stop rendering
+                        iter.remove();
                     }
                 }
             } catch (Exception ignored) {}
@@ -437,8 +508,6 @@ public class BedPlates extends Module {
 
     /**
      * Analyses up to 5 "layers" of blocks surrounding both halves of a bed.
-     * Returns a map of blockName → total count across all layers.
-     * Only blocks that make up ≥20% of their layer are included.
      */
     private Map<String, Integer> getBedDefenseLayers(BlockPos pos1, BlockPos pos2) {
         if (pos1 == null) return Collections.emptyMap();
@@ -505,10 +574,6 @@ public class BedPlates extends Module {
         return finalCounts;
     }
 
-    /**
-     * Gets a block at (x,y,z) and records it in the layer count map.
-     * Invalid/decoration blocks are treated as air so they don't show in the HUD.
-     */
     private String addBlock(int x, int y, int z, Map<String, Integer> counts) {
         Block block = getBlockAt(x, y, z);
         String name = getBlockName(block);
