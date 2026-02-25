@@ -6,6 +6,8 @@ import me.ksyz.accountmanager.AccountManager;
 import myau.command.CommandManager;
 import myau.command.commands.BindCommand;
 import myau.command.commands.HideCommand;
+import myau.command.commands.SpammerCommand;
+import myau.command.commands.HelpCommand;
 import myau.config.Config;
 import myau.event.EventManager;
 import myau.management.*;
@@ -58,6 +60,8 @@ public class Myau {
         commandManager.register(new BindCommand());
         commandManager.register(new HideCommand(true));   // .hide
         commandManager.register(new HideCommand(false));  // .show
+        commandManager.register(new SpammerCommand());
+        commandManager.register(new HelpCommand(commandManager));
         EventManager.register(commandManager);
 
         EventManager.register(rotationManager);
