@@ -23,6 +23,13 @@ public class HideCommand extends Command {
     }
 
     @Override
+    public String getDescription() {
+        return hiding
+            ? "Hide a module from the arraylist. Usage: .hide <module|all>"
+            : "Show a module in the arraylist. Usage: .show <module|all>";
+    }
+
+    @Override
     public void execute(String[] args) {
         if (args.length == 0) {
             reply("&7Usage: &f." + (hiding ? "hide" : "show") + " <module|all>");
