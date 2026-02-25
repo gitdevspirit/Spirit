@@ -3,45 +3,36 @@ package myau.command.commands;
 import myau.Myau;
 import myau.command.Command;
 import myau.module.Module;
+import myau.util.KeyBindUtil;
+import org.lwjgl.input.Keyboard;
 
 /**
- * .hide <module|all>  — hide a module from the arraylist
- * .show <module|all>  — show a module in the arraylist
- *
- * Register both separately:
- *   commandManager.register(new HideCommand(true));   // .hide
- *   commandManager.register(new HideCommand(false));  // .show
+ * .b <module> <key>   — bind a module to a key
+ * .b <module> none    — clear the bind
+ * .b <module>         — show current bind
+ * .b                  — list all binds
  */
-public class HideCommand extends Command {
+public class BindCommand extends Command {
 
-    private final boolean hiding;
-
-    /** true = .hide command, false = .show command */
-    public HideCommand(boolean hiding) {
-        super(hiding ? "hide" : "show");
-        this.hiding = hiding;
-    }
-
-    @Override
-    public String getDescription() {
-        return hiding
-            ? "Hide a module from the arraylist. Usage: .hide <module|all>"
-            : "Show a module in the arraylist. Usage: .show <module|all>";
+    public BindCommand() {
+        super("b", "bind");
+        setDescription("Bind a module to a key. Usage: .b <module> <key|none>");
     }
 
     @Override
     public void execute(String[] args) {
-        if (args.length == 0) {
-            reply("&7Usage: &f." + (hiding ? "hide" : "show") + " <module|all>");
-            return;
-        }
 
-        if (args[0].equalsIgnoreCase("all")) {
+        // .b → list all active binds
+        if (args.length == 0) {
+            reply("&7--- &fBinds &7---");
+            boolean any = false;
             for (Module m : Myau.moduleManager.modules.values()) {
-                m.setHidden(hiding);
+                if (m.getKey() != 0) {
+                    reply("  &f" + m.getName() + " &8→ &7" + KeyBindUtil.getKeyName(m.getKey()));
+                    any = true;
+                }
             }
-            reply(hiding ? "&7All modules hidden from arraylist." : "&7All modules shown in arraylist.");
-            saveConfig();
+            if (!any) reply("  &7No modules are currently bound.");
             return;
         }
 
@@ -51,10 +42,40 @@ public class HideCommand extends Command {
             return;
         }
 
-        target.setHidden(hiding);
-        reply(hiding
-            ? "&f" + target.getName() + " &7hidden from arraylist."
-            : "&f" + target.getName() + " &7shown in arraylist.");
+        // .b <module> → show current bind
+        if (args.length == 1) {
+            int k = target.getKey();
+            if (k == 0) reply("&f" + target.getName() + " &7has no bind.");
+            else        reply("&f" + target.getName() + " &7is bound to &f" + KeyBindUtil.getKeyName(k) + "&7.");
+            return;
+        }
+
+        // .b <module> none/clear/0 → remove bind
+        String keyArg = args[1];
+        if (keyArg.equalsIgnoreCase("none") || keyArg.equalsIgnoreCase("clear") || keyArg.equals("0")) {
+            target.setKey(0);
+            reply("&7Cleared bind for &f" + target.getName() + "&7.");
+            saveConfig();
+            return;
+        }
+
+        // .b <module> <key> → set bind
+        int keyCode = Keyboard.getKeyIndex(keyArg.toUpperCase());
+        if (keyCode == Keyboard.KEY_NONE) {
+            reply("&cUnknown key: &f" + keyArg + "&c. Use names like &fR&c, &fF5&c, &fHOME&c, etc.");
+            return;
+        }
+
+        // Warn if another module already has this key
+        for (Module m : Myau.moduleManager.modules.values()) {
+            if (m != target && m.getKey() == keyCode) {
+                reply("&eWarning: &f" + m.getName() + " &ealready uses that key — overwriting.");
+                m.setKey(0);
+            }
+        }
+
+        target.setKey(keyCode);
+        reply("&f" + target.getName() + " &7bound to &f" + KeyBindUtil.getKeyName(keyCode) + "&7.");
         saveConfig();
     }
 
