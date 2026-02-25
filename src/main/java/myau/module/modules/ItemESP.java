@@ -108,6 +108,7 @@ public class ItemESP extends Module {
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (!isEnabled()) return;
+        if (mc.theWorld == null || mc.thePlayer == null) return;
 
         LinkedHashMap<ItemData, Integer> itemMap = new LinkedHashMap<>();
         for (Entity entity : mc.theWorld.loadedEntityList) {
@@ -133,6 +134,11 @@ public class ItemESP extends Module {
 
         IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
         int alphaFill = (int)(opacity.getValue() / 100.0 * 255.0);
+
+        // Push GL state once for all items
+        GlStateManager.pushMatrix();
+        GlStateManager.pushAttrib();
+        GlStateManager.disableLighting();
 
         for (Entry<ItemData, Integer> itemEntry : itemMap.entrySet().stream()
                 .sorted((a, b) -> Integer.compare(
@@ -162,9 +168,8 @@ public class ItemESP extends Module {
                 GL11.glDisable(GL11.GL_DEPTH_TEST);
                 GL11.glDepthMask(false);
                 GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-                GL11.glColor4f(cr / 255.0f, cg / 255.0f, cb / 255.0f, alphaFill / 255.0f);
-                RenderUtil.drawFilledBox(bb, cr, cg, cb);
-                GL11.glColor4f(1f, 1f, 1f, 1f);
+                // Pass alpha directly into drawFilledBox via color override
+                RenderUtil.drawFilledBox(bb, cr, cg, cb, alphaFill);
                 GL11.glDepthMask(true);
                 GL11.glEnable(GL11.GL_DEPTH_TEST);
                 GL11.glEnable(GL11.GL_TEXTURE_2D);
@@ -199,6 +204,10 @@ public class ItemESP extends Module {
                 GlStateManager.popMatrix();
             }
         }
+
+        GlStateManager.enableLighting();
+        GlStateManager.popAttrib();
+        GlStateManager.popMatrix();
     }
 
     // ── Inner class ───────────────────────────────────────────────────────────
