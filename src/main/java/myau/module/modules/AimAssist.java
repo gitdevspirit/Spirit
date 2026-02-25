@@ -12,7 +12,9 @@ import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import net.minecraft.util.Vec3;
 
 import java.util.Comparator;
 import java.util.List;
@@ -22,14 +24,12 @@ public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final TimerUtil timer = new TimerUtil();
 
-    // Tracks the current smooth visual yaw/pitch being sent to the rotation manager.
-    // These ease toward the exact target rotation each tick.
-    private float smoothedYaw   = Float.NaN;
-    private float smoothedPitch = Float.NaN;
+    // Smoothed rotation state — reset when we lose a target
+    private float smoothYaw   = Float.NaN;
+    private float smoothPitch = Float.NaN;
 
     public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",    2.0, 0.0, 10.0, 0.1);
     public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",    0.0, 0.0, 10.0, 0.1);
-    // Smoothing: higher = more gradual/human-looking camera movement, 0 = instant snap
     public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  70,  0,   100,   1);
     public final SliderSetting  range      = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
     public final SliderSetting  fov        = new SliderSetting("FOV",        90,  30,  360,   1);
@@ -53,8 +53,8 @@ public class AimAssist extends Module {
 
     @Override
     public void onDisabled() {
-        smoothedYaw   = Float.NaN;
-        smoothedPitch = Float.NaN;
+        smoothYaw   = Float.NaN;
+        smoothPitch = Float.NaN;
     }
 
     private boolean isValidTarget(EntityPlayer p) {
@@ -79,6 +79,41 @@ public class AimAssist extends Module {
         return mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK;
     }
 
+    /**
+     * Computes the exact yaw/pitch to the nearest point on the target's hitbox.
+     * Using the nearest point (rather than centre) means the camera never has to
+     * overshoot or snap back when the player is already close to the hitbox edge.
+     */
+    private float[] getExactRotations(EntityPlayer target) {
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+
+        float border = target.getCollisionBorderSize();
+        AxisAlignedBB bb = target.getEntityBoundingBox().expand(border, border, border);
+
+        // Clamp the eye position to the box to get the closest point on the hitbox
+        double tx = MathHelper.clamp_double(eyes.xCoord, bb.minX, bb.maxX);
+        // Aim for upper-body (75% height) when we're above, lower-body (25%) when below,
+        // otherwise straight through — gives a stable centre-mass lock with no jitter
+        double ty;
+        double upperY = bb.minY + 0.75 * (bb.maxY - bb.minY);
+        double lowerY = bb.minY + 0.25 * (bb.maxY - bb.minY);
+        if (eyes.yCoord >= upperY)      ty = upperY;
+        else if (eyes.yCoord <= lowerY) ty = lowerY;
+        else                            ty = eyes.yCoord; // already inside → no pitch needed
+
+        double tz = MathHelper.clamp_double(eyes.zCoord, bb.minZ, bb.maxZ);
+
+        double dx = tx - eyes.xCoord;
+        double dy = ty - eyes.yCoord;
+        double dz = tz - eyes.zCoord;
+
+        double horizDist = Math.sqrt(dx * dx + dz * dz);
+        float exactYaw   = (float)(Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0f;
+        float exactPitch = (float)(-Math.atan2(dy, horizDist) * 180.0 / Math.PI);
+
+        return new float[]{ exactYaw, exactPitch };
+    }
+
     @EventTarget
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.POST || mc.currentScreen != null) return;
@@ -97,64 +132,56 @@ public class AimAssist extends Module {
                             .collect(Collectors.toList());
 
                     if (inRange.isEmpty()) {
-                        // No target — reset smooth tracking so next target starts fresh
-                        smoothedYaw   = Float.NaN;
-                        smoothedPitch = Float.NaN;
+                        smoothYaw   = Float.NaN;
+                        smoothPitch = Float.NaN;
                         return;
                     }
 
                     if (inRange.stream().anyMatch(this::isInReach))
                         inRange.removeIf(p -> !isInReach(p));
 
-                    EntityPlayer player = inRange.get(0);
-                    if (RotationUtil.distanceToEntity(player) <= 0.0) return;
+                    EntityPlayer target = inRange.get(0);
+                    if (RotationUtil.distanceToEntity(target) <= 0.0) return;
 
-                    // ── Compute the exact rotation to the hitbox (no smoothing lerp) ──
-                    AxisAlignedBB bb     = player.getEntityBoundingBox();
-                    float         border = player.getCollisionBorderSize();
-                    float[] exactRots = RotationUtil.getRotationsToBox(
-                            bb.expand(border, border, border),
-                            mc.thePlayer.rotationYaw,
-                            mc.thePlayer.rotationPitch,
-                            180.0F,
-                            1.0f);  // 1.0 = reach the target in one step (no damping)
+                    // ── Exact rotation to the nearest hitbox point ────────────────
+                    float[] exact = getExactRotations(target);
+                    float exactYaw   = exact[0];
+                    float exactPitch = MathHelper.clamp_float(exact[1], -90f, 90f);
 
-                    // ── Initialise smooth tracking on first tick / after target change ──
-                    if (Float.isNaN(smoothedYaw)) {
-                        smoothedYaw   = mc.thePlayer.rotationYaw;
-                        smoothedPitch = mc.thePlayer.rotationPitch;
+                    // ── Seed smooth state on first tick with this target ──────────
+                    if (Float.isNaN(smoothYaw)) {
+                        smoothYaw   = mc.thePlayer.rotationYaw;
+                        smoothPitch = mc.thePlayer.rotationPitch;
                     }
 
-                    // ── Ease smoothed rotation toward exact target ────────────────────
-                    // lerpFactor: smoothing=0 → 1.0 (instant), smoothing=100 → 0.05 (very gradual)
-                    float lerpFactor = (float)(1.0 - smoothing.getValue() / 100.0 * 0.95);
+                    // ── Single clean lerp — no double-smoothing ───────────────────
+                    // smoothing=0   → lerpFactor=1.0  (instant lock, no delay)
+                    // smoothing=100 → lerpFactor=0.08 (very gradual)
+                    // The curve is tuned so low values still feel responsive while
+                    // high values give a human arc without getting stuck.
+                    double s = smoothing.getValue() / 100.0;
+                    float lerpFactor = (float)(1.0 - s * s * 0.92); // quadratic so low end stays snappy
 
-                    float dyaw = exactRots[0] - smoothedYaw;
-                    while (dyaw >  180) dyaw -= 360;
-                    while (dyaw < -180) dyaw += 360;
+                    // Shortest-path yaw delta (handles 180° wrap)
+                    float dyaw = MathHelper.wrapAngleTo180_float(exactYaw - smoothYaw);
+                    smoothYaw   = smoothYaw   + dyaw              * lerpFactor;
+                    smoothPitch = smoothPitch + (exactPitch - smoothPitch) * lerpFactor;
 
-                    float targetYaw   = smoothedYaw   + dyaw              * lerpFactor;
-                    float targetPitch = smoothedPitch + (exactRots[1] - smoothedPitch) * lerpFactor;
+                    // ── Clamp per-tick movement to h/v speed sliders ──────────────
+                    float maxH = (float) hSpeed.getValue();
+                    float maxV = (float) vSpeed.getValue();
 
-                    // ── Cap per-tick delta by h/v speed sliders ───────────────────────
-                    float maxYaw   = (float) hSpeed.getValue();
-                    float maxPitch = (float) vSpeed.getValue();
+                    float dY = MathHelper.wrapAngleTo180_float(smoothYaw - mc.thePlayer.rotationYaw);
+                    float dP = smoothPitch - mc.thePlayer.rotationPitch;
 
-                    float moveYaw = targetYaw - mc.thePlayer.rotationYaw;
-                    while (moveYaw >  180) moveYaw -= 360;
-                    while (moveYaw < -180) moveYaw += 360;
-                    moveYaw = Math.max(-maxYaw, Math.min(maxYaw, moveYaw));
+                    dY = MathHelper.clamp_float(dY, -maxH, maxH);
+                    if (maxV > 0f) dP = MathHelper.clamp_float(dP, -maxV, maxV);
+                    else           dP = 0f;
 
-                    float movePitch = targetPitch - mc.thePlayer.rotationPitch;
-                    if (maxPitch > 0)
-                        movePitch = Math.max(-maxPitch, Math.min(maxPitch, movePitch));
-                    else
-                        movePitch = 0;
+                    float finalYaw   = mc.thePlayer.rotationYaw   + dY;
+                    float finalPitch = MathHelper.clamp_float(mc.thePlayer.rotationPitch + dP, -90f, 90f);
 
-                    smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
-                    smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
-
-                    Myau.rotationManager.setRotation(smoothedYaw, smoothedPitch, 0, false);
+                    Myau.rotationManager.setRotation(finalYaw, finalPitch, 0, false);
                 }
             }
         }
