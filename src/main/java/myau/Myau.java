@@ -3,6 +3,9 @@ package myau;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import me.ksyz.accountmanager.AccountManager;
+import myau.command.CommandManager;
+import myau.command.commands.BindCommand;
+import myau.command.commands.HideCommand;
 import myau.config.Config;
 import myau.event.EventManager;
 import myau.management.*;
@@ -32,6 +35,7 @@ public class Myau {
     public static PropertyManager propertyManager;
     public static ModuleManager moduleManager;
     public static NotificationManager notificationManager;
+    public static CommandManager commandManager;
 
     public Myau() {
         this.init();
@@ -49,6 +53,12 @@ public class Myau {
         propertyManager    = new PropertyManager();
         moduleManager      = new ModuleManager();
         notificationManager= new NotificationManager();
+
+        commandManager = new CommandManager();
+        commandManager.register(new BindCommand());
+        commandManager.register(new HideCommand(true));   // .hide
+        commandManager.register(new HideCommand(false));  // .show
+        EventManager.register(commandManager);
 
         EventManager.register(rotationManager);
         EventManager.register(floatManager);
