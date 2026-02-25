@@ -107,7 +107,6 @@ public class ESP extends Module {
             GlStateManager.pushAttrib();
             if (framebuffer == null)
                 framebuffer = new Framebuffer(mc.displayWidth, mc.displayHeight, false);
-            // Clear at the START so previous frame content doesn't bleed through
             framebuffer.framebufferClear();
             framebuffer.bindFramebuffer(false);
             ((IAccessorEntityRenderer) mc.entityRenderer).callSetupCameraTransform(event.getPartialTicks(), 0);
@@ -178,6 +177,10 @@ public class ESP extends Module {
 
         IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
 
+        // Ensure clean GL state before any 3D rendering
+        GlStateManager.pushMatrix();
+        GlStateManager.pushAttrib();
+
         for (EntityPlayer player : getRendered()) {
             double ix = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
             double iy = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks()) - rm.getRenderPosY();
@@ -196,7 +199,6 @@ public class ESP extends Module {
                         bb.maxX - player.posX + ix,
                         bb.maxY - player.posY + iy,
                         bb.maxZ - player.posZ + iz);
-                // Isolated state per player — no bleed between iterations
                 RenderUtil.enableRenderState();
                 RenderUtil.drawBoundingBox(offsetBB, r, g, b, 255, 1.5F);
                 RenderUtil.disableRenderState();
@@ -233,5 +235,8 @@ public class ESP extends Module {
                 GlStateManager.popMatrix();
             }
         }
+
+        GlStateManager.popAttrib();
+        GlStateManager.popMatrix();
     }
 }
