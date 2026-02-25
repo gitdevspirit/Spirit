@@ -46,6 +46,6 @@ public class HideCommand extends Command {
     }
 
     private void saveConfig() {
-        new myau.config.Config("default", false).save();
+        new myau.config.Config(myau.config.Config.lastConfig != null ? myau.config.Config.lastConfig : "default", false).save();
     }
 }
