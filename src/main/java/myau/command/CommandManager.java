@@ -20,6 +20,10 @@ public class CommandManager {
         commands.add(command);
     }
 
+    public List<Command> getCommands() {
+        return commands;
+    }
+
     /**
      * Intercepts outgoing chat packets. If the message starts with the prefix
      * it is parsed as a command and the packet is cancelled so it never reaches the server.
@@ -62,6 +66,6 @@ public class CommandManager {
             }
         }
 
-        ChatUtil.sendFormatted("&cUnknown command. Try &f.help &cfor a list.");
+        ChatUtil.sendFormatted("&cUnknown command. Use &f.c help &cfor a list.");
     }
 }
