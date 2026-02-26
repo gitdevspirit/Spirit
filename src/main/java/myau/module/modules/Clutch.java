@@ -20,8 +20,6 @@ public class Clutch extends Module {
     public final BooleanSetting bridge       = register(new BooleanSetting("Bridge",       false));
     public final BooleanSetting swing        = register(new BooleanSetting("Swing",        true));
 
-    // Ticks to wait between placements — reduces simulation flag spam
-    private static final int PLACE_COOLDOWN = 2;
     private int placeCooldown = 0;
 
     public Clutch() {
@@ -39,6 +37,7 @@ public class Clutch extends Module {
         double pz    = mc.thePlayer.posZ;
         double depth = triggerDepth.getValue();
 
+        // 3x3 straight down
         for (int ox = -1; ox <= 1; ox++) {
             for (int oz = -1; oz <= 1; oz++) {
                 for (double d = 0.25; d <= depth; d += 0.5) {
@@ -47,7 +46,7 @@ public class Clutch extends Module {
                 }
             }
         }
-
+        // Predictive along motion
         double motX = mc.thePlayer.motionX;
         double motZ = mc.thePlayer.motionZ;
         for (int tick = 1; tick <= 3; tick++) {
@@ -99,6 +98,20 @@ public class Clutch extends Module {
         return null;
     }
 
+    /**
+     * Computes yaw/pitch directly — bypasses RotationUtil.getRotationsTo
+     * which has a ≤1° dead zone and random noise that causes raycasts to miss.
+     */
+    private float[] calcRotation(Vec3 from, Vec3 to) {
+        double dx   = to.xCoord - from.xCoord;
+        double dy   = to.yCoord - from.yCoord;
+        double dz   = to.zCoord - from.zCoord;
+        double horiz = Math.sqrt(dx * dx + dz * dz);
+        float yaw   = (float)(Math.toDegrees(Math.atan2(dz, dx))) - 90f;
+        float pitch = (float)(-Math.toDegrees(Math.atan2(dy, horiz)));
+        return new float[]{ yaw, MathHelper.clamp_float(pitch, -90f, 90f) };
+    }
+
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
@@ -111,7 +124,6 @@ public class Clutch extends Module {
 
         if (mc.thePlayer.motionY >= 0 || !isOverVoid()) return;
 
-        // Tick down cooldown every update regardless
         if (placeCooldown > 0) {
             placeCooldown--;
             return;
@@ -123,28 +135,31 @@ public class Clutch extends Module {
         PlaceData pd = findPlacement();
         if (pd == null) return;
 
-        // Compute rotation toward the hit face
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+
+        // Use centre of the placement face as the hit target
         Vec3 hitVec = BlockUtil.getClickVec(pd.block, pd.face);
-        double relX = hitVec.xCoord - mc.thePlayer.posX;
-        double relY = hitVec.yCoord - mc.thePlayer.posY - mc.thePlayer.getEyeHeight();
-        double relZ = hitVec.zCoord - mc.thePlayer.posZ;
 
-        float[] rots = RotationUtil.getRotationsTo(relX, relY, relZ,
-                event.getYaw(), event.getPitch());
+        // Compute exact rotation directly — no dead zones, no noise
+        float[] rots = calcRotation(eyes, hitVec);
 
-        // Confirm raycast actually hits the block — don't place blind
+        // Verify raycast hits our block — if not, skip this tick
         MovingObjectPosition mop = RotationUtil.rayTrace(rots[0], rots[1],
                 mc.playerController.getBlockReachDistance(), 1.0f);
 
-        if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK
-                || !mop.getBlockPos().equals(pd.block)) return;
+        if (mop != null && mop.typeOfHit == MovingObjectType.BLOCK
+                && mop.getBlockPos().equals(pd.block)) {
+            // Use the actual raycast hit vec for maximum accuracy
+            hitVec = mop.hitVec;
+        } else {
+            // Raycast missed — don't place blind, skip tick
+            return;
+        }
 
-        hitVec = mop.hitVec;
-
-        // Silent rotation — server only, camera stays put
+        // Silent server-side rotation — camera does NOT move
         event.setRotation(rots[0], rots[1], 2);
 
-        // Place
+        // Switch slot, place, restore slot
         int prev = mc.thePlayer.inventory.currentItem;
         mc.thePlayer.inventory.currentItem = blockSlot;
         ItemStack held = mc.thePlayer.inventory.getCurrentItem();
@@ -155,11 +170,10 @@ public class Clutch extends Module {
         if (placed) {
             if (swing.getValue()) mc.thePlayer.swingItem();
             else PacketUtil.sendPacket(new C0APacketAnimation());
-            // Start cooldown after a successful placement
-            placeCooldown = PLACE_COOLDOWN;
+            placeCooldown = 2;
         }
 
-        // Bridge — only redirect existing momentum, never inject speed
+        // Bridge: steer existing momentum toward look direction — never add speed
         if (bridge.getValue() && MoveUtil.isForwardPressed()) {
             double spd = MoveUtil.getSpeed();
             if (spd > 0.001) {
