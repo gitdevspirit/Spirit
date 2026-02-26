@@ -60,7 +60,6 @@ public class ModuleRegistry {
         movementModules.add(Myau.moduleManager.getModule(Eagle.class));
         movementModules.add(Myau.moduleManager.getModule(NoJumpDelay.class));
         movementModules.add(Myau.moduleManager.getModule(AntiVoid.class));
-        movementModules.add(Myau.moduleManager.getModule(Clutch.class));
         movementModules.sort(comparator);
 
         renderModules = new ArrayList<>();
