@@ -16,6 +16,7 @@ public class Clutch extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final SliderSetting  triggerDepth = register(new SliderSetting("Trigger Depth", 5.0, 1.0, 20.0, 0.5));
+    public final SliderSetting  speed        = register(new SliderSetting("Speed", 1.0, 0.5, 3.0, 0.05));
     public final BooleanSetting swing        = register(new BooleanSetting("Swing", true));
 
     private boolean clutching = false;
@@ -62,16 +63,6 @@ public class Clutch extends Module {
         return -1;
     }
 
-    /**
-     * Scans downward from foot Y through every level within reach.
-     * For each Y level checks:
-     *   1. TOP face of the block directly below that Y  (flat result)
-     *   2. SIDE face of a horizontal neighbour at that Y
-     *
-     * Fires the instant any valid surface enters reach — catches mid-fall.
-     * After each placement the placed block becomes the next tick's surface
-     * so the column builds itself automatically.
-     */
     private boolean placeFalling() {
         if (blockSlot < 0) return false;
 
@@ -87,13 +78,13 @@ public class Clutch extends Module {
             int scanX = MathHelper.floor_double(px);
             int scanZ = MathHelper.floor_double(pz);
 
-            // 1. TOP face of block directly beneath this Y level
+            // TOP face of block directly beneath this Y
             BlockPos beneath = new BlockPos(scanX, scanY - 1, scanZ);
             if (!BlockUtil.isReplaceable(beneath) && inReach(beneath, reach)) {
                 if (doPlace(beneath, EnumFacing.UP)) return true;
             }
 
-            // 2. SIDE faces of horizontal neighbours at this exact Y
+            // SIDE faces of horizontal neighbours at this Y
             for (EnumFacing face : new EnumFacing[]{
                     EnumFacing.NORTH, EnumFacing.SOUTH,
                     EnumFacing.EAST,  EnumFacing.WEST }) {
@@ -128,7 +119,6 @@ public class Clutch extends Module {
         return placed;
     }
 
-    /** Exact yaw+pitch from eyes to a point — no dead zones, no noise */
     private float[] calcRotation(Vec3 eyes, Vec3 to) {
         double dx = to.xCoord - eyes.xCoord;
         double dy = to.yCoord - eyes.yCoord;
@@ -159,16 +149,17 @@ public class Clutch extends Module {
         blockSlot = findBlockSlot();
         if (blockSlot < 0) return;
 
-        // Silent rotation straight down toward the block below feet
-        // Server-side only — camera stays wherever the player is looking
+        // Silent rotation toward block below — server-side only
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
-        Vec3 target = new Vec3(
-                mc.thePlayer.posX,
-                mc.thePlayer.posY - 1.5,
-                mc.thePlayer.posZ);
+        Vec3 target = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY - 1.5, mc.thePlayer.posZ);
         float[] rots = calcRotation(eyes, target);
         event.setRotation(rots[0], rots[1], 2);
 
         placeFalling();
+
+        // Speed — applies to bridging forward
+        if (MoveUtil.isForwardPressed()) {
+            MoveUtil.setSpeed(MoveUtil.getBaseMoveSpeed() * speed.getValue(), MoveUtil.getMoveYaw());
+        }
     }
 }
