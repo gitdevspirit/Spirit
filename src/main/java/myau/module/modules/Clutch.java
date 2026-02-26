@@ -12,6 +12,9 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+
 public class Clutch extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
@@ -23,24 +26,19 @@ public class Clutch extends Module {
     }
 
     private boolean isOverVoid() {
-        double px = mc.thePlayer.posX;
-        double py = mc.thePlayer.posY;
-        double pz = mc.thePlayer.posZ;
+        double px = mc.thePlayer.posX, py = mc.thePlayer.posY, pz = mc.thePlayer.posZ;
         double depth = triggerDepth.getValue();
         for (int ox = -1; ox <= 1; ox++) {
             for (int oz = -1; oz <= 1; oz++) {
                 for (double d = 0.25; d <= depth; d += 0.5) {
-                    if (!BlockUtil.isReplaceable(new BlockPos(px + ox, py - d, pz + oz)))
-                        return false;
+                    if (!BlockUtil.isReplaceable(new BlockPos(px + ox, py - d, pz + oz))) return false;
                 }
             }
         }
-        double mx = mc.thePlayer.motionX;
-        double mz = mc.thePlayer.motionZ;
+        double mx = mc.thePlayer.motionX, mz = mc.thePlayer.motionZ;
         for (int t = 1; t <= 3; t++) {
             for (double d = 0.25; d <= depth; d += 0.5) {
-                if (!BlockUtil.isReplaceable(new BlockPos(px + mx * t, py - d, pz + mz * t)))
-                    return false;
+                if (!BlockUtil.isReplaceable(new BlockPos(px + mx * t, py - d, pz + mz * t))) return false;
             }
         }
         return true;
@@ -54,60 +52,109 @@ public class Clutch extends Module {
     }
 
     /**
-     * Scans from directly below feet outward. For every air block at foot
-     * level (or below) that has a solid neighbour within reach, place against
-     * that neighbour. No raycast verification — just place every valid surface
-     * found every tick. The column builds itself tick by tick.
+     * Scaffold-style placement: find all solid blocks near targetPos (foot-1),
+     * sort by closeness to target, pick the best face to place against.
+     * This works while bridging because targetPos follows the player's position.
      */
-    private void placeBelow(int slot) {
-        double px    = mc.thePlayer.posX;
-        double py    = mc.thePlayer.posY;
-        double pz    = mc.thePlayer.posZ;
+    private boolean place(int slot) {
+        // Target = block position directly under feet (where floor should be)
+        BlockPos targetPos = new BlockPos(
+                MathHelper.floor_double(mc.thePlayer.posX),
+                MathHelper.floor_double(mc.thePlayer.posY) - 1,
+                MathHelper.floor_double(mc.thePlayer.posZ));
+
+        // If the floor already exists, nothing to do
+        if (!BlockUtil.isReplaceable(targetPos)) return false;
+
         double reach = mc.playerController.getBlockReachDistance();
-        Vec3   eyes  = mc.thePlayer.getPositionEyes(1.0f);
 
-        int baseX = MathHelper.floor_double(px);
-        int baseY = MathHelper.floor_double(py) - 1; // directly under feet
-        int baseZ = MathHelper.floor_double(pz);
+        // Collect all solid blocks in a 4x4 area that are within reach and
+        // have at least one replaceable neighbour (so we can place against them)
+        ArrayList<BlockPos> candidates = new ArrayList<>();
+        for (int x = -3; x <= 3; x++) {
+            for (int y = -3; y <= 0; y++) {
+                for (int z = -3; z <= 3; z++) {
+                    BlockPos pos = targetPos.add(x, y, z);
+                    if (BlockUtil.isReplaceable(pos)) continue;
+                    if (BlockUtil.isInteractable(pos)) continue;
+                    if (mc.thePlayer.getDistance(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > reach) continue;
 
-        for (int radius = 0; radius <= 1; radius++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (Math.abs(dx) != radius && Math.abs(dz) != radius) continue;
-                    for (int dy = 0; dy >= -3; dy--) {
-                        BlockPos target = new BlockPos(baseX + dx, baseY + dy, baseZ + dz);
-                        if (!BlockUtil.isReplaceable(target)) continue;
-
-                        for (EnumFacing face : EnumFacing.VALUES) {
-                            BlockPos against = target.offset(face);
-                            if (BlockUtil.isReplaceable(against)) continue;
-
-                            // reach check from eyes
-                            double ex = against.getX() + 0.5 - eyes.xCoord;
-                            double ey = against.getY() + 0.5 - eyes.yCoord;
-                            double ez = against.getZ() + 0.5 - eyes.zCoord;
-                            if (ex*ex + ey*ey + ez*ez > reach * reach) continue;
-
-                            Vec3 hitVec = BlockUtil.getClickVec(against, face.getOpposite());
-
-                            int prev = mc.thePlayer.inventory.currentItem;
-                            mc.thePlayer.inventory.currentItem = slot;
-                            ItemStack held = mc.thePlayer.inventory.getCurrentItem();
-                            boolean ok = mc.playerController.onPlayerRightClick(
-                                    mc.thePlayer, mc.theWorld, held, against, face.getOpposite(), hitVec);
-                            mc.thePlayer.inventory.currentItem = prev;
-
-                            if (ok) {
-                                if (swing.getValue()) mc.thePlayer.swingItem();
-                                else PacketUtil.sendPacket(new C0APacketAnimation());
-                                return; // one block per tick
-                            }
+                    // Must have at least one replaceable neighbour face (excluding DOWN)
+                    for (EnumFacing f : EnumFacing.VALUES) {
+                        if (f == EnumFacing.DOWN) continue;
+                        if (BlockUtil.isReplaceable(pos.offset(f))) {
+                            candidates.add(pos);
+                            break;
                         }
                     }
                 }
             }
         }
+
+        if (candidates.isEmpty()) return false;
+
+        // Sort by distance to targetPos — closest wins
+        candidates.sort(Comparator.comparingDouble(
+                p -> p.distanceSqToCenter(targetPos.getX() + 0.5, targetPos.getY() + 0.5, targetPos.getZ() + 0.5)));
+
+        BlockPos best = candidates.get(0);
+
+        // Find the best facing on that block toward targetPos
+        EnumFacing bestFace = getBestFacing(best, targetPos);
+        if (bestFace == null) return false;
+
+        // Compute hit vec and rotation
+        Vec3 hitVec = BlockUtil.getClickVec(best, bestFace);
+        Vec3 eyes   = mc.thePlayer.getPositionEyes(1.0f);
+        double dx = hitVec.xCoord - eyes.xCoord;
+        double dy = hitVec.yCoord - eyes.yCoord;
+        double dz = hitVec.zCoord - eyes.zCoord;
+        float h   = (float) Math.sqrt(dx*dx + dz*dz);
+        float yaw   = (float) Math.toDegrees(Math.atan2(dz, dx)) - 90f;
+        float pitch = MathHelper.clamp_float((float) -Math.toDegrees(Math.atan2(dy, h)), -90f, 90f);
+
+        // The UpdateEvent rotation must be set BEFORE playerController.onPlayerRightClick
+        // We can't set it here since we're already inside onUpdate — so we store and apply
+        storedYaw   = yaw;
+        storedPitch = pitch;
+        hasRotation = true;
+
+        int prev = mc.thePlayer.inventory.currentItem;
+        mc.thePlayer.inventory.currentItem = slot;
+        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
+        boolean ok = mc.playerController.onPlayerRightClick(
+                mc.thePlayer, mc.theWorld, held, best, bestFace, hitVec);
+        mc.thePlayer.inventory.currentItem = prev;
+
+        if (ok) {
+            if (swing.getValue()) mc.thePlayer.swingItem();
+            else PacketUtil.sendPacket(new C0APacketAnimation());
+        }
+        return ok;
     }
+
+    // Best face from a solid block toward the target air position
+    private EnumFacing getBestFacing(BlockPos solid, BlockPos target) {
+        EnumFacing best = null;
+        double bestDist = Double.MAX_VALUE;
+        for (EnumFacing f : EnumFacing.VALUES) {
+            if (f == EnumFacing.DOWN) continue;
+            BlockPos neighbour = solid.offset(f);
+            if (!BlockUtil.isReplaceable(neighbour)) continue;
+            if (neighbour.getY() > target.getY()) continue;
+            double dist = neighbour.distanceSqToCenter(target.getX() + 0.5, target.getY() + 0.5, target.getZ() + 0.5);
+            if (dist < bestDist || (dist == bestDist && f == EnumFacing.UP)) {
+                bestDist = dist;
+                best = f;
+            }
+        }
+        return best;
+    }
+
+    // Rotation computed in place(), applied in onUpdate before placement
+    private float   storedYaw   = 0;
+    private float   storedPitch = 0;
+    private boolean hasRotation = false;
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
@@ -120,7 +167,10 @@ public class Clutch extends Module {
         int slot = findBlockSlot();
         if (slot < 0) return;
 
-        // Silent rotation straight down so placement packet is accepted
+        hasRotation = false;
+
+        // Pre-aim downward so the placement packet is accepted — will be
+        // overwritten with precise rotation inside place() if a block is found
         Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
         Vec3 foot  = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY - 1.0, mc.thePlayer.posZ);
         double dx = foot.xCoord - eyes.xCoord;
@@ -131,6 +181,11 @@ public class Clutch extends Module {
         float pitch = MathHelper.clamp_float((float) -Math.toDegrees(Math.atan2(dy, h)), -90f, 90f);
         event.setRotation(yaw, pitch, 2);
 
-        placeBelow(slot);
+        place(slot);
+
+        // If place() found a better rotation, apply it
+        if (hasRotation) {
+            event.setRotation(storedYaw, storedPitch, 2);
+        }
     }
 }
