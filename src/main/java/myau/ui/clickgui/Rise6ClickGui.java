@@ -61,12 +61,20 @@ public class Rise6ClickGui extends GuiScreen {
     private int getConfigBtnY()     { return posY + getCategoryHeight() + 8; }
     private int getConfigPanelH()   { return showConfigs ? configPanel.getContentHeight() : 0; }
     private int getSidebarHeight()  { return getCategoryHeight() + 8 + 16 + getConfigPanelH() + 8; }
-    private int getPanelHeight()    { return Math.max(modulePanel.getContentHeight() + 50, getSidebarHeight()); }
+    private int getPanelHeight() {
+        ScaledResolution sr = new ScaledResolution(mc);
+        int maxH = sr.getScaledHeight() - posY - 4; // 4px bottom margin
+        int ideal = Math.max(modulePanel.getContentHeight() + 50, getSidebarHeight());
+        return Math.min(ideal, Math.max(getSidebarHeight(), maxH));
+    }
 
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         int panelHeight = getPanelHeight();
-        modulePanel.setVisibleHeight(panelHeight - 50);
+        // visibleHeight = space available for the module list (below search bar + separator)
+        // This is independent of content height so scroll kicks in when content overflows
+        int moduleAreaTop = 36; // search bar (10) + bar height (18) + separator (1) + gap (7)
+        modulePanel.setVisibleHeight(panelHeight - moduleAreaTop - 8); // 8px bottom padding
 
         // Single clean panel — no outer shadow box
         RoundedUtils.drawRoundedRect(posX, posY, TOTAL_WIDTH, panelHeight, 10, 0xF0101010);
@@ -191,7 +199,7 @@ public class Rise6ClickGui extends GuiScreen {
         if (dragging) {
             ScaledResolution sr = new ScaledResolution(mc);
             posX = Math.max(0, Math.min(sr.getScaledWidth()  - TOTAL_WIDTH, mouseX - dragOffsetX));
-            posY = Math.max(0, Math.min(sr.getScaledHeight() - 100,         mouseY - dragOffsetY));
+            posY = Math.max(0, Math.min(sr.getScaledHeight() - getSidebarHeight() - 20, mouseY - dragOffsetY));
         } else {
             modulePanel.mouseClickMove(mouseX);
         }
