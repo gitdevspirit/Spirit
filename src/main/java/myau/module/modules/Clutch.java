@@ -12,18 +12,17 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.item.ItemStack;
 import net.minecraft.network.play.client.C0APacketAnimation;
 import net.minecraft.util.*;
-import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
 public class Clutch extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting  triggerDepth = register(new SliderSetting("Trigger Depth", 5.0,  1.0, 20.0, 0.5));
-    public final SliderSetting  speed        = register(new SliderSetting("Speed",         1.0,  0.5,  3.0, 0.05));
+    public final SliderSetting  triggerDepth = register(new SliderSetting("Trigger Depth", 5.0, 1.0, 20.0, 0.5));
     public final BooleanSetting bridge       = register(new BooleanSetting("Bridge",       false));
+    public final SliderSetting  speed        = register(new SliderSetting("Speed",         1.0, 0.5,  3.0, 0.05));
     public final BooleanSetting swing        = register(new BooleanSetting("Swing",        true));
 
     private boolean clutching = false;
-    private int     blockSlot = -1;
 
     public Clutch() {
         super("Clutch", false);
@@ -32,17 +31,35 @@ public class Clutch extends Module {
     @Override
     public void onDisabled() {
         clutching = false;
-        blockSlot = -1;
     }
 
-    // ── No solid block within triggerDepth below feet ─────────────────────────
+    // ── Only true when falling over real void (not a normal jump) ─────────────
     private boolean isOverVoid() {
-        double px = mc.thePlayer.posX;
-        double py = mc.thePlayer.posY;
-        double pz = mc.thePlayer.posZ;
-        for (double d = 0.25; d <= triggerDepth.getValue(); d += 0.25) {
-            if (!BlockUtil.isReplaceable(new BlockPos(px, py - d, pz))) return false;
+        double px    = mc.thePlayer.posX;
+        double py    = mc.thePlayer.posY;
+        double pz    = mc.thePlayer.posZ;
+        double depth = triggerDepth.getValue();
+
+        // 3x3 footprint straight down
+        for (int ox = -1; ox <= 1; ox++) {
+            for (int oz = -1; oz <= 1; oz++) {
+                for (double d = 0.25; d <= depth; d += 0.5) {
+                    if (!BlockUtil.isReplaceable(new BlockPos(px + ox, py - d, pz + oz)))
+                        return false;
+                }
+            }
         }
+
+        // Predictive — check along motion vector for next 3 ticks
+        double motX = mc.thePlayer.motionX;
+        double motZ = mc.thePlayer.motionZ;
+        for (int tick = 1; tick <= 3; tick++) {
+            for (double d = 0.25; d <= depth; d += 0.5) {
+                if (!BlockUtil.isReplaceable(new BlockPos(px + motX * tick, py - d, pz + motZ * tick)))
+                    return false;
+            }
+        }
+
         return true;
     }
 
@@ -53,16 +70,7 @@ public class Clutch extends Module {
         return -1;
     }
 
-    /**
-     * Finds the best block+face to place against.
-     *
-     * Searches from the block directly below feet, expanding outward and
-     * downward.  Crucially, after each successful placement the newly placed
-     * block becomes the surface for the NEXT tick — so each tick we place one
-     * block and the column grows until the player lands.
-     *
-     * Returns null if nothing is in reach.
-     */
+    // ── Find a block+face to place against, return placement data or null ──────
     private PlaceData findPlacement() {
         double px    = mc.thePlayer.posX;
         double py    = mc.thePlayer.posY;
@@ -70,25 +78,24 @@ public class Clutch extends Module {
         double reach = mc.playerController.getBlockReachDistance();
 
         int baseX = MathHelper.floor_double(px);
-        int baseY = MathHelper.floor_double(py) - 1; // block directly below feet
+        int baseY = MathHelper.floor_double(py) - 1;
         int baseZ = MathHelper.floor_double(pz);
 
-        // Scan outward in rings, then downward — closest wins
         for (int radius = 0; radius <= 2; radius++) {
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     if (Math.abs(dx) != radius && Math.abs(dz) != radius) continue;
-
                     for (int dy = 0; dy >= -4; dy--) {
                         BlockPos target = new BlockPos(baseX + dx, baseY + dy, baseZ + dz);
                         if (!BlockUtil.isReplaceable(target)) continue;
-
-                        // Check every face of this air block for a solid neighbour
                         for (EnumFacing face : EnumFacing.VALUES) {
                             BlockPos neighbour = target.offset(face);
                             if (BlockUtil.isReplaceable(neighbour)) continue;
-                            if (!inReach(neighbour, reach)) continue;
-                            // place against neighbour's face that points back at target
+                            // Distance check from eyes to centre of neighbour block
+                            double nx = neighbour.getX() + 0.5 - px;
+                            double ny = neighbour.getY() + 0.5 - (py + mc.thePlayer.getEyeHeight());
+                            double nz = neighbour.getZ() + 0.5 - pz;
+                            if (nx*nx + ny*ny + nz*nz > reach * reach) continue;
                             return new PlaceData(neighbour, face.getOpposite());
                         }
                     }
@@ -98,42 +105,6 @@ public class Clutch extends Module {
         return null;
     }
 
-    private boolean inReach(BlockPos pos, double reach) {
-        double dx = pos.getX() + 0.5 - mc.thePlayer.posX;
-        double dy = pos.getY() + 0.5 - (mc.thePlayer.posY - mc.thePlayer.getEyeHeight());
-        double dz = pos.getZ() + 0.5 - mc.thePlayer.posZ;
-        return dx*dx + dy*dy + dz*dz <= reach * reach;
-    }
-
-    /** Yaw + pitch aimed straight at the placement face — for the server packet */
-    private float[] getPlacementRotation(PlaceData pd) {
-        Vec3 eyes   = mc.thePlayer.getPositionEyes(1.0f);
-        Vec3 target = BlockUtil.getClickVec(pd.block, pd.face);
-        double dx   = target.xCoord - eyes.xCoord;
-        double dy   = target.yCoord - eyes.yCoord;
-        double dz   = target.zCoord - eyes.zCoord;
-        float yaw   = (float)(Math.atan2(dz, dx) * 180.0 / Math.PI) - 90.0f;
-        float pitch = (float)(-Math.atan2(dy, Math.sqrt(dx*dx + dz*dz)) * 180.0 / Math.PI);
-        return new float[]{ yaw, MathHelper.clamp_float(pitch, -90f, 90f) };
-    }
-
-    private boolean doPlace(PlaceData pd) {
-        Vec3 hitVec = BlockUtil.getClickVec(pd.block, pd.face);
-        int prev = mc.thePlayer.inventory.currentItem;
-        mc.thePlayer.inventory.currentItem = blockSlot;
-        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
-        boolean placed = mc.playerController.onPlayerRightClick(
-                mc.thePlayer, mc.theWorld, held, pd.block, pd.face, hitVec);
-        mc.thePlayer.inventory.currentItem = prev;
-        if (placed) {
-            if (swing.getValue()) mc.thePlayer.swingItem();
-            else PacketUtil.sendPacket(new C0APacketAnimation());
-        }
-        return placed;
-    }
-
-    // ── Events ────────────────────────────────────────────────────────────────
-
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
@@ -141,52 +112,102 @@ public class Clutch extends Module {
 
         if (mc.thePlayer.onGround) {
             clutching = false;
-            blockSlot = -1;
             return;
         }
 
-        // Must be falling downward
-        if (mc.thePlayer.motionY >= 0) {
+        if (mc.thePlayer.motionY >= 0 || !isOverVoid()) {
             clutching = false;
             return;
         }
 
-        if (!isOverVoid()) {
+        int blockSlot = findBlockSlot();
+        if (blockSlot < 0) {
+            clutching = false;
+            return;
+        }
+
+        PlaceData pd = findPlacement();
+        if (pd == null) {
             clutching = false;
             return;
         }
 
         clutching = true;
-        blockSlot = findBlockSlot();
-        if (blockSlot < 0) return;
 
-        PlaceData pd = findPlacement();
-        if (pd == null) return;
+        // ── Compute exact rotation to the hit face ────────────────────────────
+        Vec3 hitVec = BlockUtil.getClickVec(pd.block, pd.face);
+        double relX = hitVec.xCoord - mc.thePlayer.posX;
+        double relY = hitVec.yCoord - mc.thePlayer.posY - mc.thePlayer.getEyeHeight();
+        double relZ = hitVec.zCoord - mc.thePlayer.posZ;
 
-        // ── Silent rotation: server receives the correct look direction,
-        //    player's visual camera is completely unchanged ──────────────────
-        float[] rots = getPlacementRotation(pd);
+        // getRotationsTo returns [yaw, pitch] needed to look at this point
+        float[] rots = RotationUtil.getRotationsTo(relX, relY, relZ,
+                event.getYaw(), event.getPitch());
+
+        // ── Raycast to confirm the rotation actually hits the target ──────────
+        MovingObjectPosition mop = RotationUtil.rayTrace(rots[0], rots[1],
+                mc.playerController.getBlockReachDistance(), 1.0f);
+
+        // If the raycast doesn't land on our target block+face, find the best
+        // hit vec offset that does
+        if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK
+                || !mop.getBlockPos().equals(pd.block)
+                || mop.sideHit != pd.face) {
+
+            // Try centre of face as fallback
+            hitVec = BlockUtil.getClickVec(pd.block, pd.face);
+            relX = hitVec.xCoord - mc.thePlayer.posX;
+            relY = hitVec.yCoord - mc.thePlayer.posY - mc.thePlayer.getEyeHeight();
+            relZ = hitVec.zCoord - mc.thePlayer.posZ;
+            rots = RotationUtil.getRotationsTo(relX, relY, relZ,
+                    event.getYaw(), event.getPitch());
+
+            mop = RotationUtil.rayTrace(rots[0], rots[1],
+                    mc.playerController.getBlockReachDistance(), 1.0f);
+
+            // If still can't hit it, skip this tick — don't place blind
+            if (mop == null || mop.typeOfHit != MovingObjectType.BLOCK
+                    || !mop.getBlockPos().equals(pd.block)) {
+                return;
+            }
+            hitVec = mop.hitVec;
+        } else {
+            hitVec = mop.hitVec;
+        }
+
+        // ── Apply silent rotation — server-side only, camera doesn't move ─────
         event.setRotation(rots[0], rots[1], 2);
 
-        // Place the block this tick — next tick the placed block becomes the
-        // new surface and we place the next one on top of it, building a column
-        doPlace(pd);
+        // ── Place the block ───────────────────────────────────────────────────
+        int prev = mc.thePlayer.inventory.currentItem;
+        mc.thePlayer.inventory.currentItem = blockSlot;
+        ItemStack held = mc.thePlayer.inventory.getCurrentItem();
+        boolean placed = mc.playerController.onPlayerRightClick(
+                mc.thePlayer, mc.theWorld, held, pd.block, pd.face, hitVec);
+        mc.thePlayer.inventory.currentItem = prev;
 
-        // Bridge: push forward each tick so we keep moving while placing
-        if (bridge.getValue()) {
-            MoveUtil.setSpeed(
-                MoveUtil.getBaseMoveSpeed() * speed.getValue(),
-                MoveUtil.getMoveYaw());
+        if (placed) {
+            if (swing.getValue()) mc.thePlayer.swingItem();
+            else PacketUtil.sendPacket(new C0APacketAnimation());
+        }
+
+        // Bridge: only nudge speed when player is pressing a movement key —
+        // don't set speed from nothing as that causes Simulation flags
+        if (bridge.getValue() && MoveUtil.isForwardPressed()) {
+            double current = MoveUtil.getSpeed();
+            double target  = MoveUtil.getBaseMoveSpeed() * speed.getValue();
+            // Gently ease toward target speed rather than snapping
+            if (current < target) {
+                MoveUtil.setSpeed(current + Math.min(0.02, target - current), MoveUtil.getMoveYaw());
+            }
         }
     }
 
-    /** Stay on edge of placed blocks — don't slide off */
+    // SafeWalk only while actively clutching so we don't slide off placed blocks
     @EventTarget
     public void onSafeWalk(SafeWalkEvent event) {
         if (isEnabled() && clutching) event.setSafeWalk(true);
     }
-
-    // ── Helper record ─────────────────────────────────────────────────────────
 
     private static class PlaceData {
         final BlockPos   block;
