@@ -153,7 +153,7 @@ public class Autoblock extends Module {
         if (this.blockDelayMS > 0L) this.blockDelayMS -= 50L;
         if (this.releaseCooldownTicks > 0) this.releaseCooldownTicks--;
 
-        if (AimAssist.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
+        if (KillAura.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
             if (this.blockingState) stopBlock();
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             this.isBlocking     = false;
