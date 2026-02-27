@@ -128,19 +128,25 @@ public class AimAssist extends Module {
                     float targetYaw   = smoothedYaw   + dyaw                           * lerpFactor;
                     float targetPitch = smoothedPitch + (exactRots[1] - smoothedPitch) * lerpFactor;
 
-                    float maxYaw   = (float) hSpeed.getValue();
-                    float maxPitch = (float) vSpeed.getValue();
-
                     float moveYaw = targetYaw - mc.thePlayer.rotationYaw;
                     while (moveYaw >  180) moveYaw -= 360;
                     while (moveYaw < -180) moveYaw += 360;
-                    moveYaw = Math.max(-maxYaw, Math.min(maxYaw, moveYaw));
 
                     float movePitch = targetPitch - mc.thePlayer.rotationPitch;
-                    if (maxPitch > 0)
-                        movePitch = Math.max(-maxPitch, Math.min(maxPitch, movePitch));
-                    else
-                        movePitch = 0;
+
+                    // Only cap speed when smoothing is active — at smoothing=0 the
+                    // lerp is already instant so capping by hSpeed just makes it slow
+                    if (smoothing.getValue() > 0) {
+                        float maxYaw   = (float) hSpeed.getValue();
+                        float maxPitch = (float) vSpeed.getValue();
+                        moveYaw = Math.max(-maxYaw, Math.min(maxYaw, moveYaw));
+                        if (maxPitch > 0)
+                            movePitch = Math.max(-maxPitch, Math.min(maxPitch, movePitch));
+                        else
+                            movePitch = 0;
+                    } else {
+                        if ((float) vSpeed.getValue() <= 0) movePitch = 0;
+                    }
 
                     smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
                     smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
