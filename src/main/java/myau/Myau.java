@@ -93,9 +93,11 @@ public class Myau {
         moduleManager.modules.put(Blink.class,           new Blink());
         moduleManager.modules.put(BackTrack.class,       new BackTrack());
         moduleManager.modules.put(FPScounter.class,      new FPScounter());
+        moduleManager.modules.put(Freelook.class,        new Freelook());
         moduleManager.modules.put(Chams.class,           new Chams());
         moduleManager.modules.put(ChestESP.class,        new ChestESP());
         moduleManager.modules.put(ChestStealer.class,    new ChestStealer());
+        moduleManager.modules.put(Clutch.class,          new Clutch());
         moduleManager.modules.put(Eagle.class,           new Eagle());
         moduleManager.modules.put(ESP.class,             new ESP());
         moduleManager.modules.put(FastPlace.class,       new FastPlace());
