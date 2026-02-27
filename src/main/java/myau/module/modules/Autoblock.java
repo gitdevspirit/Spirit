@@ -23,10 +23,11 @@ import net.minecraft.util.EnumFacing;
 public class Autoblock extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final DropdownSetting mode = register(new DropdownSetting("Mode", 10,
+    // SLINKY removed — was index 11
+    public final DropdownSetting mode = register(new DropdownSetting("Mode", 9,
             "NONE", "VANILLA", "SPOOF", "HYPIXEL", "BLINK",
             "INTERACT", "SWAP", "LEGIT", "FAKE", "LAGRANGE",
-            "GRIM", "SLINKY", "LEGITFULL"
+            "GRIM", "LEGITFULL"
     ));
 
     public final SliderSetting blockRange   = register(new SliderSetting("Block Range",   6.0,   3.0,   8.0,   0.1));
@@ -38,28 +39,26 @@ public class Autoblock extends Module {
     public final BooleanSetting requireAttack = register(new BooleanSetting("Require Attack", true));
     public final BooleanSetting autoRelease   = register(new BooleanSetting("Auto Release",   true));
 
-    // SLINKY settings
-    public final SliderSetting  slinkyMaxHold        = register(new SliderSetting("Slinky Max Hold",      4.0,   1.0,  10.0,  0.5));
-    public final SliderSetting  slinkyMaxHurt        = register(new SliderSetting("Slinky Max Hurt",      8.0,   1.0,  10.0,  0.5));
-    public final SliderSetting  slinkyLagChance      = register(new SliderSetting("Slinky Lag Chance",   35.0,   0.0, 100.0,  1.0));
-    public final SliderSetting  slinkyLagDuration    = register(new SliderSetting("Slinky Lag Duration", 150.0,  0.0, 500.0, 10.0));
-    public final BooleanSetting slinkyReblockInstant = register(new BooleanSetting("Slinky Reblock Instant", true));
-    public final BooleanSetting slinkyRightClick     = register(new BooleanSetting("Slinky Right Click",  true));
-    public final BooleanSetting slinkyLeftClick      = register(new BooleanSetting("Slinky Left Click",   false));
-    public final BooleanSetting slinkyDamaged        = register(new BooleanSetting("Slinky Damaged",      true));
-
-    // LEGITFULL settings (block→hold 2 ticks→release rhythm, bypasses Grim)
-    public final BooleanSetting legitfullBlockDelay  = register(new BooleanSetting("Block Delay", false, () -> mode.getIndex() == 12));
+    // LEGITFULL settings — controls how long to hold and how long to wait before reblocking
+    public final SliderSetting  legitfullHoldMin    = register(new SliderSetting("LF Hold Min",    3.0,  1.0, 10.0, 0.5));
+    public final SliderSetting  legitfullHoldMax    = register(new SliderSetting("LF Hold Max",    6.0,  1.0, 10.0, 0.5));
+    public final SliderSetting  legitfullDelayMin   = register(new SliderSetting("LF Delay Min",   2.0,  0.0,  8.0, 0.5));
+    public final SliderSetting  legitfullDelayMax   = register(new SliderSetting("LF Delay Max",   4.0,  0.0,  8.0, 0.5));
+    public final BooleanSetting legitfullBlockDelay = register(new BooleanSetting("Block Delay",   false, () -> mode.getIndex() == 11));
 
     // Internal state
-    private boolean blockingState  = false;
-    private boolean fakeBlockState = false;
-    private boolean isBlocking     = false;
-    private boolean blinkReset     = false;
-    private int     blockTick      = 0;
-    private long    blockDelayMS   = 0L;
-    private int     releaseTick    = 0;
-    private int     releaseCooldownTicks = 0;  // Min ticks after release before re-block (Grim place/use PacketOrderI)
+    private boolean blockingState        = false;
+    private boolean fakeBlockState       = false;
+    private boolean isBlocking           = false;
+    private boolean blinkReset           = false;
+    private int     blockTick            = 0;
+    private long    blockDelayMS         = 0L;
+    private int     releaseTick          = 0;
+    private int     releaseCooldownTicks = 0;
+
+    // LEGITFULL rhythm state
+    private int legitHoldTicks  = 0; // how many ticks to hold the block
+    private int legitDelayTicks = 0; // how many ticks to wait before reblocking
 
     public Autoblock() {
         super("Autoblock", false);
@@ -73,6 +72,13 @@ public class Autoblock extends Module {
 
     private long getBlockDelay() {
         return (long)(1000.0F / RandomUtil.nextLong((long) getMinCPS(), (long) getMaxCPS()));
+    }
+
+    /** Random int in [min, max] inclusive */
+    private int randRange(double min, double max) {
+        int lo = (int) Math.round(Math.min(min, max));
+        int hi = (int) Math.round(Math.max(min, max));
+        return lo == hi ? lo : lo + (int)(Math.random() * (hi - lo + 1));
     }
 
     private boolean canAutoblock() {
@@ -103,7 +109,7 @@ public class Autoblock extends Module {
         stopBlock(false);
     }
 
-    private void stopBlock(boolean fromLegitFull) {
+    private void stopBlock(boolean skipCooldown) {
         PacketUtil.sendPacket(new C07PacketPlayerDigging(
                 C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
                 BlockPos.ORIGIN,
@@ -112,8 +118,8 @@ public class Autoblock extends Module {
         mc.thePlayer.stopUsingItem();
         this.blockingState = false;
         this.releaseTick   = 0;
-        if (!fromLegitFull) {
-            this.releaseCooldownTicks = 5;  // Wait before next place packet (Grim place/use PacketOrderI)
+        if (!skipCooldown) {
+            this.releaseCooldownTicks = 5;
         }
     }
 
@@ -147,13 +153,12 @@ public class Autoblock extends Module {
         if (this.blockDelayMS > 0L) this.blockDelayMS -= 50L;
         if (this.releaseCooldownTicks > 0) this.releaseCooldownTicks--;
 
-        // Don't re-block after KillAura attacks or until release has "settled" (Grim PacketOrderI place/use)
         if (KillAura.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
             if (this.blockingState) stopBlock();
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-            this.isBlocking = false;
+            this.isBlocking     = false;
             this.fakeBlockState = false;
-            this.blockTick = 0;
+            this.blockTick      = 0;
             return;
         }
 
@@ -166,9 +171,9 @@ public class Autoblock extends Module {
         if (!canBlock) {
             if (this.blockingState) stopBlock();
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-            this.isBlocking    = false;
+            this.isBlocking     = false;
             this.fakeBlockState = false;
-            this.blockTick     = 0;
+            this.blockTick      = 0;
             return;
         }
 
@@ -177,13 +182,13 @@ public class Autoblock extends Module {
         switch (getMode()) {
 
             case 0: // NONE
-                this.isBlocking    = false;
+                this.isBlocking     = false;
                 this.fakeBlockState = false;
                 break;
 
             case 1: // VANILLA
                 if (!this.blockingState) swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = false;
                 break;
 
@@ -193,7 +198,7 @@ public class Autoblock extends Module {
                 PacketUtil.sendPacket(new C09PacketHeldItemChange(slot2));
                 PacketUtil.sendPacket(new C09PacketHeldItemChange(item2));
                 swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = false;
                 break;
 
@@ -202,7 +207,7 @@ public class Autoblock extends Module {
                     case 0: swap = true; this.blockTick = 1; break;
                     case 1: if (this.blockDelayMS <= 50L) this.blockTick = 0; break;
                 }
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = true;
                 break;
 
@@ -217,7 +222,7 @@ public class Autoblock extends Module {
                         if (this.blockDelayMS <= 50L) this.blockTick = 0;
                         break;
                 }
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = true;
                 break;
 
@@ -227,7 +232,7 @@ public class Autoblock extends Module {
                 PacketUtil.sendPacket(new C09PacketHeldItemChange(empty5));
                 ((IAccessorPlayerControllerMP) mc.playerController).setCurrentPlayerItem(empty5);
                 swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = true;
                 break;
 
@@ -237,18 +242,18 @@ public class Autoblock extends Module {
                 PacketUtil.sendPacket(new C09PacketHeldItemChange(emptySlot6));
                 PacketUtil.sendPacket(new C09PacketHeldItemChange(cur6));
                 swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = true;
                 break;
 
             case 7: // LEGIT
                 swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = false;
                 break;
 
             case 8: // FAKE
-                this.isBlocking    = false;
+                this.isBlocking     = false;
                 this.fakeBlockState = true;
                 break;
 
@@ -269,76 +274,63 @@ public class Autoblock extends Module {
                         if (ka9.isAttackAllowed()) this.blockTick = 0;
                         break;
                 }
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = true;
                 break;
 
             case 10: // GRIM
                 if (!this.blockingState) swap = true;
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = false;
                 break;
 
-            case 11: // SLINKY
-                boolean allow = false;
-                if (slinkyRightClick.getValue() && PlayerUtil.isUsingItem())                    allow = true;
-                if (slinkyLeftClick.getValue()  && mc.gameSettings.keyBindAttack.isKeyDown())   allow = true;
-                if (slinkyDamaged.getValue()    && mc.thePlayer.hurtTime > 0)                   allow = true;
-                if (mc.thePlayer.hurtTime > (float) slinkyMaxHurt.getValue())                   allow = false;
-
-                if (!allow) {
-                    if (this.blockingState) stopBlock();
-                    this.isBlocking    = false;
-                    this.fakeBlockState = false;
-                    break;
-                }
-
-                if (RandomUtil.nextInt(0, 100) < (float) slinkyLagChance.getValue()) {
-                    this.blockDelayMS = (long) slinkyLagDuration.getValue();
-                }
-
-                if (slinkyReblockInstant.getValue()) {
-                    swap = !this.blockingState;
-                } else {
-                    if (this.blockDelayMS <= 0L) swap = true;
-                }
-
-                this.releaseTick   = (int) slinkyMaxHold.getValue();
-                this.isBlocking    = true;
-                this.fakeBlockState = false;
-                break;
-
-            case 12: // LEGITFULL - block→hold 2 ticks→release rhythm (Grim bypass)
+            case 11: { // LEGITFULL — randomised hold→delay rhythm
+                // Phase 0: waiting for optional pre-block delay
+                // Phase 1: blocking (hold for legitHoldTicks)
+                // Phase 2: released, waiting for legitDelayTicks before reblocking
                 if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
                     switch (this.blockTick) {
-                        case 0:
+                        case 0: // Start — optionally wait one tick before blocking
                             if (legitfullBlockDelay.getValue()) {
                                 this.blockTick = 1;
-                            } else {
-                                if (!this.blockingState) swap = true;
-                                this.blockTick = 2;
+                                break;
                             }
-                            break;
-                        case 1:
+                            // Fall through to case 1
+                        case 1: // Block and pick how long to hold
                             if (!this.blockingState) swap = true;
+                            this.legitHoldTicks = randRange(
+                                    legitfullHoldMin.getValue(),
+                                    legitfullHoldMax.getValue());
                             this.blockTick = 2;
                             break;
-                        case 2:
-                        case 3:
-                            swap = false;
-                            this.blockTick++;
+
+                        case 2: // Holding — count down
+                            this.legitHoldTicks--;
+                            if (this.legitHoldTicks <= 0) {
+                                // Release and pick how long to wait
+                                if (this.blockingState) stopBlock(true);
+                                this.legitDelayTicks = randRange(
+                                        legitfullDelayMin.getValue(),
+                                        legitfullDelayMax.getValue());
+                                this.blockTick = 3;
+                            }
                             break;
-                        case 4:
-                            if (this.blockingState) stopBlock(true);  // LEGITFULL rhythm - no extra cooldown
-                            this.blockTick = 0;
+
+                        case 3: // Delay between releases — count down then restart
+                            this.legitDelayTicks--;
+                            if (this.legitDelayTicks <= 0) {
+                                this.blockTick = 0;
+                            }
                             break;
+
                         default:
                             this.blockTick = 0;
                     }
                 }
-                this.isBlocking    = true;
+                this.isBlocking     = true;
                 this.fakeBlockState = false;
                 break;
+            }
         }
 
         if (swap && this.blockDelayMS <= 0L) {
@@ -350,12 +342,14 @@ public class Autoblock extends Module {
     private void resetState() {
         if (this.blockingState) stopBlock();
         Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-        this.isBlocking    = false;
-        this.fakeBlockState = false;
-        this.blockTick     = 0;
-        this.blockDelayMS  = 0L;
-        this.releaseTick   = 0;
+        this.isBlocking          = false;
+        this.fakeBlockState      = false;
+        this.blockTick           = 0;
+        this.blockDelayMS        = 0L;
+        this.releaseTick         = 0;
         this.releaseCooldownTicks = 0;
+        this.legitHoldTicks      = 0;
+        this.legitDelayTicks     = 0;
     }
 
     public boolean isBlocking() {
@@ -366,9 +360,8 @@ public class Autoblock extends Module {
         return (mc.thePlayer.isUsingItem() || this.blockingState) && ItemUtil.isHoldingSword();
     }
 
-    /** LEGITFULL hold phase - KillAura must not interrupt (skip attack, don't stopBlock) */
     public boolean isInLegitFullHoldPhase() {
-        return getMode() == 12 && (this.blockTick == 2 || this.blockTick == 3 || this.blockTick == 4);
+        return getMode() == 11 && (this.blockTick == 2);
     }
 
     @Override
