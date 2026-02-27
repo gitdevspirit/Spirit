@@ -5,6 +5,7 @@ import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
+import myau.events.RightClickMouseEvent;
 import myau.events.UpdateEvent;
 import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
@@ -133,6 +134,19 @@ public class Autoblock extends Module {
                 return i;
         }
         return Math.floorMod(currentSlot - 1, 9);
+    }
+
+    /**
+     * Cancel manual right-click while holding a sword when Autoblock is enabled.
+     * This ensures all blocking goes through Autoblock's rhythm, not manual right-clicks
+     * which would fight against Autoblock's block/release cycle.
+     */
+    @EventTarget(Priority.HIGHEST)
+    public void onRightClick(RightClickMouseEvent event) {
+        if (!isEnabled()) return;
+        if (getMode() == 0) return; // NONE mode - allow manual
+        if (!ItemUtil.isHoldingSword()) return;
+        event.setCancelled(true);
     }
 
     @EventTarget(Priority.LOWEST)
