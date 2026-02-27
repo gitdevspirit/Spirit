@@ -246,15 +246,18 @@ public class KillAura extends Module {
         if (Myau.playerStateManager.digging || Myau.playerStateManager.placing) return false;
         if (!attackTimer.hasTimeElapsed(getAttackDelay())) return false;
 
-        // Ask Autoblock to release before we hit
+        // Ask Autoblock to release before we hit.
+        // Use skipCooldown=true so Autoblock's releaseCooldownTicks isn't set —
+        // KA already waits one tick via deferredAttack, so the extra 5-tick lockout
+        // would just prevent Autoblock from reblocking after the hit.
         try {
             Autoblock ab = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
             if (ab != null && ab.isEnabled() && ab.isPlayerBlocking()) {
-                if (ab.isInLegitFullHoldPhase()) return false; // wait for LEGITFULL hold to finish
-                ab.stopBlock();
+                if (ab.isInLegitFullHoldPhase()) return false;
+                ab.stopBlockForAttack(); // releases without triggering releaseCooldownTicks
                 deferredAttack = true;
                 deferredTarget = target;
-                return false; // attack next tick once block is released
+                return false;
             }
         } catch (Exception ignored) {}
 
@@ -269,7 +272,7 @@ public class KillAura extends Module {
             if (mc.playerController.getCurrentGameType() != GameType.SPECTATOR)
                 PlayerUtil.attackEntity(entity);
             attackTimer.reset();
-            attackCooldownTicks = 5;
+            attackCooldownTicks = 2;
             return true;
         }
 
