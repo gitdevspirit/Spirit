@@ -7,10 +7,40 @@
   "compatibilityLevel": "JAVA_8",
 
   "mixins": [
-    "MixinGuiIngame",      
-    "MixinGuiIngameHUD"    
+    "MixinGuiIngame",
+    "MixinGuiIngameHUD"
   ],
 
-  "client": [],
+  "client": [
+    "MixinAbstractClientPlayer",
+    "MixinBlock",
+    "MixinBlockBush",
+    "MixinBlockGrass",
+    "MixinBlockLadder",
+    "MixinBlockLeaves",
+    "MixinBlockModelRenderer",
+    "MixinBlockPane",
+    "MixinBlockRendererDispatcher",
+    "MixinBlockWeb",
+    "MixinEntity",
+    "MixinEntityLivingBase",
+    "MixinEntityPlayer",
+    "MixinEntityPlayerSP",
+    "MixinEntityRenderer",
+    "MixinFontRenderer",
+    "MixinFovHandler",
+    "MixinGuiIngameForge",
+    "MixinItemStack",
+    "MixinKeyBinding",
+    "MixinMinecraft",
+    "MixinNetworkManager",
+    "MixinPlayerControllerMP",
+    "MixinRenderManager",
+    "MixinRendererLivingEntity",
+    "MixinVisGraph",
+    "MixinWorld",
+    "MixinWorldRenderer"
+  ],
+
   "server": []
 }
