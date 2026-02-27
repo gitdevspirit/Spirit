@@ -110,6 +110,15 @@ public class Autoblock extends Module {
         stopBlock(false);
     }
 
+    /**
+     * Called by KillAura before attacking. Releases the block WITHOUT setting
+     * releaseCooldownTicks so Autoblock can immediately reblock after the hit.
+     * KillAura's attackCooldownTicks handles the Grim PacketOrderI window instead.
+     */
+    public void stopBlockForAttack() {
+        stopBlock(true);
+    }
+
     private void stopBlock(boolean skipCooldown) {
         PacketUtil.sendPacket(new C07PacketPlayerDigging(
                 C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
@@ -120,7 +129,7 @@ public class Autoblock extends Module {
         this.blockingState = false;
         this.releaseTick   = 0;
         if (!skipCooldown) {
-            this.releaseCooldownTicks = 5;
+            this.releaseCooldownTicks = 3;
         }
     }
 
@@ -172,7 +181,6 @@ public class Autoblock extends Module {
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             this.isBlocking     = false;
             this.fakeBlockState = false;
-            this.blockTick      = 0;
             return;
         }
 
