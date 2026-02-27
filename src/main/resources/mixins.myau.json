@@ -27,6 +27,7 @@
     "MixinEntityPlayer",
     "MixinEntityPlayerSP",
     "MixinEntityRenderer",
+    "MixinFreelook",
     "MixinFontRenderer",
     "MixinFovHandler",
     "MixinGuiIngameForge",
