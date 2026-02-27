@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import me.ksyz.accountmanager.AccountManager;
 import myau.command.CommandManager;
+import myau.render.RenderEventBridge;
+import net.minecraftforge.common.MinecraftForge;
 import myau.command.commands.BindCommand;
 import myau.command.commands.HideCommand;
 import myau.command.commands.SpammerCommand;
@@ -94,6 +96,7 @@ public class Myau {
         moduleManager.modules.put(Chams.class,           new Chams());
         moduleManager.modules.put(ChestESP.class,        new ChestESP());
         moduleManager.modules.put(ChestStealer.class,    new ChestStealer());
+        moduleManager.modules.put(Clutch.class,          new Clutch());
         moduleManager.modules.put(Eagle.class,           new Eagle());
         moduleManager.modules.put(ESP.class,             new ESP());
         moduleManager.modules.put(FastPlace.class,       new FastPlace());
@@ -190,5 +193,9 @@ public class Myau {
         }
 
         AccountManager.init();
+
+        // Bridge Forge's RenderWorldLastEvent → our Render3DEvent
+        // This is what makes ESP, BedPlates, ItemESP, etc. actually render
+        MinecraftForge.EVENT_BUS.register(new RenderEventBridge());
     }
 }
