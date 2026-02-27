@@ -5,7 +5,6 @@ import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
-import myau.events.RightClickMouseEvent;
 import myau.events.UpdateEvent;
 import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
@@ -110,15 +109,6 @@ public class Autoblock extends Module {
         stopBlock(false);
     }
 
-    /**
-     * Called by KillAura before attacking. Releases the block WITHOUT setting
-     * releaseCooldownTicks so Autoblock can immediately reblock after the hit.
-     * KillAura's attackCooldownTicks handles the Grim PacketOrderI window instead.
-     */
-    public void stopBlockForAttack() {
-        stopBlock(true);
-    }
-
     private void stopBlock(boolean skipCooldown) {
         PacketUtil.sendPacket(new C07PacketPlayerDigging(
                 C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
@@ -129,7 +119,7 @@ public class Autoblock extends Module {
         this.blockingState = false;
         this.releaseTick   = 0;
         if (!skipCooldown) {
-            this.releaseCooldownTicks = 3;
+            this.releaseCooldownTicks = 5;
         }
     }
 
@@ -143,19 +133,6 @@ public class Autoblock extends Module {
                 return i;
         }
         return Math.floorMod(currentSlot - 1, 9);
-    }
-
-    /**
-     * Cancel manual right-click while holding a sword when Autoblock is enabled.
-     * This ensures all blocking goes through Autoblock's rhythm, not manual right-clicks
-     * which would fight against Autoblock's block/release cycle.
-     */
-    @EventTarget(Priority.HIGHEST)
-    public void onRightClick(RightClickMouseEvent event) {
-        if (!isEnabled()) return;
-        if (getMode() == 0) return; // NONE mode - allow manual
-        if (!ItemUtil.isHoldingSword()) return;
-        event.setCancelled(true);
     }
 
     @EventTarget(Priority.LOWEST)
@@ -176,11 +153,12 @@ public class Autoblock extends Module {
         if (this.blockDelayMS > 0L) this.blockDelayMS -= 50L;
         if (this.releaseCooldownTicks > 0) this.releaseCooldownTicks--;
 
-        if (KillAura.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
+        if (AimAssist.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
             if (this.blockingState) stopBlock();
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             this.isBlocking     = false;
             this.fakeBlockState = false;
+            this.blockTick      = 0;
             return;
         }
 
