@@ -100,6 +100,7 @@ public class ModuleRegistry {
         playerModules.add(Myau.moduleManager.getModule(MCF.class));
         playerModules.add(Myau.moduleManager.getModule(AntiDebuff.class));
         playerModules.add(Myau.moduleManager.getModule(FlagDetector.class));
+        playerModules.add(Myau.moduleManager.getModule(Freelook.class));
         playerModules.sort(comparator);
 
         miscModules = new ArrayList<>();
