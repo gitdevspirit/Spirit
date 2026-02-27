@@ -33,7 +33,7 @@ public class BedPlates extends Module {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     // Bed tracking state
-    private final Map<String, Map<String, Object>> bedPositions   = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, Object>> bedPositions  = new ConcurrentHashMap<>();
     private final Map<String, Boolean>             searchedBlocks = new ConcurrentHashMap<>();
     private final Set<Integer>                     yLevels        = ConcurrentHashMap.newKeySet();
 
@@ -106,9 +106,7 @@ public class BedPlates extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         int ticks = mc.thePlayer.ticksExisted;
-        // Always scan — don't require yLevels to be populated first
         if (ticks % 3   == 0) findYLevels();
-        if (ticks % 10  == 0) scanAroundSelf();   // NEW: also find beds near local player
         if (ticks % 20  == 0) searchForBeds();
         if (ticks % 300 == 0) searchedBlocks.clear();
         updateBeds();
@@ -117,7 +115,8 @@ public class BedPlates extends Module {
     @EventTarget
     public void onRender3D(Render3DEvent event) {
         if (!isEnabled()) return;
-        // Capture the GL transform while the world matrix is active
+        // Capture the GL transform while the world matrix is active so we can
+        // project world positions to screen coords during Render2D
         modelview.clear();  projection.clear();  viewport.clear();
         GL11.glGetFloat(GL11.GL_MODELVIEW_MATRIX, modelview);
         GL11.glGetFloat(GL11.GL_PROJECTION_MATRIX, projection);
@@ -132,11 +131,8 @@ public class BedPlates extends Module {
     @SuppressWarnings("unchecked")
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !matricesCaptured) return;
+        if (!isEnabled() || !matricesCaptured || bedPositions.isEmpty()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
-
-        // If no beds found yet, nothing to render (but don't bail on empty map — keep scanning)
-        if (bedPositions.isEmpty()) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
         int sf = sr.getScaleFactor();
@@ -157,7 +153,6 @@ public class BedPlates extends Module {
             if (distance > maxDist) continue;
 
             Map<String, Integer> layers = (Map<String, Integer>) bed.getOrDefault("layers", Collections.emptyMap());
-            // Render even if layers is empty (bed exists but no defence blocks)
 
             BlockPos p1 = (BlockPos) bed.get("position1");
             BlockPos p2 = (BlockPos) bed.get("position2");
@@ -186,61 +181,54 @@ public class BedPlates extends Module {
             float padding  =  2 * currentScale;
             float boxSize  = itemSize + padding;
 
-            // If no defence blocks, render a small indicator dot/label
-            if (layerKeys.isEmpty()) {
-                GlStateManager.pushMatrix();
-                GlStateManager.enableBlend();
-                GlStateManager.disableDepth();
-                drawRect(sx - 4, sy - 4, sx + 4, sy + 4, 0xCC44FF44);
-                GlStateManager.enableDepth();
-                GlStateManager.disableBlend();
-                GlStateManager.popMatrix();
-                continue;
-            }
-
-            float totalW   = layerKeys.size() * boxSize;
-            float startX   = sx - totalW / 2f;
-            float startY   = sy - boxSize / 2f;
-
             GlStateManager.pushMatrix();
             GlStateManager.enableBlend();
             GlStateManager.disableDepth();
 
-            // Dark translucent background
-            drawRect(startX - padding, startY - padding,
-                     startX + totalW + padding, startY + boxSize + padding,
-                     0xCC1A1A1F);
+            if (layerKeys.isEmpty()) {
+                // Undefended bed — show a small green dot
+                drawRect(sx - 4 * currentScale, sy - 4 * currentScale,
+                         sx + 4 * currentScale, sy + 4 * currentScale, 0xCC44FF44);
+            } else {
+                float totalW = layerKeys.size() * boxSize;
+                float startX = sx - totalW / 2f;
+                float startY = sy - boxSize / 2f;
 
-            for (int i = 0; i < layerKeys.size(); i++) {
-                String blockName = layerKeys.get(i).split(":")[0];
-                float ix = startX + i * boxSize + padding / 2f;
-                float iy = startY + padding / 2f;
+                // Dark translucent background
+                drawRect(startX - padding, startY - padding,
+                         startX + totalW + padding, startY + boxSize + padding,
+                         0xCC1A1A1F);
 
-                ItemStack stack = stackFromBlockName(blockName);
-                if (stack != null) {
-                    GlStateManager.pushMatrix();
-                    GlStateManager.translate(ix, iy, 150);
-                    GlStateManager.scale(currentScale, currentScale, currentScale);
-                    GlStateManager.enableDepth();
-                    mc.getRenderItem().renderItemIntoGUI(stack, 0, 0);
-                    GlStateManager.disableDepth();
-                    GlStateManager.popMatrix();
-                }
+                for (int i = 0; i < layerKeys.size(); i++) {
+                    String blockName = layerKeys.get(i);
+                    float ix = startX + i * boxSize + padding / 2f;
+                    float iy = startY + padding / 2f;
 
-                // Block count label (bottom-right corner of the icon)
-                if (showCount.getValue()) {
-                    int count = layers.getOrDefault(layerKeys.get(i), 0);
-                    if (count > 1) {
-                        String txt = String.valueOf(count);
-                        float textScale = currentScale * 0.55f;
-                        float tw = mc.fontRendererObj.getStringWidth(txt) * textScale;
-                        float tx = ix + itemSize - tw + padding * 0.25f;
-                        float ty = iy + itemSize - (mc.fontRendererObj.FONT_HEIGHT * textScale) + padding * 0.25f;
+                    ItemStack stack = stackFromBlockName(blockName);
+                    if (stack != null) {
                         GlStateManager.pushMatrix();
-                        GlStateManager.translate(tx, ty, 0);
-                        GlStateManager.scale(textScale, textScale, 1f);
-                        mc.fontRendererObj.drawStringWithShadow(txt, 0, 0, 0xFFFFFF);
+                        GlStateManager.translate(ix, iy, 150);
+                        GlStateManager.scale(currentScale, currentScale, currentScale);
+                        GlStateManager.enableDepth();
+                        mc.getRenderItem().renderItemIntoGUI(stack, 0, 0);
+                        GlStateManager.disableDepth();
                         GlStateManager.popMatrix();
+                    }
+
+                    if (showCount.getValue()) {
+                        int count = layers.getOrDefault(layerKeys.get(i), 0);
+                        if (count > 1) {
+                            String txt = String.valueOf(count);
+                            float textScale = currentScale * 0.55f;
+                            float tw = mc.fontRendererObj.getStringWidth(txt) * textScale;
+                            float tx = ix + itemSize - tw + padding * 0.25f;
+                            float ty = iy + itemSize - (mc.fontRendererObj.FONT_HEIGHT * textScale) + padding * 0.25f;
+                            GlStateManager.pushMatrix();
+                            GlStateManager.translate(tx, ty, 0);
+                            GlStateManager.scale(textScale, textScale, 1f);
+                            mc.fontRendererObj.drawStringWithShadow(txt, 0, 0, 0xFFFFFF);
+                            GlStateManager.popMatrix();
+                        }
                     }
                 }
             }
@@ -256,12 +244,17 @@ public class BedPlates extends Module {
         bedPositions.clear();
         searchedBlocks.clear();
         yLevels.clear();
-        matricesCaptured = false;
     }
 
     // ── Rendering helpers ─────────────────────────────────────────────────────
 
+    /**
+     * Projects a world position to 2D window pixel coordinates.
+     * The GL matrices must have been captured during Render3D.
+     * Returns null if the position is behind the camera.
+     */
     private float[] worldToScreen(double wx, double wy, double wz) {
+        // Minecraft's GL matrices are set up relative to renderPos, so subtract it
         float rx = (float)(wx - renderPosX);
         float ry = (float)(wy - renderPosY);
         float rz = (float)(wz - renderPosZ);
@@ -272,7 +265,7 @@ public class BedPlates extends Module {
         if (!ok) return null;
 
         float wz2 = win.get(2);
-        if (wz2 < 0 || wz2 >= 1.0003684f) return null;
+        if (wz2 < 0 || wz2 >= 1.0003684f) return null; // behind near/far plane
 
         return new float[]{ win.get(0), win.get(1) };
     }
@@ -319,25 +312,19 @@ public class BedPlates extends Module {
     // ── Async scanning ────────────────────────────────────────────────────────
 
     /**
-     * Scans near all visible players AND the local player for bed Y levels.
-     * This ensures we find beds even if no other players are near them.
+     * Scans near all visible players for bed Y levels, so we know
+     * which Y slices to search for beds.
      */
     private void findYLevels() {
-        if (mc.theWorld == null || mc.thePlayer == null) return;
+        if (mc.theWorld == null) return;
         List<?> players = new ArrayList<>(mc.theWorld.playerEntities);
         executor.execute(() -> {
             try {
-                // Include local player in the scan
-                List<net.minecraft.entity.player.EntityPlayer> toScan = new ArrayList<>();
-                toScan.add(mc.thePlayer);
                 for (Object o : players) {
-                    if (o instanceof net.minecraft.entity.player.EntityPlayer) {
-                        net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
-                        if (p != mc.thePlayer) toScan.add(p);
-                    }
-                }
+                    if (!(o instanceof net.minecraft.entity.player.EntityPlayer)) continue;
+                    net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
+                    if (p == mc.thePlayer) continue;
 
-                for (net.minecraft.entity.player.EntityPlayer p : toScan) {
                     int px = (int) p.posX, py = (int) p.posY, pz = (int) p.posZ;
                     for (int x = px - 4; x <= px + 4; x++) {
                         for (int y = py - 4; y <= py + 4; y++) {
@@ -355,52 +342,12 @@ public class BedPlates extends Module {
     }
 
     /**
-     * NEW: Scans a wide radius around the local player for beds regardless
-     * of known yLevels. This is the primary discovery mechanism.
-     */
-    private void scanAroundSelf() {
-        if (mc.theWorld == null || mc.thePlayer == null) return;
-        int maxDist = (int) renderDistance.getValue();
-        double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
-        int px = (int) myX, py = (int) myY, pz = (int) myZ;
-
-        executor.execute(() -> {
-            try {
-                // Scan a horizontal slice around the player at all reasonable Y values
-                int scanRadius = Math.min(maxDist, 64);
-                for (int y = Math.max(0, py - 5); y <= Math.min(255, py + 10); y++) {
-                    for (int x = px - scanRadius; x <= px + scanRadius; x += 2) {
-                        for (int z = pz - scanRadius; z <= pz + scanRadius; z += 2) {
-                            String key = "3" + x + "," + y + "," + z;
-                            if (searchedBlocks.containsKey(key)) continue;
-                            searchedBlocks.put(key, Boolean.TRUE);
-
-                            if (getBlockAt(x, y, z) != Blocks.bed) continue;
-
-                            // Found a bed — register its y level and process it immediately
-                            yLevels.add(y);
-                            registerBedAt(x, y, z, myX, myY, myZ);
-                        }
-                    }
-                }
-            } catch (Exception ignored) {}
-        });
-    }
-
-    /**
      * Searches a 40×40 radius around each player on known Y levels for beds.
      */
     private void searchForBeds() {
-        if (mc.theWorld == null) return;
+        if (mc.theWorld == null || yLevels.isEmpty()) return;
         List<?> players = new ArrayList<>(mc.theWorld.playerEntities);
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
-
-        // If no yLevels yet, run a quick broad scan on common bed heights
-        Set<Integer> levelsToSearch = new HashSet<>(yLevels);
-        if (levelsToSearch.isEmpty()) {
-            // Default scan heights for typical BedWars maps
-            for (int y = 60; y <= 90; y++) levelsToSearch.add(y);
-        }
 
         executor.execute(() -> {
             try {
@@ -409,7 +356,7 @@ public class BedPlates extends Module {
                     net.minecraft.entity.player.EntityPlayer p = (net.minecraft.entity.player.EntityPlayer) o;
                     int px = (int) p.posX, pz = (int) p.posZ;
 
-                    for (int yLevel : levelsToSearch) {
+                    for (int yLevel : new HashSet<>(yLevels)) {
                         for (int x = px - 20; x <= px + 20; x++) {
                             for (int z = pz - 20; z <= pz + 20; z++) {
                                 String key = "1" + x + "," + yLevel + "," + z;
@@ -417,44 +364,37 @@ public class BedPlates extends Module {
                                 searchedBlocks.put(key, Boolean.TRUE);
 
                                 if (getBlockAt(x, yLevel, z) != Blocks.bed) continue;
-                                registerBedAt(x, yLevel, z, myX, myY, myZ);
+
+                                // Only process the "foot" half of the bed to avoid double-counting
+                                if (getBlockAt(x + 1, yLevel, z) == Blocks.bed) continue;
+                                if (getBlockAt(x, yLevel, z + 1) == Blocks.bed) continue;
+
+                                BlockPos pos1 = new BlockPos(x, yLevel, z);
+                                BlockPos pos2 = pos1;
+                                if (getBlockAt(x - 1, yLevel, z) == Blocks.bed)
+                                    pos2 = new BlockPos(x - 1, yLevel, z);
+                                else if (getBlockAt(x, yLevel, z - 1) == Blocks.bed)
+                                    pos2 = new BlockPos(x, yLevel, z - 1);
+
+                                double dist = Math.sqrt(
+                                        (x - myX) * (x - myX) +
+                                        (yLevel - myY) * (yLevel - myY) +
+                                        (z - myZ) * (z - myZ));
+
+                                Map<String, Object> bedData = new ConcurrentHashMap<>();
+                                bedData.put("visible",   Boolean.TRUE);
+                                bedData.put("distance",  dist);
+                                bedData.put("position1", pos1);
+                                bedData.put("position2", pos2);
+                                bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
+                                bedData.put("lastcheck", System.currentTimeMillis());
+                                bedPositions.put(key, bedData);
                             }
                         }
                     }
                 }
             } catch (Exception ignored) {}
         });
-    }
-
-    /**
-     * Registers or updates a bed entry found at the given coordinates.
-     */
-    private void registerBedAt(int x, int yLevel, int z, double myX, double myY, double myZ) {
-        // Only process the "foot" half of the bed to avoid double-counting
-        if (getBlockAt(x + 1, yLevel, z) == Blocks.bed) return;
-        if (getBlockAt(x, yLevel, z + 1) == Blocks.bed) return;
-
-        BlockPos pos1 = new BlockPos(x, yLevel, z);
-        BlockPos pos2 = pos1;
-        if (getBlockAt(x - 1, yLevel, z) == Blocks.bed)
-            pos2 = new BlockPos(x - 1, yLevel, z);
-        else if (getBlockAt(x, yLevel, z - 1) == Blocks.bed)
-            pos2 = new BlockPos(x, yLevel, z - 1);
-
-        double dist = Math.sqrt(
-                (x - myX) * (x - myX) +
-                (yLevel - myY) * (yLevel - myY) +
-                (z - myZ) * (z - myZ));
-
-        String mapKey = "1" + x + "," + yLevel + "," + z;
-        Map<String, Object> bedData = new ConcurrentHashMap<>();
-        bedData.put("visible",   Boolean.TRUE);
-        bedData.put("distance",  dist);
-        bedData.put("position1", pos1);
-        bedData.put("position2", pos2);
-        bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
-        bedData.put("lastcheck", System.currentTimeMillis());
-        bedPositions.put(mapKey, bedData);
     }
 
     /**
@@ -467,12 +407,9 @@ public class BedPlates extends Module {
 
         executor.execute(() -> {
             try {
-                Iterator<Map.Entry<String, Map<String, Object>>> iter = bedPositions.entrySet().iterator();
-                while (iter.hasNext()) {
-                    Map.Entry<String, Map<String, Object>> entry = iter.next();
-                    Map<String, Object> bed = entry.getValue();
+                for (Map<String, Object> bed : bedPositions.values()) {
                     BlockPos p1 = (BlockPos) bed.get("position1");
-                    if (p1 == null) { iter.remove(); continue; }
+                    if (p1 == null) continue;
 
                     double dist = Math.sqrt(
                             (p1.getX() - myX) * (p1.getX() - myX) +
@@ -490,9 +427,6 @@ public class BedPlates extends Module {
                             bed.put("layers",    getBedDefenseLayers(p1, p2 != null ? p2 : p1));
                             bed.put("lastcheck", System.currentTimeMillis());
                         }
-                    } else {
-                        // Remove destroyed beds from the map so they stop rendering
-                        iter.remove();
                     }
                 }
             } catch (Exception ignored) {}
@@ -507,73 +441,41 @@ public class BedPlates extends Module {
     }
 
     /**
-     * Analyses up to 5 "layers" of blocks surrounding both halves of a bed.
+     * Scans a simple box around both bed halves and returns a map of
+     * blockName → count for every unique defence block found.
+     * No thresholds — any solid non-INVALID block counts.
      */
     private Map<String, Integer> getBedDefenseLayers(BlockPos pos1, BlockPos pos2) {
         if (pos1 == null) return Collections.emptyMap();
         if (pos2 == null) pos2 = pos1;
 
-        boolean facingZ = Math.abs(pos2.getZ() - pos1.getZ()) > Math.abs(pos2.getX() - pos1.getX());
-        BlockPos[] beds = { pos1, pos2 };
+        Map<String, Integer> counts = new LinkedHashMap<>();
 
-        Map<String, Integer> finalCounts = new LinkedHashMap<>();
-        int maxLayers = 5, airLayersCount = 0;
+        int minX = Math.min(pos1.getX(), pos2.getX()) - 2;
+        int maxX = Math.max(pos1.getX(), pos2.getX()) + 2;
+        int minZ = Math.min(pos1.getZ(), pos2.getZ()) - 2;
+        int maxZ = Math.max(pos1.getZ(), pos2.getZ()) + 2;
+        int baseY = pos1.getY();
 
-        for (int layer = 1; layer <= maxLayers; layer++) {
-            Map<String, Integer> layerCounts = new HashMap<>();
-            int total = 0, airBlocks = 0;
-
-            for (int bedPart = 0; bedPart < beds.length; bedPart++) {
-                BlockPos bed = beds[bedPart];
-                int offset = bedPart == 0 ? layer : -layer;
-
-                int startX = facingZ ? bed.getX()          : bed.getX() + offset;
-                int startY = bed.getY();
-                int startZ = facingZ ? bed.getZ() + offset : bed.getZ();
-
-                for (int step1 = 0; step1 <= layer; step1++) {
-                    int yOff = 0;
-                    for (int step2 = step1; step2 >= 0; step2--) {
-                        int x1, z1, x2, z2;
-                        if (facingZ) {
-                            int zShift = bedPart == 0 ? step1 : -step1;
-                            x1 = startX - step2; z1 = startZ - zShift;
-                            x2 = startX + step2; z2 = z1;
-                        } else {
-                            int xShift = bedPart == 0 ? step1 : -step1;
-                            x1 = startX - xShift; z1 = startZ - step2;
-                            x2 = x1;              z2 = startZ + step2;
-                        }
-
-                        String t1 = addBlock(x1, startY + yOff, z1, layerCounts);
-                        if ("air".equals(t1)) airBlocks++;
-                        total++;
-
-                        if (x1 != x2 || z1 != z2) {
-                            String t2 = addBlock(x2, startY + yOff, z2, layerCounts);
-                            if ("air".equals(t2)) airBlocks++;
-                            total++;
-                        }
-
-                        if (step2 > 0) yOff++;
-                    }
+        for (int x = minX; x <= maxX; x++) {
+            for (int z = minZ; z <= maxZ; z++) {
+                for (int dy = -1; dy <= 2; dy++) {
+                    Block block = getBlockAt(x, baseY + dy, z);
+                    if (block == Blocks.air) continue;
+                    String name = getBlockName(block);
+                    if (INVALID.contains(name)) continue;
+                    counts.merge(name, 1, Integer::sum);
                 }
-            }
-
-            if (total == 0 || (float) airBlocks / total > 0.2f) {
-                if (++airLayersCount >= 2) break;
-                continue;
-            }
-
-            for (Map.Entry<String, Integer> e : layerCounts.entrySet()) {
-                if (!"air".equals(e.getKey()) && (float) e.getValue() / total >= 0.2f)
-                    finalCounts.merge(e.getKey(), e.getValue(), Integer::sum);
             }
         }
 
-        return finalCounts;
+        return counts;
     }
 
+    /**
+     * Gets a block at (x,y,z) and records it in the layer count map.
+     * Invalid/decoration blocks are treated as air so they don't show in the HUD.
+     */
     private String addBlock(int x, int y, int z, Map<String, Integer> counts) {
         Block block = getBlockAt(x, y, z);
         String name = getBlockName(block);
