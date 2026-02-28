@@ -61,14 +61,8 @@ public class Rise6ClickGui extends GuiScreen {
             boolean hov = mouseX >= tx && mouseX <= tx + tw && mouseY >= ty && mouseY <= ty + th;
 
             if (sel) {
-                // Filled pink pill
-                RoundedUtils.drawRoundedRect(tx, ty, tw, th, th / 2, GuiColors.ACCENT);
-                // Soft glow behind it
-                RoundedUtils.drawRoundedRect(tx - 2, ty - 2, tw + 4, th + 4, th / 2 + 2, GuiColors.ACCENT_GLOW);
-                gl(); mc.fontRendererObj.drawString(TAB_NAMES[i], tx + TAB_PAD, ty + (th - 8) / 2, 0xFF1A0D12);
+                gl(); mc.fontRendererObj.drawString(TAB_NAMES[i], tx + TAB_PAD, ty + (th - 8) / 2, GuiColors.ACCENT);
             } else {
-                // Ghost outline pill
-                RoundedUtils.drawRoundedRect(tx, ty, tw, th, th / 2, hov ? 0x33E991B8 : 0x18FFFFFF);
                 gl(); mc.fontRendererObj.drawString(TAB_NAMES[i], tx + TAB_PAD, ty + (th - 8) / 2,
                         hov ? GuiColors.ACCENT : 0xFFCCCCCC);
             }
