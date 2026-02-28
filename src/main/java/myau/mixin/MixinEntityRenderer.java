@@ -2,7 +2,6 @@ package myau.mixin;
 
 import myau.Myau;
 import myau.module.modules.Autoblock;
-import myau.module.modules.KillAura;
 import net.minecraft.client.renderer.EntityRenderer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
