@@ -160,4 +160,18 @@ public abstract class MixinMinecraft {
             inventoryPlayer.changeCurrentItem(slot);
         }
     }
+
+    /**
+     * Intercepts Minecraft's mouseHelper.mouseXYChange() call inside runTick.
+     */
+    @Redirect(
+            method = {"runTick"},
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/util/MouseHelper;mouseXYChange()V"
+            )
+    )
+    private void onMouseXYChange(MouseHelper mouseHelper) {
+        mouseHelper.mouseXYChange();
+    }
 }
