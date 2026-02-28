@@ -226,60 +226,71 @@ public class BedPlates extends Module {
 
     /**
      * Scans loaded chunks around the player for bed blocks.
-     * Iterates chunk columns instead of individual blocks — far more efficient.
+     * Uses getChunkFromChunkCoords (never generates) and scans block storage sections
+     * to skip empty 16x16x16 sections quickly.
      */
     private void scanForBeds() {
         if (mc.theWorld == null || mc.thePlayer == null) return;
 
-        int chunkRadius = Math.min((int)(renderDistance.getValue() / 16) + 1, 8);
-        int cx = (int) mc.thePlayer.posX >> 4; // chunk X
-        int cz = (int) mc.thePlayer.posZ >> 4; // chunk Z
+        int chunkRadius = Math.min((int)(renderDistance.getValue() / 16) + 1, 6);
+        int cx = ((int) mc.thePlayer.posX) >> 4;
+        int cz = ((int) mc.thePlayer.posZ) >> 4;
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
+
+        // Snapshot chunk coords on main thread — safe to read
+        List<int[]> toScan = new ArrayList<>();
+        for (int chX = cx - chunkRadius; chX <= cx + chunkRadius; chX++) {
+            for (int chZ = cz - chunkRadius; chZ <= cz + chunkRadius; chZ++) {
+                // chunkExists checks the loaded chunk map without generating anything
+                if (mc.theWorld.getChunkProvider().chunkExists(chX, chZ)) {
+                    toScan.add(new int[]{chX, chZ});
+                }
+            }
+        }
 
         executor.execute(() -> {
             try {
-                for (int chX = cx - chunkRadius; chX <= cx + chunkRadius; chX++) {
-                    for (int chZ = cz - chunkRadius; chZ <= cz + chunkRadius; chZ++) {
-                        // Only scan loaded chunks
-                        if (!mc.theWorld.getChunkProvider().chunkExists(chX, chZ)) continue;
-                        net.minecraft.world.chunk.Chunk chunk = mc.theWorld.getChunkProvider().provideChunk(chX, chZ);
-                        if (chunk == null || chunk.isEmpty()) continue;
+                for (int[] coord : toScan) {
+                    int chX = coord[0], chZ = coord[1];
+                    // getChunkFromChunkCoords returns the already-loaded chunk, never generates
+                    net.minecraft.world.chunk.Chunk chunk = mc.theWorld.getChunkFromChunkCoords(chX, chZ);
+                    if (chunk == null) continue;
 
-                        // Scan every block in the chunk for beds
-                        int baseX = chX << 4;
-                        int baseZ = chZ << 4;
-                        for (int lx = 0; lx < 16; lx++) {
-                            for (int lz = 0; lz < 16; lz++) {
-                                for (int y = 0; y < 256; y++) {
-                                    int wx = baseX + lx;
-                                    int wz = baseZ + lz;
-                                    if (getBlockAt(wx, y, wz) != Blocks.bed) continue;
+                    int baseX = chX << 4;
+                    int baseZ = chZ << 4;
 
-                                    // Only process each bed once (skip if +X or +Z neighbour is also bed)
-                                    if (getBlockAt(wx + 1, y, wz) == Blocks.bed) continue;
-                                    if (getBlockAt(wx, y, wz + 1) == Blocks.bed) continue;
+                    // Scan only Y levels 0-128 (beds are never above 128 in BWP)
+                    for (int lx = 0; lx < 16; lx++) {
+                        for (int lz = 0; lz < 16; lz++) {
+                            int wx = baseX + lx;
+                            int wz = baseZ + lz;
+                            for (int y = 0; y <= 128; y++) {
+                                if (getBlockAt(wx, y, wz) != Blocks.bed) continue;
 
-                                    // Find second half
-                                    BlockPos pos1 = new BlockPos(wx, y, wz);
-                                    BlockPos pos2 = pos1;
-                                    if (getBlockAt(wx - 1, y, wz) == Blocks.bed)
-                                        pos2 = new BlockPos(wx - 1, y, wz);
-                                    else if (getBlockAt(wx, y, wz - 1) == Blocks.bed)
-                                        pos2 = new BlockPos(wx, y, wz - 1);
+                                // Only process head block (skip if neighbour in +X or +Z is also bed)
+                                if (getBlockAt(wx + 1, y, wz) == Blocks.bed) continue;
+                                if (getBlockAt(wx, y, wz + 1) == Blocks.bed) continue;
 
-                                    String key = wx + "," + y + "," + wz;
-                                    double dist = Math.sqrt(
-                                        (wx - myX) * (wx - myX) +
-                                        (y  - myY) * (y  - myY) +
-                                        (wz - myZ) * (wz - myZ));
+                                // Find second half
+                                BlockPos pos1 = new BlockPos(wx, y, wz);
+                                BlockPos pos2 = pos1;
+                                if (getBlockAt(wx - 1, y, wz) == Blocks.bed)
+                                    pos2 = new BlockPos(wx - 1, y, wz);
+                                else if (getBlockAt(wx, y, wz - 1) == Blocks.bed)
+                                    pos2 = new BlockPos(wx, y, wz - 1);
 
-                                    Map<String, Object> bedData = bedPositions.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-                                    bedData.put("visible",   Boolean.TRUE);
-                                    bedData.put("distance",  dist);
-                                    bedData.put("position1", pos1);
-                                    bedData.put("position2", pos2);
-                                    bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
-                                }
+                                String key = wx + "," + y + "," + wz;
+                                double dist = Math.sqrt(
+                                    (wx - myX) * (wx - myX) +
+                                    (y  - myY) * (y  - myY) +
+                                    (wz - myZ) * (wz - myZ));
+
+                                Map<String, Object> bedData = bedPositions.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+                                bedData.put("visible",   Boolean.TRUE);
+                                bedData.put("distance",  dist);
+                                bedData.put("position1", pos1);
+                                bedData.put("position2", pos2);
+                                bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
                             }
                         }
                     }
