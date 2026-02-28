@@ -18,6 +18,7 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.chunk.Chunk;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
@@ -224,52 +225,62 @@ public class BedPlates extends Module {
     // ── Scanning ──────────────────────────────────────────────────────────────
 
     /**
-     * Scans a box around the local player for bed blocks.
-     * No dependency on other players — finds every bed in range.
+     * Scans loaded chunks around the player for bed blocks.
+     * Iterates chunk columns instead of individual blocks — far more efficient.
      */
     private void scanForBeds() {
         if (mc.theWorld == null || mc.thePlayer == null) return;
 
-        int radius = (int) renderDistance.getValue();
-        // Cap scan radius to avoid freezing — we use async but keep it sane
-        int scanR = Math.min(radius, 80);
-
-        int cx = (int) mc.thePlayer.posX;
-        int cy = (int) mc.thePlayer.posY;
-        int cz = (int) mc.thePlayer.posZ;
+        int chunkRadius = Math.min((int)(renderDistance.getValue() / 16) + 1, 8);
+        int cx = (int) mc.thePlayer.posX >> 4; // chunk X
+        int cz = (int) mc.thePlayer.posZ >> 4; // chunk Z
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
 
         executor.execute(() -> {
             try {
-                for (int x = cx - scanR; x <= cx + scanR; x++) {
-                    for (int y = Math.max(0, cy - scanR); y <= Math.min(255, cy + scanR); y++) {
-                        for (int z = cz - scanR; z <= cz + scanR; z++) {
-                            if (getBlockAt(x, y, z) != Blocks.bed) continue;
+                for (int chX = cx - chunkRadius; chX <= cx + chunkRadius; chX++) {
+                    for (int chZ = cz - chunkRadius; chZ <= cz + chunkRadius; chZ++) {
+                        // Only scan loaded chunks
+                        if (!mc.theWorld.getChunkProvider().chunkExists(chX, chZ)) continue;
+                        net.minecraft.world.chunk.Chunk chunk = mc.theWorld.getChunkProvider().provideChunk(chX, chZ);
+                        if (chunk == null || chunk.isEmpty()) continue;
 
-                            // Skip if a bed block exists to the +X or +Z — only process each bed once (foot block)
-                            if (getBlockAt(x + 1, y, z) == Blocks.bed) continue;
-                            if (getBlockAt(x, y, z + 1) == Blocks.bed) continue;
+                        // Scan every block in the chunk for beds
+                        int baseX = chX << 4;
+                        int baseZ = chZ << 4;
+                        for (int lx = 0; lx < 16; lx++) {
+                            for (int lz = 0; lz < 16; lz++) {
+                                for (int y = 0; y < 256; y++) {
+                                    int wx = baseX + lx;
+                                    int wz = baseZ + lz;
+                                    if (getBlockAt(wx, y, wz) != Blocks.bed) continue;
 
-                            // Find the second half of the bed
-                            BlockPos pos1 = new BlockPos(x, y, z);
-                            BlockPos pos2 = pos1;
-                            if (getBlockAt(x - 1, y, z) == Blocks.bed)
-                                pos2 = new BlockPos(x - 1, y, z);
-                            else if (getBlockAt(x, y, z - 1) == Blocks.bed)
-                                pos2 = new BlockPos(x, y, z - 1);
+                                    // Only process each bed once (skip if +X or +Z neighbour is also bed)
+                                    if (getBlockAt(wx + 1, y, wz) == Blocks.bed) continue;
+                                    if (getBlockAt(wx, y, wz + 1) == Blocks.bed) continue;
 
-                            String key = x + "," + y + "," + z;
-                            double dist = Math.sqrt(
-                                (x - myX) * (x - myX) +
-                                (y - myY) * (y - myY) +
-                                (z - myZ) * (z - myZ));
+                                    // Find second half
+                                    BlockPos pos1 = new BlockPos(wx, y, wz);
+                                    BlockPos pos2 = pos1;
+                                    if (getBlockAt(wx - 1, y, wz) == Blocks.bed)
+                                        pos2 = new BlockPos(wx - 1, y, wz);
+                                    else if (getBlockAt(wx, y, wz - 1) == Blocks.bed)
+                                        pos2 = new BlockPos(wx, y, wz - 1);
 
-                            Map<String, Object> bedData = bedPositions.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-                            bedData.put("visible",   Boolean.TRUE);
-                            bedData.put("distance",  dist);
-                            bedData.put("position1", pos1);
-                            bedData.put("position2", pos2);
-                            bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
+                                    String key = wx + "," + y + "," + wz;
+                                    double dist = Math.sqrt(
+                                        (wx - myX) * (wx - myX) +
+                                        (y  - myY) * (y  - myY) +
+                                        (wz - myZ) * (wz - myZ));
+
+                                    Map<String, Object> bedData = bedPositions.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
+                                    bedData.put("visible",   Boolean.TRUE);
+                                    bedData.put("distance",  dist);
+                                    bedData.put("position1", pos1);
+                                    bedData.put("position2", pos2);
+                                    bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
+                                }
+                            }
                         }
                     }
                 }
