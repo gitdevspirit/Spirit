@@ -160,25 +160,4 @@ public abstract class MixinMinecraft {
             inventoryPlayer.changeCurrentItem(slot);
         }
     }
-
-    /**
-     * Intercepts Minecraft's mouseHelper.mouseXYChange() call inside runTick.
-     * When Freelook is active we suppress it so the mouse delta doesn't also
-     * rotate the player — Freelook reads the same delta for its camera instead.
-     */
-    @Redirect(
-            method = {"runTick"},
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/util/MouseHelper;mouseXYChange()V"
-            )
-    )
-    private void onMouseXYChange(MouseHelper mouseHelper) {
-        if (Freelook.active) {
-            // Don't call mouseXYChange — player rotation stays fixed.
-            // Freelook.onTick() already read getDX()/getDY() for the camera.
-            return;
-        }
-        mouseHelper.mouseXYChange();
-    }
 }
