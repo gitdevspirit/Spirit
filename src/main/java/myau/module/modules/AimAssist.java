@@ -4,7 +4,6 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.KeyEvent;
-import myau.events.Render2DEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
@@ -14,9 +13,6 @@ import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.scoreboard.Score;
-import net.minecraft.scoreboard.ScoreObjective;
-import net.minecraft.scoreboard.Scoreboard;
 import org.lwjgl.opengl.GL11;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
@@ -39,11 +35,6 @@ public class AimAssist extends Module {
     public final BooleanSetting botChecks  = new BooleanSetting("Bot Check",    true);
     public final BooleanSetting team       = new BooleanSetting("Teams",        true);
 
-    // Health HUD
-    public final BooleanSetting  showHealth  = new BooleanSetting("Show Health",  true);
-    public final DropdownSetting healthMode  = new DropdownSetting("Health Mode", 0, "HEARTS", "TAB");
-    public final SliderSetting   healthOffX  = new SliderSetting("Health X",  0, -200, 200, 1);
-    public final SliderSetting   healthOffY  = new SliderSetting("Health Y", 20,  -50, 200, 1);
 
     public AimAssist() {
         super("AimAssist", false);
@@ -56,10 +47,6 @@ public class AimAssist extends Module {
         register(allowTools);
         register(botChecks);
         register(team);
-        register(showHealth);
-        register(healthMode);
-        register(healthOffX);
-        register(healthOffY);
     }
 
     private boolean isValidTarget(EntityPlayer p) {
@@ -133,7 +120,6 @@ public class AimAssist extends Module {
         }
     }
 
-    private String getHealthText() {
         if (healthMode.getIndex() == 1) {
             try {
                 Scoreboard sb = mc.theWorld.getScoreboard();
@@ -152,32 +138,10 @@ public class AimAssist extends Module {
         return String.format("%.1f", hp / 2f);
     }
 
-    private int getHealthColor() {
         float ratio = mc.thePlayer.getHealth() / mc.thePlayer.getMaxHealth();
         if (ratio > 0.6f) return 0xFFFF5555;
         if (ratio > 0.3f) return 0xFFFFAA00;
         return 0xFFFF2222;
-    }
-
-    @EventTarget
-    public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !showHealth.getValue()) return;
-        if (mc.thePlayer == null || mc.currentScreen != null) return;
-
-        String healthStr = getHealthText();
-        String display = "❤ " + healthStr; // ❤ <health>
-
-        ScaledResolution sr = new ScaledResolution(mc);
-        int cx = sr.getScaledWidth()  / 2;
-        int cy = sr.getScaledHeight() / 2;
-
-        float x = cx + (float) healthOffX.getValue() - mc.fontRendererObj.getStringWidth(display) / 2f;
-        float y = cy + (float) healthOffY.getValue();
-
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        mc.fontRendererObj.drawStringWithShadow(display, x, y, getHealthColor());
-        GL11.glDisable(GL11.GL_BLEND);
     }
 
     @EventTarget
