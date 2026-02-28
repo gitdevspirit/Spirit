@@ -53,12 +53,6 @@ public class Rise6ClickGui extends GuiScreen {
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         int W = sw(), H = sh();
 
-        // Very subtle dim — game still fully visible underneath
-        drawRect(0, 0, W, H, 0x33000000);
-
-        // Soft vignette for depth
-        drawGradientRect(0, 0, W, 60, 0x18000000, 0x00000000);
-        drawGradientRect(0, H - 40, W, H, 0x00000000, 0x18000000);
 
         // ── Tab row ───────────────────────────────────────────────────────────
         for (int i = 0; i < TAB_NAMES.length; i++) {
