@@ -114,39 +114,40 @@ public class AimAssist extends Module {
                             180.0F,
                             1.0f);
 
-                    if (Float.isNaN(smoothedYaw)) {
-                        smoothedYaw   = mc.thePlayer.rotationYaw;
-                        smoothedPitch = mc.thePlayer.rotationPitch;
-                    }
+                    // hSpeed controls how fast we reach the target (degrees/tick).
+                    // smoothing controls the easing curve — higher = more curved/gradual
+                    // approach, but we always arrive within roughly the same time.
+                    // At smoothing=0 movement is linear. At smoothing=100 the first few
+                    // ticks move quickly then decelerate as we close in (ease-out).
+                    float maxYaw   = (float) hSpeed.getValue();
+                    float maxPitch = (float) vSpeed.getValue();
 
-                    float lerpFactor = (float)(1.0 - smoothing.getValue() / 100.0 * 0.95);
+                    float rawDyaw = exactRots[0] - mc.thePlayer.rotationYaw;
+                    while (rawDyaw >  180) rawDyaw -= 360;
+                    while (rawDyaw < -180) rawDyaw += 360;
+                    float rawDpitch = (maxPitch > 0) ? (exactRots[1] - mc.thePlayer.rotationPitch) : 0f;
 
-                    float dyaw = exactRots[0] - smoothedYaw;
-                    while (dyaw >  180) dyaw -= 360;
-                    while (dyaw < -180) dyaw += 360;
+                    // Clamp to max speed so we always reach target within predictable time
+                    float clampedYaw   = Math.max(-maxYaw,   Math.min(maxYaw,   rawDyaw));
+                    float clampedPitch = Math.max(-maxPitch, Math.min(maxPitch, rawDpitch));
 
-                    float targetYaw   = smoothedYaw   + dyaw                           * lerpFactor;
-                    float targetPitch = smoothedPitch + (exactRots[1] - smoothedPitch) * lerpFactor;
+                    // Apply ease-out based on smoothing: raise the clamped ratio to a power.
+                    // power > 1 = ease-out (fast start, slow finish = smoother feel).
+                    // smoothing=0 → power=1.0 (linear), smoothing=100 → power=2.5 (strong ease-out)
+                    float sm    = (float) smoothing.getValue() / 100f;
+                    float power = 1.0f + sm * 1.5f;
 
-                    float moveYaw = targetYaw - mc.thePlayer.rotationYaw;
-                    while (moveYaw >  180) moveYaw -= 360;
-                    while (moveYaw < -180) moveYaw += 360;
+                    float signYaw   = rawDyaw   != 0 ? Math.signum(rawDyaw)   : 0f;
+                    float signPitch = rawDpitch != 0 ? Math.signum(rawDpitch) : 0f;
+                    float ratioYaw   = maxYaw   > 0 ? Math.min(Math.abs(rawDyaw)   / maxYaw,   1f) : 1f;
+                    float ratioPitch = maxPitch > 0 ? Math.min(Math.abs(rawDpitch) / maxPitch, 1f) : 1f;
 
-                    float movePitch = targetPitch - mc.thePlayer.rotationPitch;
+                    float moveYaw   = signYaw   * (float) Math.pow(ratioYaw,   power) * maxYaw;
+                    float movePitch = signPitch * (float) Math.pow(ratioPitch, power) * maxPitch;
 
-                    // Only cap speed when smoothing is active — at smoothing=0 the
-                    // lerp is already instant so capping by hSpeed just makes it slow
-                    if (smoothing.getValue() > 0) {
-                        float maxYaw   = (float) hSpeed.getValue();
-                        float maxPitch = (float) vSpeed.getValue();
-                        moveYaw = Math.max(-maxYaw, Math.min(maxYaw, moveYaw));
-                        if (maxPitch > 0)
-                            movePitch = Math.max(-maxPitch, Math.min(maxPitch, movePitch));
-                        else
-                            movePitch = 0;
-                    } else {
-                        if ((float) vSpeed.getValue() <= 0) movePitch = 0;
-                    }
+                    // Never overshoot — cap to the actual remaining delta
+                    if (Math.abs(moveYaw)   > Math.abs(rawDyaw))   moveYaw   = rawDyaw;
+                    if (Math.abs(movePitch) > Math.abs(rawDpitch)) movePitch = rawDpitch;
 
                     smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
                     smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
