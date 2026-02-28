@@ -2,7 +2,6 @@ package myau.ui.clickgui;
 
 import myau.module.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.ScaledResolution;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
@@ -41,42 +40,28 @@ public class NewModulePanel {
     // ── Render ────────────────────────────────────────────────────────────────
     public void render(int mx, int my, String search) {
         List<Module> list = filtered(search);
-        ScissorUtil.enable(areaX, areaY, areaW, areaH);
-
         int c = cols();
         int totalW = c * CARD_W + (c - 1) * CARD_GAP;
         int sx = areaX + (areaW - totalW) / 2;
 
-        // We render row by row. Within each row, track the max height
-        // so that an expanded module pushes all subsequent rows down.
-        int row = 0;
-        int y = areaY - scrollOffset;
+        ScissorUtil.enable(areaX, areaY, areaW, areaH);
 
-        // Group modules into rows first
-        int total = list.size();
-        for (int i = 0; i < total; ) {
-            // Collect this row
-            int rowEnd = Math.min(i + c, total);
-            int rowMaxH = CARD_H;
-            for (int j = i; j < rowEnd; j++) {
-                Module m = list.get(j);
-                int h = CARD_H;
-                if (expandedModule == m) h += settingsH(m) + 4;
-                if (h > rowMaxH) rowMaxH = h;
-            }
+        // Render column by column so expansion only pushes down within its own column
+        for (int col = 0; col < c; col++) {
+            int x = sx + col * (CARD_W + CARD_GAP);
+            int y = areaY - scrollOffset;
 
-            // Render each card in the row
-            for (int j = i; j < rowEnd; j++) {
-                Module m = list.get(j);
-                int x = sx + (j - i) * (CARD_W + CARD_GAP);
+            for (int i = col; i < list.size(); i += c) {
+                Module m = list.get(i);
                 renderCard(m, x, y, mx, my);
+                y += CARD_H + CARD_GAP;
+
                 if (expandedModule == m) {
-                    renderSettingsInline(m, x, y + CARD_H + 2, mx, my);
+                    int sh = settingsH(m);
+                    renderSettingsInline(m, x, y - CARD_GAP, mx, my);
+                    y += sh + CARD_GAP;
                 }
             }
-
-            y += rowMaxH + CARD_GAP;
-            i = rowEnd;
         }
 
         ScissorUtil.disable();
@@ -86,21 +71,23 @@ public class NewModulePanel {
         boolean en  = m.isEnabled();
         boolean hov = mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H;
 
-        toggleAnim.putIfAbsent(m, en ? 1f : 0f);
-        float ta = toggleAnim.get(m) + ((en ? 1f : 0f) - toggleAnim.get(m)) * 0.2f;
+        // Animate toward current state
+        float cur = toggleAnim.getOrDefault(m, en ? 1f : 0f);
+        float target = en ? 1f : 0f;
+        float ta = cur + (target - cur) * 0.2f;
         toggleAnim.put(m, ta);
 
-        // All modules same style — pink tint when on, dim ghost when off
+        // Background — pink tint if on, ghost if off
         int bg = en ? blend(0x44E991B8, 0x77E991B8, ta) : (hov ? 0x22FFFFFF : 0x14FFFFFF);
         RoundedUtils.drawRoundedRect(x, y, CARD_W, CARD_H, CARD_H / 2, bg);
 
-        // Dot
+        // Status dot
         RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3,
-                en ? GuiColors.ACCENT : 0xFF404040);
+                en ? GuiColors.ACCENT : 0xFF383838);
 
-        // Name — always same colour logic: pink=on, white=hovered, grey=off
+        // Name — pink=on, light grey=hovered, dark grey=off. Never white.
         gl();
-        int nc = en ? GuiColors.ACCENT : (hov ? 0xFFDDDDDD : 0xFF888888);
+        int nc = en ? GuiColors.ACCENT : (hov ? 0xFFBBBBBB : 0xFF666666);
         mc.fontRendererObj.drawString(m.getName(), x + 18, y + (CARD_H - 8) / 2, nc);
 
         // Expand arrow
@@ -109,7 +96,7 @@ public class NewModulePanel {
             boolean exp = expandedModule == m;
             mc.fontRendererObj.drawString(exp ? "v" : ">",
                     x + CARD_W - 10, y + (CARD_H - 8) / 2,
-                    exp ? GuiColors.ACCENT : 0xFF555555);
+                    exp ? GuiColors.ACCENT : 0xFF484848);
         }
     }
 
@@ -117,8 +104,9 @@ public class NewModulePanel {
         int w  = CARD_W;
         int sh = settingsH(m);
 
-        RoundedUtils.drawRoundedRect(x, y, w, sh, 6, 0xDD0D0D0D);
-        drawRect(x, y, x + 1, y + sh, GuiColors.ACCENT_DIM);
+        RoundedUtils.drawRoundedRect(x, y, w, sh, 6, 0xDD0C0C0C);
+        // Pink left accent bar
+        drawRect(x + 2, y + 4, x + 3, y + sh - 4, GuiColors.ACCENT_DIM);
 
         int oy = y + 5;
         for (Setting s : m.getSettings()) {
@@ -126,38 +114,38 @@ public class NewModulePanel {
             gl();
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 7, oy + 2, 0xFF777777);
+                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
                 String val = fmtVal(sl.getValue());
                 mc.fontRendererObj.drawString(val,
                         x + w - mc.fontRendererObj.getStringWidth(val) - 7, oy + 2, GuiColors.ACCENT);
-                int bx = x + 7, by = oy + 13, bw = w - 14;
-                drawRect(bx, by, bx + bw, by + 2, 0xFF252525);
+                int bx = x + 8, by = oy + 13, bw = w - 16;
+                drawRect(bx, by, bx + bw, by + 2, 0xFF222222);
                 int fill = Math.max(2, (int)(bw * sl.getPercent()));
                 drawRect(bx, by, bx + fill, by + 2, GuiColors.ACCENT);
-                RoundedUtils.drawRoundedRect(bx + fill - 3, by - 2, 6, 6, 3, 0xFFFFFFFF);
+                RoundedUtils.drawRoundedRect(bx + fill - 3, by - 2, 6, 6, 3, 0xFFEEEEEE);
                 if (draggingSlider == sl) { sliderBarX = bx; sliderBarW = bw; }
                 oy += SET_ROW;
             } else if (s instanceof DropdownSetting) {
                 DropdownSetting dd = (DropdownSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 7, oy + 2, 0xFF777777);
+                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
                 String v = "< " + dd.getValue() + " >";
                 mc.fontRendererObj.drawString(v,
                         x + w - mc.fontRendererObj.getStringWidth(v) - 7, oy + 2, GuiColors.ACCENT);
                 oy += 16;
             } else if (s instanceof BooleanSetting) {
                 BooleanSetting bs = (BooleanSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 7, oy + 2, 0xFF777777);
+                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
                 RoundedUtils.drawRoundedRect(x + w - 14, oy + 3, 6, 6, 3,
-                        bs.getValue() ? GuiColors.ACCENT : 0xFF404040);
+                        bs.getValue() ? GuiColors.ACCENT : 0xFF383838);
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 7, oy + 2, 0xFF777777);
+                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
                 boolean lstn = listeningKeybind == kb;
                 String lbl = lstn ? "[ ... ]" : "[ " + kb.getDisplayName() + " ]";
                 mc.fontRendererObj.drawString(lbl,
                         x + w - mc.fontRendererObj.getStringWidth(lbl) - 7, oy + 2,
-                        lstn ? 0xFFFFFFFF : GuiColors.ACCENT);
+                        lstn ? 0xFFEEEEEE : GuiColors.ACCENT);
                 oy += 16;
             }
         }
@@ -169,42 +157,33 @@ public class NewModulePanel {
         int c = cols();
         int totalW = c * CARD_W + (c - 1) * CARD_GAP;
         int sx = areaX + (areaW - totalW) / 2;
-        int total = list.size();
 
-        int y = areaY - scrollOffset;
-        for (int i = 0; i < total; ) {
-            int rowEnd = Math.min(i + c, total);
-            int rowMaxH = CARD_H;
-            for (int j = i; j < rowEnd; j++) {
-                Module m = list.get(j);
-                int h = CARD_H + (expandedModule == m ? settingsH(m) + 4 : 0);
-                if (h > rowMaxH) rowMaxH = h;
-            }
+        for (int col = 0; col < c; col++) {
+            int x = sx + col * (CARD_W + CARD_GAP);
+            int y = areaY - scrollOffset;
 
-            for (int j = i; j < rowEnd; j++) {
-                Module m = list.get(j);
-                int x = sx + (j - i) * (CARD_W + CARD_GAP);
+            for (int i = col; i < list.size(); i += c) {
+                Module m = list.get(i);
 
-                // Card click
+                // Card hit
                 if (mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H) {
                     if (button == 0) m.toggle();
                     else if (button == 1 && !m.getSettings().isEmpty())
                         expandedModule = expandedModule == m ? null : m;
                     return;
                 }
+                y += CARD_H + CARD_GAP;
 
-                // Settings click
+                // Settings hit
                 if (expandedModule == m) {
                     int sh = settingsH(m);
-                    if (mx >= x && mx <= x + CARD_W && my >= y + CARD_H + 2 && my <= y + CARD_H + 2 + sh) {
-                        settingClick(m, x, y + CARD_H + 2, CARD_W, mx, my, button);
+                    if (mx >= x && mx <= x + CARD_W && my >= y - CARD_GAP && my <= y - CARD_GAP + sh) {
+                        settingClick(m, x, y - CARD_GAP, CARD_W, mx, my, button);
                         return;
                     }
+                    y += sh + CARD_GAP;
                 }
             }
-
-            y += rowMaxH + CARD_GAP;
-            i = rowEnd;
         }
     }
 
@@ -214,7 +193,7 @@ public class NewModulePanel {
             if (!s.isVisible()) continue;
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
-                int bx = x + 7, by = oy + 13, bw = w - 14;
+                int bx = x + 8, by = oy + 13, bw = w - 16;
                 if (button == 0 && mx >= bx && mx <= bx + bw && my >= by - 3 && my <= by + 7) {
                     draggingSlider = sl; sliderBarX = bx; sliderBarW = bw; updateSlider(mx);
                 }
