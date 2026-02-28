@@ -73,6 +73,7 @@ public class Myau {
         EventManager.register(lagManager);
         EventManager.register(moduleManager);
 
+        moduleManager.modules.put(AC.class,              new AC());
         moduleManager.modules.put(AimAssist.class,       new AimAssist());
         moduleManager.modules.put(Autoblock.class,       new Autoblock());
         moduleManager.modules.put(AntiAFK.class,         new AntiAFK());
