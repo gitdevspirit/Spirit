@@ -83,10 +83,7 @@ public class TargetHUD extends Module {
     public EntityLivingBase getTarget() { return target; }
 
     private EntityLivingBase resolveTarget() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura.isEnabled() && killAura.isAttackAllowed() && TeamUtil.isEntityLoaded(killAura.getTarget()))
-            return killAura.getTarget();
-        if (!kaOnly.getValue() && !lastAttackTimer.hasTimeElapsed(1500L) && TeamUtil.isEntityLoaded(lastTarget))
+        if (!lastAttackTimer.hasTimeElapsed(1500L) && TeamUtil.isEntityLoaded(lastTarget))
             return lastTarget;
         return chatPreview.getValue() && mc.currentScreen instanceof GuiChat ? mc.thePlayer : null;
     }
