@@ -30,11 +30,7 @@ public class AutoTool extends Module {
         register(sneakOnly);
     }
 
-    public boolean isKillAura() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (!killAura.isEnabled()) return false;
-        return TeamUtil.isEntityLoaded(killAura.getTarget()) && killAura.isAttackAllowed();
-    }
+    public boolean isKillAura() { return false; }
 
     @EventTarget
     public void onTick(TickEvent event) {
