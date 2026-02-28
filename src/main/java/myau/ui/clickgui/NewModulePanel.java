@@ -14,362 +14,244 @@ public class NewModulePanel {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    // Layout
-    private static final int CARD_W       = 150;
-    private static final int CARD_H       = 36;
-    private static final int CARD_GAP     = 8;
-    private static final int SETTINGS_ROW = 24;
+    // Card layout
+    private static final int CARD_W   = 130;
+    private static final int CARD_H   = 22;
+    private static final int CARD_GAP = 6;
+    private static final int SET_ROW  = 22;
 
-    // Area set by parent each frame
     private int areaX, areaY, areaW, areaH;
-
     private List<Module> modules;
     private Module expandedModule = null;
 
-    private final Map<Module, Float> toggleAnim    = new HashMap<>();
-    private final Map<Module, Float> expandAnim    = new HashMap<>();
+    private final Map<Module, Float> toggleAnim = new HashMap<>();
 
     private int scrollOffset = 0;
 
-    // Slider drag state
-    private SliderSetting  draggingSlider = null;
+    private SliderSetting  draggingSlider;
     private int            sliderBarX, sliderBarW;
+    private KeybindSetting listeningKeybind;
 
-    // Keybind
-    private KeybindSetting listeningKeybind = null;
+    public NewModulePanel(List<Module> modules) { this.modules = modules; }
 
-    public NewModulePanel(List<Module> modules) {
-        this.modules = modules;
-    }
+    public void setModules(List<Module> m) { modules = m; expandedModule = null; scrollOffset = 0; }
+    public void setVisibleArea(int x, int y, int w, int h) { areaX=x; areaY=y; areaW=w; areaH=h; }
 
-    public void setModules(List<Module> modules) {
-        this.modules = modules;
-        expandedModule = null;
-        scrollOffset   = 0;
-    }
-
-    public void setVisibleArea(int x, int y, int w, int h) {
-        areaX = x; areaY = y; areaW = w; areaH = h;
-    }
-
-    // ── How many columns fit ──────────────────────────────────────────────────
-    private int cols() {
-        return Math.max(1, areaW / (CARD_W + CARD_GAP));
-    }
-
-    // ── Total content height ──────────────────────────────────────────────────
-    public int contentHeight(List<Module> filtered) {
-        int c = cols();
-        int rows = 0;
-        int col  = 0;
-        int rowH = CARD_H + CARD_GAP;
-        for (Module m : filtered) {
-            if (col == 0) rows++;
-            // If this module is expanded it pushes down the next row
-            if (expandedModule == m && col == 0) {
-                rowH = Math.max(rowH, CARD_H + settingsHeight(m) + CARD_GAP);
-            }
-            col = (col + 1) % c;
-        }
-        // Rough total: multiply rows * rowH
-        return rows * (CARD_H + CARD_GAP) + (expandedModule != null ? settingsHeight(expandedModule) : 0);
-    }
+    private int cols() { return Math.max(1, areaW / (CARD_W + CARD_GAP)); }
 
     // ── Render ────────────────────────────────────────────────────────────────
-    public void render(int mouseX, int mouseY, String search) {
-        List<Module> filtered = filtered(search);
-
-        // Clamp scroll
-        int maxScroll = Math.max(0, contentHeight(filtered) - areaH + 20);
-        if (scrollOffset > maxScroll) scrollOffset = maxScroll;
-
+    public void render(int mx, int my, String search) {
+        List<Module> list = filtered(search);
         ScissorUtil.enable(areaX, areaY, areaW, areaH);
-        GL11.glEnable(GL11.GL_SCISSOR_TEST);
 
-        int c    = cols();
+        int c = cols();
         int totalW = c * CARD_W + (c - 1) * CARD_GAP;
-        int startX = areaX + (areaW - totalW) / 2;
+        int sx = areaX + (areaW - totalW) / 2;
+        int col = 0, x = sx, y = areaY - scrollOffset;
 
-        int col = 0, x = startX, y = areaY - scrollOffset;
-        int extraY = 0; // extra height from expanded settings
-
-        for (Module m : filtered) {
-            if (col == 0) { x = startX; y += extraY; extraY = 0; }
-            renderCard(m, x, y, mouseX, mouseY);
-            int cH = CARD_H;
-            if (expandedModule == m) cH += settingsHeight(m);
-            extraY = Math.max(extraY, cH + CARD_GAP);
+        for (Module m : list) {
+            if (col == 0) x = sx;
+            renderCard(m, x, y, mx, my);
+            int ch = CARD_H + (expandedModule == m ? settingsH(m) + 4 : 0);
             x += CARD_W + CARD_GAP;
-            col = (col + 1) % c;
-            if (col == 0) { y += CARD_H + CARD_GAP; extraY = 0; }
+            col++;
+            if (col >= c) { col = 0; y += ch + CARD_GAP; }
         }
 
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
         ScissorUtil.disable();
     }
 
-    private void renderCard(Module m, int x, int y, int mouseX, int mouseY) {
-        boolean enabled = m.isEnabled();
-        boolean hovered = mouseX >= x && mouseX <= x + CARD_W && mouseY >= y && mouseY <= y + CARD_H;
-        boolean expanded = expandedModule == m;
+    private void renderCard(Module m, int x, int y, int mx, int my) {
+        boolean en  = m.isEnabled();
+        boolean hov = mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H;
+        boolean exp = expandedModule == m;
 
-        // Advance toggle animation
-        toggleAnim.putIfAbsent(m, enabled ? 1f : 0f);
-        float ta = toggleAnim.get(m);
-        ta += ((enabled ? 1f : 0f) - ta) * 0.25f;
+        // Animate toggle
+        toggleAnim.putIfAbsent(m, en ? 1f : 0f);
+        float ta = toggleAnim.get(m) + ((en ? 1f : 0f) - toggleAnim.get(m)) * 0.2f;
         toggleAnim.put(m, ta);
 
-        // Card background
-        int bgColor = enabled
-                ? blend(0xFF1A1A1A, 0xFF252525, ta)
-                : (hovered ? 0xFF181818 : 0xFF131313);
-        RoundedUtils.drawRoundedRect(x, y, CARD_W, CARD_H, 8, bgColor);
+        // Card pill background
+        int bg;
+        if (en)       bg = blend(0x44E991B8, 0x88E991B8, ta); // pink tint
+        else if (hov) bg = 0x22FFFFFF;
+        else          bg = 0x14FFFFFF;
+        RoundedUtils.drawRoundedRect(x, y, CARD_W, CARD_H, CARD_H / 2, bg);
 
-        // Left accent bar when enabled
-        if (enabled) {
-            RoundedUtils.drawRoundedRect(x, y + 6, 2, CARD_H - 12, 1, blend(0xFF333333, 0xFFFFFFFF, ta));
-        }
+        // Left dot — filled pink when on, dim when off
+        int dotColor = en ? Rise6ClickGui.ACCENT : 0xFF444444;
+        RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3, dotColor);
 
-        // Subtle border
-        int borderAlpha = enabled ? 0x40 : (hovered ? 0x25 : 0x15);
-        drawBorder(x, y, CARD_W, CARD_H, 8, (borderAlpha << 24) | 0xFFFFFF);
+        // Name
+        gl(); int nc = en ? Rise6ClickGui.ACCENT : (hov ? 0xFFCCCCCC : 0xFF777777);
+        mc.fontRendererObj.drawString(m.getName(), x + 18, y + (CARD_H - 8) / 2, nc);
 
-        // Module name
-        GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1);
-        int nameColor = enabled ? 0xFFFFFFFF : (hovered ? 0xFFBBBBBB : 0xFF777777);
-        mc.fontRendererObj.drawString(m.getName(), x + 10, y + 8, nameColor);
-
-        // Suffix (e.g. mode name)
-        String[] suffix = m.getSuffix();
-        if (suffix != null && suffix.length > 0) {
-            GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1);
-            mc.fontRendererObj.drawString(suffix[0], x + 10, y + 19, 0xFF555555);
-        }
-
-        // Toggle switch (right side)
-        int tgX = x + CARD_W - 26, tgY = y + CARD_H / 2 - 4;
-        drawSwitch(tgX, tgY, ta);
-
-        // Expand arrow if settings exist
+        // Expand arrow if has settings
         if (!m.getSettings().isEmpty()) {
-            GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1);
-            mc.fontRendererObj.drawString(expanded ? "v" : ">", x + CARD_W - 38, y + 8, 0xFF444444);
+            gl(); mc.fontRendererObj.drawString(exp ? "v" : ">",
+                    x + CARD_W - 10, y + (CARD_H - 8) / 2, en ? 0xFFE991B8 : 0xFF555555);
         }
 
-        // Settings panel below card if expanded
-        if (expanded) {
-            renderSettings(m, x, y + CARD_H, CARD_W, mouseX, mouseY);
-        }
+        // Settings panel
+        if (exp) renderSettings(m, x, y + CARD_H + 2, mx, my);
     }
 
-    private void renderSettings(Module m, int x, int y, int w, int mouseX, int mouseY) {
-        // Settings background — slightly different shade
-        int sh = settingsHeight(m);
-        RoundedUtils.drawRoundedRect(x, y, w, sh, 8, 0xFF0F0F0F);
-        drawBorder(x, y, w, sh, 8, 0x20FFFFFF);
+    private void renderSettings(Module m, int x, int y, int mx, int my) {
+        int sh = settingsH(m);
+        // Subtle settings bg
+        RoundedUtils.drawRoundedRect(x + 4, y, CARD_W - 8, sh, 6, 0x22000000);
+        // Left accent line
+        drawRect(x + 8, y + 2, x + 9, y + sh - 2, Rise6ClickGui.ACCENT_DIM);
 
-        int oy = y + 6;
+        int oy = y + 4;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
-
-            GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1);
-
+            gl();
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 10, oy + 2, 0xFF888888);
-                String valStr = formatVal(sl.getValue());
-                mc.fontRendererObj.drawString(valStr,
-                        x + w - mc.fontRendererObj.getStringWidth(valStr) - 10, oy + 2, 0xFFCCCCCC);
-
-                int bx = x + 10, by = oy + 14, bw = w - 20;
-                drawRect(bx, by, bx + bw, by + 3, 0xFF252525);
-                int fill = Math.max(3, (int)(bw * sl.getPercent()));
-                drawRect(bx, by, bx + fill, by + 3, 0xFFCCCCCC);
-                // Handle dot
-                drawRoundRect(bx + fill - 3, by - 2, 6, 7, 3, 0xFFFFFFFF);
-
+                mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
+                String val = fmtVal(sl.getValue());
+                mc.fontRendererObj.drawString(val, x + CARD_W - mc.fontRendererObj.getStringWidth(val) - 9, oy + 2,
+                        Rise6ClickGui.ACCENT);
+                int bx = x + 13, by = oy + 13, bw = CARD_W - 26;
+                drawRect(bx, by, bx + bw, by + 2, 0xFF2A2A2A);
+                int fill = Math.max(2, (int)(bw * sl.getPercent()));
+                drawRect(bx, by, bx + fill, by + 2, Rise6ClickGui.ACCENT);
+                RoundedUtils.drawRoundedRect(bx + fill - 3, by - 2, 6, 6, 3, 0xFFFFFFFF);
                 if (draggingSlider == sl) { sliderBarX = bx; sliderBarW = bw; }
-                oy += SETTINGS_ROW;
-
+                oy += SET_ROW;
             } else if (s instanceof DropdownSetting) {
                 DropdownSetting dd = (DropdownSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 10, oy + 2, 0xFF888888);
-                String val = "< " + dd.getValue() + " >";
-                mc.fontRendererObj.drawString(val,
-                        x + w - mc.fontRendererObj.getStringWidth(val) - 10, oy + 2, 0xFFCCCCCC);
-                oy += 18;
-
+                mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
+                String v = "< " + dd.getValue() + " >";
+                mc.fontRendererObj.drawString(v, x + CARD_W - mc.fontRendererObj.getStringWidth(v) - 9, oy + 2,
+                        Rise6ClickGui.ACCENT);
+                oy += 16;
             } else if (s instanceof BooleanSetting) {
                 BooleanSetting bs = (BooleanSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 10, oy + 2, 0xFF888888);
+                mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
                 float ba = bs.getValue() ? 1f : 0f;
-                drawSwitch(x + w - 26, oy, ba);
-                oy += 18;
-
+                int dotC = bs.getValue() ? Rise6ClickGui.ACCENT : 0xFF444444;
+                RoundedUtils.drawRoundedRect(x + CARD_W - 14, oy + 3, 6, 6, 3, dotC);
+                oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 10, oy + 2, 0xFF888888);
-                boolean listening = listeningKeybind == kb;
-                String label = listening ? "[ ... ]" : "[ " + kb.getDisplayName() + " ]";
-                int lc = listening ? 0xFFFFFFFF : 0xFFAAAAAA;
-                mc.fontRendererObj.drawString(label,
-                        x + w - mc.fontRendererObj.getStringWidth(label) - 10, oy + 2, lc);
-                oy += 18;
+                mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
+                boolean lstn = listeningKeybind == kb;
+                String lbl = lstn ? "[ ... ]" : "[ " + kb.getDisplayName() + " ]";
+                mc.fontRendererObj.drawString(lbl, x + CARD_W - mc.fontRendererObj.getStringWidth(lbl) - 9, oy + 2,
+                        lstn ? 0xFFFFFFFF : Rise6ClickGui.ACCENT);
+                oy += 16;
             }
         }
     }
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
-    public void mouseClicked(int mouseX, int mouseY, int button) {
-        List<Module> filtered = filtered(null); // search doesn't affect click detection
+    public void mouseClicked(int mx, int my, int button) {
+        List<Module> list = filtered(null);
         int c = cols();
         int totalW = c * CARD_W + (c - 1) * CARD_GAP;
-        int startX = areaX + (areaW - totalW) / 2;
+        int sx = areaX + (areaW - totalW) / 2;
+        int col = 0, x = sx, y = areaY - scrollOffset;
 
-        int col = 0, x = startX, y = areaY - scrollOffset, extraY = 0;
-
-        for (Module m : filtered) {
-            if (col == 0) { x = startX; y += extraY; extraY = 0; }
-
-            // Card hit
-            if (mouseX >= x && mouseX <= x + CARD_W && mouseY >= y && mouseY <= y + CARD_H) {
+        for (Module m : list) {
+            if (col == 0) x = sx;
+            if (mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H) {
                 if (button == 0) m.toggle();
                 else if (button == 1 && !m.getSettings().isEmpty())
-                    expandedModule = (expandedModule == m) ? null : m;
+                    expandedModule = expandedModule == m ? null : m;
                 return;
             }
-
-            // Settings hit (if expanded)
+            int ch = CARD_H;
             if (expandedModule == m) {
-                int sh = settingsHeight(m);
-                if (mouseX >= x && mouseX <= x + CARD_W && mouseY >= y + CARD_H && mouseY <= y + CARD_H + sh) {
-                    settingClicked(m, x, y + CARD_H, CARD_W, mouseX, mouseY, button);
+                int sh = settingsH(m);
+                if (mx >= x && mx <= x + CARD_W && my >= y + CARD_H + 2 && my <= y + CARD_H + 2 + sh) {
+                    settingClick(m, x, y + CARD_H + 2, mx, my, button);
                     return;
                 }
-                extraY = Math.max(extraY, CARD_H + sh + CARD_GAP);
-            } else {
-                extraY = Math.max(extraY, CARD_H + CARD_GAP);
+                ch += sh + 4;
             }
-
             x += CARD_W + CARD_GAP;
-            col = (col + 1) % c;
-            if (col == 0) { y += CARD_H + CARD_GAP; extraY = 0; }
+            col++;
+            if (col >= c) { col = 0; y += ch + CARD_GAP; }
         }
     }
 
-    private void settingClicked(Module m, int x, int y, int w, int mouseX, int mouseY, int button) {
-        int oy = y + 6;
+    private void settingClick(Module m, int x, int y, int mx, int my, int button) {
+        int oy = y + 4;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
-                int bx = x + 10, by = oy + 14, bw = w - 20;
-                if (button == 0 && mouseX >= bx && mouseX <= bx + bw
-                        && mouseY >= by - 3 && mouseY <= by + 8) {
-                    draggingSlider = sl; sliderBarX = bx; sliderBarW = bw;
-                    updateSlider(mouseX);
+                int bx = x + 13, by = oy + 13, bw = CARD_W - 26;
+                if (button == 0 && mx >= bx && mx <= bx + bw && my >= by - 3 && my <= by + 7) {
+                    draggingSlider = sl; sliderBarX = bx; sliderBarW = bw; updateSlider(mx);
                 }
-                oy += SETTINGS_ROW;
+                oy += SET_ROW;
             } else if (s instanceof DropdownSetting) {
-                DropdownSetting dd = (DropdownSetting) s;
-                if (mouseY >= oy && mouseY <= oy + 18) {
-                    if (button == 0) dd.next();
-                    else if (button == 1) dd.prev();
+                if (my >= oy && my <= oy + 16) {
+                    if (button == 0) ((DropdownSetting)s).next();
+                    else if (button == 1) ((DropdownSetting)s).prev();
                 }
-                oy += 18;
+                oy += 16;
             } else if (s instanceof BooleanSetting) {
-                BooleanSetting bs = (BooleanSetting) s;
-                if (button == 0 && mouseY >= oy && mouseY <= oy + 18) bs.toggle();
-                oy += 18;
+                if (button == 0 && my >= oy && my <= oy + 16) ((BooleanSetting)s).toggle();
+                oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
-                if (button == 0 && mouseY >= oy && mouseY <= oy + 18)
-                    listeningKeybind = (listeningKeybind == kb) ? null : kb;
-                oy += 18;
+                if (button == 0 && my >= oy && my <= oy + 16)
+                    listeningKeybind = listeningKeybind == kb ? null : kb;
+                oy += 16;
             }
         }
     }
 
-    public void mouseDrag(int mouseX) { if (draggingSlider != null) updateSlider(mouseX); }
-    public void mouseReleased()       { draggingSlider = null; }
-
-    public void handleScroll(int delta) {
-        scrollOffset = Math.max(0, scrollOffset + (delta > 0 ? -16 : 16));
-    }
-
-    public void keyTyped(char c, int keyCode) {
+    public void mouseDrag(int mx)  { if (draggingSlider != null) updateSlider(mx); }
+    public void mouseReleased()    { draggingSlider = null; }
+    public void handleScroll(int d){ scrollOffset = Math.max(0, scrollOffset + (d > 0 ? -16 : 16)); }
+    public void keyTyped(char c, int kc) {
         if (listeningKeybind != null) {
-            listeningKeybind.setKeyCode(keyCode == Keyboard.KEY_ESCAPE ? 0 : keyCode);
+            listeningKeybind.setKeyCode(kc == Keyboard.KEY_ESCAPE ? 0 : kc);
             listeningKeybind = null;
         }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    private List<Module> filtered(String search) {
-        if (search == null || search.isEmpty()) return modules;
-        String q = search.toLowerCase();
-        return modules.stream().filter(m -> m.getName().toLowerCase().contains(q)).collect(Collectors.toList());
+    private List<Module> filtered(String s) {
+        if (s == null || s.isEmpty()) return modules;
+        return modules.stream().filter(m -> m.getName().toLowerCase().contains(s.toLowerCase()))
+                .collect(Collectors.toList());
     }
 
-    private int settingsHeight(Module m) {
-        int h = 6;
+    private int settingsH(Module m) {
+        int h = 8;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
-            h += (s instanceof SliderSetting) ? SETTINGS_ROW : 18;
+            h += s instanceof SliderSetting ? SET_ROW : 16;
         }
-        return h + 6;
+        return h;
     }
 
-    private void updateSlider(int mouseX) {
+    private void updateSlider(int mx) {
         if (draggingSlider == null) return;
-        float pct = Math.max(0f, Math.min(1f, (float)(mouseX - sliderBarX) / sliderBarW));
+        float pct = Math.max(0f, Math.min(1f, (float)(mx - sliderBarX) / sliderBarW));
         draggingSlider.setValue(draggingSlider.getMin() + pct * (draggingSlider.getMax() - draggingSlider.getMin()));
     }
 
-    private String formatVal(double v) {
-        return v == Math.floor(v) ? String.valueOf((int) v) : String.format("%.2f", v);
-    }
-
-    // ── Draw primitives ───────────────────────────────────────────────────────
-    private void drawSwitch(int x, int y, float t) {
-        int trackColor = blend(0xFF2A2A2A, 0xFF555555, t);
-        drawRect(x, y, x + 18, y + 8, trackColor);
-        // Round ends
-        RoundedUtils.drawRoundedRect(x, y, 18, 8, 4, trackColor);
-        // Knob
-        int kx = x + 2 + (int)(t * 8);
-        RoundedUtils.drawRoundedRect(kx, y + 1, 6, 6, 3, 0xFFFFFFFF);
-    }
-
-    private void drawBorder(int x, int y, int w, int h, int r, int color) {
-        // Single-pixel border sim using thin rects
-        drawRect(x, y, x + w, y + 1, color);
-        drawRect(x, y + h - 1, x + w, y + h, color);
-        drawRect(x, y, x + 1, y + h, color);
-        drawRect(x + w - 1, y, x + w, y + h, color);
-    }
-
-    private void drawRoundRect(int x, int y, int w, int h, int r, int color) {
-        RoundedUtils.drawRoundedRect(x, y, w, h, r, color);
+    private String fmtVal(double v) {
+        return v == Math.floor(v) ? String.valueOf((int)v) : String.format("%.2f", v);
     }
 
     private void drawRect(int x1, int y1, int x2, int y2, int color) {
-        float a = (color >> 24 & 0xFF) / 255f;
-        float r = (color >> 16 & 0xFF) / 255f;
-        float g = (color >> 8  & 0xFF) / 255f;
-        float b = (color       & 0xFF) / 255f;
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        float a=(color>>24&0xFF)/255f, r=(color>>16&0xFF)/255f, g=(color>>8&0xFF)/255f, b=(color&0xFF)/255f;
+        GL11.glEnable(GL11.GL_BLEND); GL11.glDisable(GL11.GL_TEXTURE_2D);
         GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(r, g, b, a);
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2d(x1, y2); GL11.glVertex2d(x2, y2);
-        GL11.glVertex2d(x2, y1); GL11.glVertex2d(x1, y1);
-        GL11.glEnd();
-        GL11.glDisable(GL11.GL_BLEND);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1, 1, 1, 1);
+        GL11.glColor4f(r,g,b,a); GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2d(x1,y2); GL11.glVertex2d(x2,y2); GL11.glVertex2d(x2,y1); GL11.glVertex2d(x1,y1);
+        GL11.glEnd(); GL11.glDisable(GL11.GL_BLEND); GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1);
     }
+
+    private void gl() { GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1); }
 
     private int blend(int c1, int c2, float t) {
         int a1=(c1>>24)&0xFF, r1=(c1>>16)&0xFF, g1=(c1>>8)&0xFF, b1=c1&0xFF;
