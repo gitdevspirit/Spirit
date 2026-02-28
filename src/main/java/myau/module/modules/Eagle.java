@@ -4,7 +4,6 @@ import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
 import myau.events.MoveInputEvent;
-import myau.events.Render2DEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
@@ -30,10 +29,6 @@ public class Eagle extends Module {
     public final BooleanSetting blocksOnly     = register(new BooleanSetting("Blocks Only",    true));
     public final BooleanSetting sneakOnly      = register(new BooleanSetting("Sneak Only",     false));
 
-    // Block counter HUD
-    public final BooleanSetting showCount  = register(new BooleanSetting("Show Count",  true));
-    public final SliderSetting  countOffX  = register(new SliderSetting("Count X",  0, -200, 200, 1));
-    public final SliderSetting  countOffY  = register(new SliderSetting("Count Y", 20,  -50, 200, 1));
 
     public Eagle() {
         super("Eagle", false);
@@ -51,14 +46,11 @@ public class Eagle extends Module {
         return (!blocksOnly.getValue() || ItemUtil.isHoldingBlock()) && mc.thePlayer.onGround;
     }
 
-    /** Total block count across all hotbar slots */
     private int getTotalBlocks() {
         int total = 0;
         for (int i = 0; i < 9; i++) {
             ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-            if (stack != null && ItemUtil.isBlock(stack)) {
-                total += stack.stackSize;
-            }
+            if (stack != null && ItemUtil.isBlock(stack)) total += stack.stackSize;
         }
         return total;
     }
@@ -89,34 +81,6 @@ public class Eagle extends Module {
                 mc.thePlayer.movementInput.moveForward *= 0.3F;
             }
         }
-    }
-
-    @EventTarget
-    public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !showCount.getValue()) return;
-        if (mc.thePlayer == null || mc.currentScreen != null) return;
-        if (!ItemUtil.isHoldingBlock()) return;
-
-        int blocks = getTotalBlocks();
-        String text = String.valueOf(blocks);
-
-        ScaledResolution sr = new ScaledResolution(mc);
-        int cx = sr.getScaledWidth()  / 2;
-        int cy = sr.getScaledHeight() / 2;
-
-        float x = cx + (float) countOffX.getValue() - mc.fontRendererObj.getStringWidth(text) / 2f;
-        float y = cy + (float) countOffY.getValue();
-
-        // Color: green → yellow → red based on count
-        int color;
-        if (blocks > 64)      color = 0xFF55FF55; // green
-        else if (blocks > 16) color = 0xFFFFAA00; // yellow
-        else                  color = 0xFFFF5555; // red
-
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        mc.fontRendererObj.drawStringWithShadow(text, x, y, color);
-        GL11.glDisable(GL11.GL_BLEND);
     }
 
     @Override
