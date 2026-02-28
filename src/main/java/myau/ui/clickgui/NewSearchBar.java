@@ -1,5 +1,6 @@
 package myau.ui.clickgui;
 
+
 import net.minecraft.client.Minecraft;
 import org.lwjgl.opengl.GL11;
 
@@ -16,7 +17,7 @@ public class NewSearchBar {
         RoundedUtils.drawRoundedRect(x, y, w, h, h / 2,
                 focused ? 0x33E991B8 : 0x18FFFFFF);
         // Pink bottom line when focused
-        if (focused) drawRect(x + 8, y + h - 1, x + w - 8, y + h, Rise6ClickGui.ACCENT_DIM);
+        if (focused) drawRect(x + 8, y + h - 1, x + w - 8, y + h, GuiColors.ACCENT_DIM);
 
         gl();
         String disp = text.isEmpty() && !focused ? "Search..." : text;
@@ -25,7 +26,7 @@ public class NewSearchBar {
 
         if (focused) {
             if (System.currentTimeMillis() - blink > 530) { caret = !caret; blink = System.currentTimeMillis(); }
-            if (caret) drawRect(x + 10 + mc.fontRendererObj.getStringWidth(text), y + 3, x + 11 + mc.fontRendererObj.getStringWidth(text), y + h - 3, Rise6ClickGui.ACCENT);
+            if (caret) drawRect(x + 10 + mc.fontRendererObj.getStringWidth(text), y + 3, x + 11 + mc.fontRendererObj.getStringWidth(text), y + h - 3, GuiColors.ACCENT);
         }
     }
 
