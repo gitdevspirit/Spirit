@@ -1,5 +1,6 @@
 package myau.ui.clickgui;
 
+
 import myau.module.*;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.input.Keyboard;
@@ -79,11 +80,11 @@ public class NewModulePanel {
         RoundedUtils.drawRoundedRect(x, y, CARD_W, CARD_H, CARD_H / 2, bg);
 
         // Left dot — filled pink when on, dim when off
-        int dotColor = en ? Rise6ClickGui.ACCENT : 0xFF444444;
+        int dotColor = en ? GuiColors.ACCENT : 0xFF444444;
         RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3, dotColor);
 
         // Name
-        gl(); int nc = en ? Rise6ClickGui.ACCENT : (hov ? 0xFFCCCCCC : 0xFF777777);
+        gl(); int nc = en ? GuiColors.ACCENT : (hov ? 0xFFCCCCCC : 0xFF777777);
         mc.fontRendererObj.drawString(m.getName(), x + 18, y + (CARD_H - 8) / 2, nc);
 
         // Expand arrow if has settings
@@ -101,7 +102,7 @@ public class NewModulePanel {
         // Subtle settings bg
         RoundedUtils.drawRoundedRect(x + 4, y, CARD_W - 8, sh, 6, 0x22000000);
         // Left accent line
-        drawRect(x + 8, y + 2, x + 9, y + sh - 2, Rise6ClickGui.ACCENT_DIM);
+        drawRect(x + 8, y + 2, x + 9, y + sh - 2, GuiColors.ACCENT_DIM);
 
         int oy = y + 4;
         for (Setting s : m.getSettings()) {
@@ -112,11 +113,11 @@ public class NewModulePanel {
                 mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
                 String val = fmtVal(sl.getValue());
                 mc.fontRendererObj.drawString(val, x + CARD_W - mc.fontRendererObj.getStringWidth(val) - 9, oy + 2,
-                        Rise6ClickGui.ACCENT);
+                        GuiColors.ACCENT);
                 int bx = x + 13, by = oy + 13, bw = CARD_W - 26;
                 drawRect(bx, by, bx + bw, by + 2, 0xFF2A2A2A);
                 int fill = Math.max(2, (int)(bw * sl.getPercent()));
-                drawRect(bx, by, bx + fill, by + 2, Rise6ClickGui.ACCENT);
+                drawRect(bx, by, bx + fill, by + 2, GuiColors.ACCENT);
                 RoundedUtils.drawRoundedRect(bx + fill - 3, by - 2, 6, 6, 3, 0xFFFFFFFF);
                 if (draggingSlider == sl) { sliderBarX = bx; sliderBarW = bw; }
                 oy += SET_ROW;
@@ -125,13 +126,13 @@ public class NewModulePanel {
                 mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
                 String v = "< " + dd.getValue() + " >";
                 mc.fontRendererObj.drawString(v, x + CARD_W - mc.fontRendererObj.getStringWidth(v) - 9, oy + 2,
-                        Rise6ClickGui.ACCENT);
+                        GuiColors.ACCENT);
                 oy += 16;
             } else if (s instanceof BooleanSetting) {
                 BooleanSetting bs = (BooleanSetting) s;
                 mc.fontRendererObj.drawString(s.getName(), x + 13, oy + 2, 0xFF888888);
                 float ba = bs.getValue() ? 1f : 0f;
-                int dotC = bs.getValue() ? Rise6ClickGui.ACCENT : 0xFF444444;
+                int dotC = bs.getValue() ? GuiColors.ACCENT : 0xFF444444;
                 RoundedUtils.drawRoundedRect(x + CARD_W - 14, oy + 3, 6, 6, 3, dotC);
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
@@ -140,7 +141,7 @@ public class NewModulePanel {
                 boolean lstn = listeningKeybind == kb;
                 String lbl = lstn ? "[ ... ]" : "[ " + kb.getDisplayName() + " ]";
                 mc.fontRendererObj.drawString(lbl, x + CARD_W - mc.fontRendererObj.getStringWidth(lbl) - 9, oy + 2,
-                        lstn ? 0xFFFFFFFF : Rise6ClickGui.ACCENT);
+                        lstn ? 0xFFFFFFFF : GuiColors.ACCENT);
                 oy += 16;
             }
         }
