@@ -120,6 +120,7 @@ public class Myau {
         moduleManager.modules.put(ClientSpoofer.class,   new ClientSpoofer());
         moduleManager.modules.put(ItemESP.class,         new ItemESP());
         moduleManager.modules.put(Jesus.class,           new Jesus());
+        moduleManager.modules.put(JumpReset.class,       new JumpReset());
         moduleManager.modules.put(Disabler.class,        new Disabler());
         moduleManager.modules.put(KeepSprint.class,      new KeepSprint());
         moduleManager.modules.put(FlagDetector.class,    new FlagDetector());
