@@ -23,7 +23,6 @@ public class ModuleRegistry {
         combatModules = new ArrayList<>();
         combatModules.add(Myau.moduleManager.getModule(AimAssist.class));
         combatModules.add(Myau.moduleManager.getModule(AutoClicker.class));
-        combatModules.add(Myau.moduleManager.getModule(KillAura.class));
         combatModules.add(Myau.moduleManager.getModule(Wtap.class));
         combatModules.add(Myau.moduleManager.getModule(Velocity.class));
         combatModules.add(Myau.moduleManager.getModule(ServerLag.class));
