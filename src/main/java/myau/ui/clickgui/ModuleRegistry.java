@@ -23,6 +23,7 @@ public class ModuleRegistry {
         combatModules = new ArrayList<>();
         combatModules.add(Myau.moduleManager.getModule(AimAssist.class));
         combatModules.add(Myau.moduleManager.getModule(AutoClicker.class));
+        combatModules.add(Myau.moduleManager.getModule(KillAura.class));
         combatModules.add(Myau.moduleManager.getModule(Wtap.class));
         combatModules.add(Myau.moduleManager.getModule(Velocity.class));
         combatModules.add(Myau.moduleManager.getModule(ServerLag.class));
@@ -34,11 +35,11 @@ public class ModuleRegistry {
         combatModules.add(Myau.moduleManager.getModule(HitBox.class));
         combatModules.add(Myau.moduleManager.getModule(MoreKB.class));
         combatModules.add(Myau.moduleManager.getModule(Refill.class));
-        combatModules.add(Myau.moduleManager.getModule(JumpReset.class));
         combatModules.add(Myau.moduleManager.getModule(HitSelect.class));
         combatModules.add(Myau.moduleManager.getModule(BackTrack.class));
         combatModules.add(Myau.moduleManager.getModule(ClickAssits.class));
         combatModules.add(Myau.moduleManager.getModule(Criticals.class));
+        combatModules.add(Myau.moduleManager.getModule(JumpReset.class));
         combatModules.add(Myau.moduleManager.getModule(BlockHit.class));
         combatModules.add(Myau.moduleManager.getModule(Autoblock.class));
         combatModules.sort(comparator);
@@ -100,7 +101,6 @@ public class ModuleRegistry {
         playerModules.add(Myau.moduleManager.getModule(MCF.class));
         playerModules.add(Myau.moduleManager.getModule(AntiDebuff.class));
         playerModules.add(Myau.moduleManager.getModule(FlagDetector.class));
-        playerModules.add(Myau.moduleManager.getModule(Freelook.class));
         playerModules.sort(comparator);
 
         miscModules = new ArrayList<>();
