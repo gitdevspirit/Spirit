@@ -1,6 +1,5 @@
 package myau.mixin;
 
-import myau.module.modules.Freelook;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.EntityRenderer;
 import net.minecraft.client.renderer.entity.RenderManager;
