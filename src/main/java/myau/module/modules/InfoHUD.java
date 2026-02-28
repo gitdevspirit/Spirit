@@ -35,7 +35,7 @@ public class InfoHUD extends Module {
     public final DropdownSetting healthMode     = register(new DropdownSetting("Health Mode",   0, "HEARTS", "TAB"));
     public final BooleanSetting  showBlocks     = register(new BooleanSetting("Show Blocks",   true));
 
-    public Vitals() { super("InfoHUD", false); }
+    public InfoHUD() { super("InfoHUD", false); }
 
     // ── Data helpers ──────────────────────────────────────────────────────────
 
