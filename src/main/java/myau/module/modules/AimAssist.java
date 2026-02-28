@@ -22,12 +22,11 @@ public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private final TimerUtil timer = new TimerUtil();
 
-    private float smoothedYaw   = Float.NaN;
-    private float smoothedPitch = Float.NaN;
-
-    public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  50,  0,   100,   1);
-    public final SliderSetting  range      = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
-    public final SliderSetting  fov        = new SliderSetting("FOV",        90,  30,  360,   1);
+    public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",   3.0, 0.0, 10.0, 0.1);
+    public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",   0.0, 0.0, 10.0, 0.1);
+    public final SliderSetting  smoothing  = new SliderSetting("Smoothing", 50,  0,   100,   1);
+    public final SliderSetting  range      = new SliderSetting("Range",     4.5, 3.0, 8.0,  0.1);
+    public final SliderSetting  fov        = new SliderSetting("FOV",       90,  30,  360,   1);
     public final BooleanSetting weaponOnly = new BooleanSetting("Weapons Only", true);
     public final BooleanSetting allowTools = new BooleanSetting("Allow Tools",  false);
     public final BooleanSetting botChecks  = new BooleanSetting("Bot Check",    true);
@@ -35,6 +34,8 @@ public class AimAssist extends Module {
 
     public AimAssist() {
         super("AimAssist", false);
+        register(hSpeed);
+        register(vSpeed);
         register(smoothing);
         register(range);
         register(fov);
@@ -42,12 +43,6 @@ public class AimAssist extends Module {
         register(allowTools);
         register(botChecks);
         register(team);
-    }
-
-    @Override
-    public void onDisabled() {
-        smoothedYaw   = Float.NaN;
-        smoothedPitch = Float.NaN;
     }
 
     private boolean isValidTarget(EntityPlayer p) {
@@ -89,11 +84,7 @@ public class AimAssist extends Module {
                             .sorted(Comparator.comparingDouble(RotationUtil::distanceToEntity))
                             .collect(Collectors.toList());
 
-                    if (inRange.isEmpty()) {
-                        smoothedYaw   = Float.NaN;
-                        smoothedPitch = Float.NaN;
-                        return;
-                    }
+                    if (inRange.isEmpty()) return;
 
                     if (inRange.stream().anyMatch(this::isInReach))
                         inRange.removeIf(p -> !isInReach(p));
@@ -101,36 +92,25 @@ public class AimAssist extends Module {
                     EntityPlayer player = inRange.get(0);
                     if (RotationUtil.distanceToEntity(player) <= 0.0) return;
 
-                    AxisAlignedBB bb     = player.getEntityBoundingBox();
-                    float         border = player.getCollisionBorderSize();
-                    float[] target = RotationUtil.getRotationsToBox(
+                    AxisAlignedBB bb = player.getEntityBoundingBox();
+                    double border    = player.getCollisionBorderSize();
+                    float[] rotation = RotationUtil.getRotationsToBox(
                             bb.expand(border, border, border),
                             mc.thePlayer.rotationYaw,
                             mc.thePlayer.rotationPitch,
                             180.0F,
-                            1.0f);
+                            (float) smoothing.getValue() / 100.0F
+                    );
 
-                    float dyaw = target[0] - mc.thePlayer.rotationYaw;
-                    while (dyaw >  180) dyaw -= 360;
-                    while (dyaw < -180) dyaw += 360;
-                    float dpitch = target[1] - mc.thePlayer.rotationPitch;
+                    float yaw   = (float) Math.min(Math.abs(hSpeed.getValue()), 10.0);
+                    float pitch = (float) Math.min(Math.abs(vSpeed.getValue()), 10.0);
 
-                    // smoothing=0  → lerpT=1.0 (snap instantly to target)
-                    // smoothing=100→ lerpT=0.05 (ease in slowly)
-                    // lerpT applied to the delta each tick — large gaps close fast,
-                    // small gaps ease in, so it always feels smooth on arrival
-                    float sm    = (float) smoothing.getValue() / 100f;
-                    // smoothing=0 → lerpT=1.0 (instant snap)
-                    // smoothing=100 → lerpT=0.6 (still fast, just slightly eased)
-                    float lerpT = 1.0f - sm * 0.4f;
-
-                    float moveYaw   = dyaw   * lerpT;
-                    float movePitch = dpitch * lerpT;
-
-                    smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
-                    smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
-
-                    Myau.rotationManager.setRotation(smoothedYaw, smoothedPitch, 0, false);
+                    Myau.rotationManager.setRotation(
+                            mc.thePlayer.rotationYaw   + (rotation[0] - mc.thePlayer.rotationYaw)   * 0.1F * yaw,
+                            mc.thePlayer.rotationPitch + (rotation[1] - mc.thePlayer.rotationPitch) * 0.1F * pitch,
+                            0,
+                            false
+                    );
                 }
             }
         }
