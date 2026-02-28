@@ -102,7 +102,6 @@ public class Myau {
         moduleManager.modules.put(ServerLag.class,       new ServerLag());
         moduleManager.modules.put(Fly.class,             new Fly());
         moduleManager.modules.put(FakeLag.class,         new FakeLag());
-        moduleManager.modules.put(Freelook.class,        new Freelook());
         moduleManager.modules.put(FullBright.class,      new FullBright());
         moduleManager.modules.put(GhostHand.class,       new GhostHand());
         moduleManager.modules.put(GuiModule.class,       new GuiModule());
