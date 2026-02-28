@@ -5,7 +5,6 @@ import myau.init.Initializer;
 import myau.event.EventManager;
 import myau.event.types.EventType;
 import myau.events.*;
-import myau.module.modules.Freelook;
 import myau.module.modules.NoHitDelay;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.MouseHelper;
