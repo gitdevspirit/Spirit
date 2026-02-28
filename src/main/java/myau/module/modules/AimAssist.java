@@ -25,8 +25,6 @@ public class AimAssist extends Module {
     private float smoothedYaw   = Float.NaN;
     private float smoothedPitch = Float.NaN;
 
-    public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",    180.0, 0.0, 180.0, 0.5);
-    public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",    180.0, 0.0, 180.0, 0.5);
     public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  50,  0,   100,   1);
     public final SliderSetting  range      = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
     public final SliderSetting  fov        = new SliderSetting("FOV",        90,  30,  360,   1);
@@ -37,8 +35,6 @@ public class AimAssist extends Module {
 
     public AimAssist() {
         super("AimAssist", false);
-        register(hSpeed);
-        register(vSpeed);
         register(smoothing);
         register(range);
         register(fov);
@@ -107,47 +103,27 @@ public class AimAssist extends Module {
 
                     AxisAlignedBB bb     = player.getEntityBoundingBox();
                     float         border = player.getCollisionBorderSize();
-                    float[] exactRots = RotationUtil.getRotationsToBox(
+                    float[] target = RotationUtil.getRotationsToBox(
                             bb.expand(border, border, border),
                             mc.thePlayer.rotationYaw,
                             mc.thePlayer.rotationPitch,
                             180.0F,
                             1.0f);
 
-                    // hSpeed controls how fast we reach the target (degrees/tick).
-                    // smoothing controls the easing curve — higher = more curved/gradual
-                    // approach, but we always arrive within roughly the same time.
-                    // At smoothing=0 movement is linear. At smoothing=100 the first few
-                    // ticks move quickly then decelerate as we close in (ease-out).
-                    float maxYaw   = (float) hSpeed.getValue();
-                    float maxPitch = (float) vSpeed.getValue();
+                    float dyaw = target[0] - mc.thePlayer.rotationYaw;
+                    while (dyaw >  180) dyaw -= 360;
+                    while (dyaw < -180) dyaw += 360;
+                    float dpitch = target[1] - mc.thePlayer.rotationPitch;
 
-                    float rawDyaw = exactRots[0] - mc.thePlayer.rotationYaw;
-                    while (rawDyaw >  180) rawDyaw -= 360;
-                    while (rawDyaw < -180) rawDyaw += 360;
-                    float rawDpitch = (maxPitch > 0) ? (exactRots[1] - mc.thePlayer.rotationPitch) : 0f;
-
-                    // Clamp to max speed so we always reach target within predictable time
-                    float clampedYaw   = Math.max(-maxYaw,   Math.min(maxYaw,   rawDyaw));
-                    float clampedPitch = Math.max(-maxPitch, Math.min(maxPitch, rawDpitch));
-
-                    // Apply ease-out based on smoothing: raise the clamped ratio to a power.
-                    // power > 1 = ease-out (fast start, slow finish = smoother feel).
-                    // smoothing=0 → power=1.0 (linear), smoothing=100 → power=2.5 (strong ease-out)
+                    // smoothing=0  → lerpT=1.0 (snap instantly to target)
+                    // smoothing=100→ lerpT=0.05 (ease in slowly)
+                    // lerpT applied to the delta each tick — large gaps close fast,
+                    // small gaps ease in, so it always feels smooth on arrival
                     float sm    = (float) smoothing.getValue() / 100f;
-                    float power = 1.0f + sm * 1.5f;
+                    float lerpT = 1.0f - sm * 0.95f;
 
-                    float signYaw   = rawDyaw   != 0 ? Math.signum(rawDyaw)   : 0f;
-                    float signPitch = rawDpitch != 0 ? Math.signum(rawDpitch) : 0f;
-                    float ratioYaw   = maxYaw   > 0 ? Math.min(Math.abs(rawDyaw)   / maxYaw,   1f) : 1f;
-                    float ratioPitch = maxPitch > 0 ? Math.min(Math.abs(rawDpitch) / maxPitch, 1f) : 1f;
-
-                    float moveYaw   = signYaw   * (float) Math.pow(ratioYaw,   power) * maxYaw;
-                    float movePitch = signPitch * (float) Math.pow(ratioPitch, power) * maxPitch;
-
-                    // Never overshoot — cap to the actual remaining delta
-                    if (Math.abs(moveYaw)   > Math.abs(rawDyaw))   moveYaw   = rawDyaw;
-                    if (Math.abs(movePitch) > Math.abs(rawDpitch)) movePitch = rawDpitch;
+                    float moveYaw   = dyaw   * lerpT;
+                    float movePitch = dpitch * lerpT;
 
                     smoothedYaw   = mc.thePlayer.rotationYaw   + moveYaw;
                     smoothedPitch = mc.thePlayer.rotationPitch + movePitch;
