@@ -174,11 +174,15 @@ public class NewModulePanel {
                 }
                 y += CARD_H + CARD_GAP;
 
-                // Settings hit
+                // Settings hit — settingsY matches renderSettingsInline call site
                 if (expandedModule == m) {
                     int sh = settingsH(m);
-                    if (mx >= x && mx <= x + CARD_W && my >= y - CARD_GAP && my <= y - CARD_GAP + sh) {
-                        settingClick(m, x, y - CARD_GAP, CARD_W, mx, my, button);
+                    int settingsY = y - CARD_GAP; // y was incremented by CARD_H+CARD_GAP, so card bottom = y-CARD_GAP, settings start 2px below that
+                    // render calls renderSettingsInline at cardY+CARD_H+2, click y after increment = cardY+CARD_H+CARD_GAP
+                    // so settingsY for click = y - CARD_GAP + 2
+                    settingsY = y - CARD_GAP + 2;
+                    if (mx >= x && mx <= x + CARD_W && my >= settingsY && my <= settingsY + sh) {
+                        settingClick(m, x, settingsY, CARD_W, mx, my, button);
                         return;
                     }
                     y += sh + CARD_GAP;
@@ -205,7 +209,7 @@ public class NewModulePanel {
                 }
                 oy += 16;
             } else if (s instanceof BooleanSetting) {
-                if (button == 0 && my >= oy && my <= oy + 16) ((BooleanSetting)s).toggle();
+                if (button == 0 && mx >= x && mx <= x + w && my >= oy && my <= oy + 16) ((BooleanSetting)s).toggle();
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
