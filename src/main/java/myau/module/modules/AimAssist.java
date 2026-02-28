@@ -120,30 +120,6 @@ public class AimAssist extends Module {
         }
     }
 
-        if (healthMode.getIndex() == 1) {
-            try {
-                Scoreboard sb = mc.theWorld.getScoreboard();
-                if (sb != null) {
-                    ScoreObjective obj = sb.getObjectiveInDisplaySlot(2);
-                    if (obj != null) {
-                        Score score = sb.getValueFromObjective(mc.thePlayer.getName(), obj);
-                        if (score != null) return String.valueOf(score.getScorePoints());
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
-        // HEARTS: getHealth() is in half-hearts, divide by 2 for full hearts
-        float hp = mc.thePlayer.getHealth();
-        if (hp == (int) hp) return String.valueOf((int)(hp / 2f));
-        return String.format("%.1f", hp / 2f);
-    }
-
-        float ratio = mc.thePlayer.getHealth() / mc.thePlayer.getMaxHealth();
-        if (ratio > 0.6f) return 0xFFFF5555;
-        if (ratio > 0.3f) return 0xFFFFAA00;
-        return 0xFFFF2222;
-    }
-
     @EventTarget
     public void onPress(KeyEvent event) {
         if (event.getKey() == mc.gameSettings.keyBindAttack.getKeyCode()
