@@ -54,14 +54,7 @@ public class TargetStrafe extends Module {
         return !requirePress.getValue() || PlayerUtil.isJumping();
     }
 
-    private EntityLivingBase getKillAuraTarget() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killAura.isEnabled() && killAura.isAttackAllowed()) {
-            EntityLivingBase t = killAura.getTarget();
-            return TeamUtil.isEntityLoaded(t) ? t : null;
-        }
-        return null;
-    }
+    private EntityLivingBase getKillAuraTarget() { return null; }
 
     private Color getTargetColor(EntityLivingBase entity) {
         if (entity instanceof EntityPlayer) {
