@@ -135,8 +135,18 @@ public class NewModulePanel {
             } else if (s instanceof BooleanSetting) {
                 BooleanSetting bs = (BooleanSetting) s;
                 mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
-                RoundedUtils.drawRoundedRect(x + w - 14, oy + 3, 6, 6, 3,
-                        bs.getValue() ? GuiColors.ACCENT : 0xFF383838);
+                // Checkbox box
+                int cbX = x + w - 14, cbY = oy + 2, cbS = 9;
+                drawRect(cbX, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? GuiColors.ACCENT : 0xFF2A2A2A);
+                drawRect(cbX, cbY, cbX + cbS, cbY + 1, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                drawRect(cbX, cbY + cbS - 1, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                drawRect(cbX, cbY, cbX + 1, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                drawRect(cbX + cbS - 1, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                // Tick when on
+                if (bs.getValue()) {
+                    gl();
+                    mc.fontRendererObj.drawString("\u2713", cbX + 1, cbY + 1, 0xFF1A0D12);
+                }
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
