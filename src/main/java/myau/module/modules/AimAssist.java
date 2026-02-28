@@ -25,9 +25,9 @@ public class AimAssist extends Module {
     private float smoothedYaw   = Float.NaN;
     private float smoothedPitch = Float.NaN;
 
-    public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",    2.0, 0.0, 10.0, 0.1);
-    public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",    0.0, 0.0, 10.0, 0.1);
-    public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  70,  0,   100,   1);
+    public final SliderSetting  hSpeed     = new SliderSetting("H-Speed",    180.0, 0.0, 180.0, 0.5);
+    public final SliderSetting  vSpeed     = new SliderSetting("V-Speed",    180.0, 0.0, 180.0, 0.5);
+    public final SliderSetting  smoothing  = new SliderSetting("Smoothing",  50,  0,   100,   1);
     public final SliderSetting  range      = new SliderSetting("Range",      4.5, 3.0, 8.0,  0.1);
     public final SliderSetting  fov        = new SliderSetting("FOV",        90,  30,  360,   1);
     public final BooleanSetting weaponOnly = new BooleanSetting("Weapons Only", true);
