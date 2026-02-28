@@ -104,6 +104,7 @@ public class ModuleRegistry {
 
         miscModules = new ArrayList<>();
         miscModules.add(Myau.moduleManager.getModule(Spammer.class));
+        miscModules.add(Myau.moduleManager.getModule(AC.class));
         miscModules.add(Myau.moduleManager.getModule(BedNuker.class));
         miscModules.add(Myau.moduleManager.getModule(BedTracker.class));
         miscModules.add(Myau.moduleManager.getModule(LightningTracker.class));
