@@ -37,10 +37,7 @@ public class NoSlow extends Module {
     }
 
     public boolean isSwordActive() {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (killauraonly.getValue()) {
-            if (!killAura.isEnabled() || killAura.getTarget() == null) return false;
-        }
+        // KillAura removed — killauraonly setting no longer has effect
         return swordMode.getIndex() != 0 && ItemUtil.isHoldingSword();
     }
 
