@@ -77,7 +77,7 @@ public class AC extends Module {
             if (!(obj instanceof EntityPlayer)) continue;
             EntityPlayer p = (EntityPlayer) obj;
             if (p == mc.thePlayer) continue;
-            if (p.isDead()) continue;
+            if (p.isDead) continue;
             if (ignoreTeam.getValue() && TeamUtil.isSameTeam(p)) continue;
 
             Map<String, Object> data = playerData.computeIfAbsent(p, k -> new HashMap<>());
