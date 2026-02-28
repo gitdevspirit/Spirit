@@ -120,7 +120,9 @@ public class AimAssist extends Module {
                     // lerpT applied to the delta each tick — large gaps close fast,
                     // small gaps ease in, so it always feels smooth on arrival
                     float sm    = (float) smoothing.getValue() / 100f;
-                    float lerpT = 1.0f - sm * 0.95f;
+                    // smoothing=0 → lerpT=1.0 (instant snap)
+                    // smoothing=100 → lerpT=0.6 (still fast, just slightly eased)
+                    float lerpT = 1.0f - sm * 0.4f;
 
                     float moveYaw   = dyaw   * lerpT;
                     float movePitch = dpitch * lerpT;
