@@ -112,6 +112,7 @@ public class AutoBlockIn extends Module {
         serverPitch = event.getPitch();
 
         updateProgress();
+        if (progress >= 1.0f) { setEnabled(false); return; }
 
         int blockSlot = findBestBlockSlot();
         if (blockSlot != -1 && mc.thePlayer.inventory.currentItem != blockSlot) {
