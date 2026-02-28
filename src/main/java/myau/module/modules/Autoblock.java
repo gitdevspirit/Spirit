@@ -84,8 +84,7 @@ public class Autoblock extends Module {
     private boolean canAutoblock() {
         if (!ItemUtil.isHoldingSword()) return false;
         if (requirePress.getValue() && !PlayerUtil.isUsingItem()) return false;
-        KillAura ka = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-        if (requireAttack.getValue() && !ka.isAttackAllowed()) return false;
+        // KillAura removed — requireAttack setting no longer has effect
         return true;
     }
 
@@ -153,7 +152,7 @@ public class Autoblock extends Module {
         if (this.blockDelayMS > 0L) this.blockDelayMS -= 50L;
         if (this.releaseCooldownTicks > 0) this.releaseCooldownTicks--;
 
-        if (KillAura.attackCooldownTicks > 0 || this.releaseCooldownTicks > 0) {
+        if (this.releaseCooldownTicks > 0) {
             if (this.blockingState) stopBlock();
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             this.isBlocking     = false;
@@ -270,8 +269,7 @@ public class Autoblock extends Module {
                         if (this.blockDelayMS <= 0L) this.blockTick = 2;
                         break;
                     case 2:
-                        KillAura ka9 = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                        if (ka9.isAttackAllowed()) this.blockTick = 0;
+                        this.blockTick = 0; // KillAura removed — always advance
                         break;
                 }
                 this.isBlocking     = true;
