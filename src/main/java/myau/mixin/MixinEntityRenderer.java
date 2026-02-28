@@ -13,9 +13,8 @@ public class MixinEntityRenderer {
 
     @Inject(method = "hurtCameraEffect", at = @At("HEAD"), cancellable = true)
     private void onHurtCam(float ticks, CallbackInfo ci) {
-        KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
         Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
-        if (killAura.isEnabled() && autoblock.isBlocking()) {
+        if (autoblock.isEnabled() && autoblock.isBlocking()) {
             ci.cancel();
         }
     }
