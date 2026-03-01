@@ -75,6 +75,7 @@ public class ModuleRegistry {
         renderModules.add(Myau.moduleManager.getModule(ItemESP.class));
         renderModules.add(Myau.moduleManager.getModule(InfoHUD.class));
         renderModules.add(Myau.moduleManager.getModule(ViewClip.class));
+        renderModules.add(Myau.moduleManager.getModule(Session.class));
         renderModules.add(Myau.moduleManager.getModule(NoHurtCam.class));
         renderModules.add(Myau.moduleManager.getModule(HUD.class));
         renderModules.add(Myau.moduleManager.getModule(GuiModule.class));
