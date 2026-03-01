@@ -121,6 +121,7 @@ public class Myau {
         moduleManager.modules.put(BlockHit.class,        new BlockHit());
         moduleManager.modules.put(ClientSpoofer.class,   new ClientSpoofer());
         moduleManager.modules.put(ItemESP.class,         new ItemESP());
+        moduleManager.modules.put(ItemAlerts.class,      new ItemAlerts());
         moduleManager.modules.put(Jesus.class,           new Jesus());
         moduleManager.modules.put(Disabler.class,        new Disabler());
         moduleManager.modules.put(KeepSprint.class,      new KeepSprint());
