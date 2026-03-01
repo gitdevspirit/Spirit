@@ -115,6 +115,7 @@ public class ModuleRegistry {
         miscModules.add(Myau.moduleManager.getModule(AntiObfuscate.class));
         miscModules.add(Myau.moduleManager.getModule(AutoAnduril.class));
         miscModules.add(Myau.moduleManager.getModule(InventoryClicker.class));
+        miscModules.add(Myau.moduleManager.getModule(ItemAlerts.class));
         miscModules.add(Myau.moduleManager.getModule(Disabler.class));
         miscModules.add(Myau.moduleManager.getModule(ClientSpoofer.class));
         miscModules.add(Myau.moduleManager.getModule(AutoHypixel.class));
