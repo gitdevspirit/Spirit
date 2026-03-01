@@ -34,5 +34,5 @@ jobs:
       - name: Upload built jar
         uses: actions/upload-artifact@v4
         with:
-          name: Myau-V3
+          name: Spirit-Client
           path: build/libs/*.jar
