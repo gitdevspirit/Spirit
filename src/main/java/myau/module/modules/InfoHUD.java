@@ -34,6 +34,8 @@ public class InfoHUD extends Module {
     public final BooleanSetting  showHealth     = register(new BooleanSetting("Show Health",   true));
     public final DropdownSetting healthMode     = register(new DropdownSetting("Health Mode",   0, "HEARTS", "TAB"));
     public final BooleanSetting  showBlocks     = register(new BooleanSetting("Show Blocks",   true));
+    public final BooleanSetting  showHealthIcon = register(new BooleanSetting("Health Icon",   true));
+    public final BooleanSetting  showBlockIcon  = register(new BooleanSetting("Block Icon",    true));
 
     public InfoHUD() { super("InfoHUD", false); }
 
@@ -82,25 +84,27 @@ public class InfoHUD extends Module {
         List<String[]> rows = new ArrayList<>(); // [label, value, colorHex]
 
         if (showHealth.getValue()) {
-            rows.add(new String[]{ "\u2764", getHealthText(), String.valueOf(getHealthColor()) });
+            String icon = showHealthIcon.getValue() ? "\u2764 " : "";
+            // [icon, value, valueColor, iconColor]
+            rows.add(new String[]{ icon, getHealthText(), String.valueOf(getHealthColor()), String.valueOf(getHealthColor()) });
         }
 
         if (showBlocks.getValue() && ItemUtil.isHoldingBlock()) {
             int blocks = getTotalBlocks();
             int col = blocks > 64 ? 0xFF55FF55 : blocks > 16 ? 0xFFFFAA00 : 0xFFFF5555;
-            rows.add(new String[]{ "\u25A0", String.valueOf(blocks), String.valueOf(col) });
+            String icon = showBlockIcon.getValue() ? "\u25A0 " : "";
+            rows.add(new String[]{ icon, String.valueOf(blocks), String.valueOf(col), String.valueOf(col) });
         }
 
         if (rows.isEmpty()) return;
 
-        int labelColor = 0xFFAAAAAA;
         int lineH      = mc.fontRendererObj.FONT_HEIGHT + 3;
         int padding    = 6;
 
         // Measure panel
         int maxW = 0;
         for (String[] row : rows) {
-            int w = mc.fontRendererObj.getStringWidth(row[0] + " " + row[1]);
+            int w = mc.fontRendererObj.getStringWidth(row[0] + row[1]);
             if (w > maxW) maxW = w;
         }
         float panelW = maxW + padding * 2;
@@ -137,14 +141,15 @@ public class InfoHUD extends Module {
 
         // Draw rows
         for (int i = 0; i < rows.size(); i++) {
-            String[] row   = rows.get(i);
-            float    ry    = dy + padding + i * lineH;
-            float    rx    = dx + padding;
-            int      valColor = Integer.parseInt(row[2]);
+            String[] row      = rows.get(i);
+            float    ry       = dy + padding + i * lineH;
+            float    rx       = dx + padding;
+            int      valColor  = Integer.parseInt(row[2]);
+            int      iconColor = Integer.parseInt(row[3]);
 
-            // Label (icon) in grey
-            mc.fontRendererObj.drawStringWithShadow(row[0], rx, ry, labelColor);
-            // Value in its own colour, right-aligned
+            // Icon in its own color (heart = red, block = block count color)
+            mc.fontRendererObj.drawStringWithShadow(row[0], rx, ry, iconColor);
+            // Value right-aligned in value color
             float valX = dx + panelW - padding - mc.fontRendererObj.getStringWidth(row[1]);
             mc.fontRendererObj.drawStringWithShadow(row[1], valX, ry, valColor);
         }
