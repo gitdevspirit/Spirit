@@ -119,5 +119,10 @@ public class Rise6ClickGui extends GuiScreen {
 
     @Override public boolean doesGuiPauseGame() { return false; }
 
-    private void gl() { GL11.glEnable(GL11.GL_TEXTURE_2D); GL11.glColor4f(1,1,1,1); }
+    private void gl() {
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(1f, 1f, 1f, 1f);
+    }
 }
