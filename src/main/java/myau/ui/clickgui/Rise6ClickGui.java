@@ -54,6 +54,9 @@ public class Rise6ClickGui extends GuiScreen {
         int W = sw(), H = sh();
 
 
+        // ── Background tint behind GUI ────────────────────────────────────────
+        RoundedUtils.drawRoundedRect(6, barY() - 4, W - 12, H - barY(), 8, 0x33000000);
+
         // ── Tab row ───────────────────────────────────────────────────────────
         for (int i = 0; i < TAB_NAMES.length; i++) {
             int tx = tabX(i), ty = barY(), tw = tabW(i), th = TAB_H;
