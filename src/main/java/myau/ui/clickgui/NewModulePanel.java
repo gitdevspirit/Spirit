@@ -2,6 +2,7 @@ package myau.ui.clickgui;
 
 import myau.module.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
@@ -85,18 +86,20 @@ public class NewModulePanel {
         RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3,
                 en ? GuiColors.ACCENT : 0xFF383838);
 
-        // Name — pink=on, light grey=hovered, dark grey=off. Never white.
+        // Name — pink=on, grey=off. Never white.
         gl();
-        int nc = en ? GuiColors.ACCENT : (hov ? 0xFFBBBBBB : 0xFF666666);
-        mc.fontRendererObj.drawString(m.getName(), x + 18, y + (CARD_H - 8) / 2, nc);
+        int nc = en ? GuiColors.ACCENT : (hov ? 0xFF888888 : 0xFF555555);
+        GlStateManager.color(1f, 1f, 1f, 1f);
+        mc.fontRendererObj.drawString(m.getName(), x + 18, y + (CARD_H - 8) / 2, nc, false);
 
         // Expand arrow
         if (!m.getSettings().isEmpty()) {
             gl();
             boolean exp = expandedModule == m;
+            GlStateManager.color(1f, 1f, 1f, 1f);
             mc.fontRendererObj.drawString(exp ? "v" : ">",
                     x + CARD_W - 10, y + (CARD_H - 8) / 2,
-                    exp ? GuiColors.ACCENT : 0xFF484848);
+                    exp ? GuiColors.ACCENT : 0xFF484848, false);
         }
     }
 
