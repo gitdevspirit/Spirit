@@ -115,9 +115,9 @@ public class ItemAlerts extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         S04PacketEntityEquipment pkt = (S04PacketEntityEquipment) event.getPacket();
-        int    entityId = pkt.func_149392_a(); // getEntityId
-        int    slot     = pkt.func_149390_b(); // getEquipmentSlot (0=held, 1=feet, 2=legs, 3=chest, 4=head)
-        ItemStack item  = pkt.func_149388_c(); // getItemStack
+        int    entityId = pkt.getEntityID();
+        int    slot     = pkt.getEquipmentSlot();
+        ItemStack item  = pkt.getItemStack();
 
         Entity entity = mc.theWorld.getEntityByID(entityId);
         if (!(entity instanceof EntityPlayer)) return;
