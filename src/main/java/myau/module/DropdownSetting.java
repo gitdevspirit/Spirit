@@ -12,6 +12,12 @@ public class DropdownSetting extends Setting {
         this.index   = defaultIndex;
     }
 
+    public DropdownSetting(String name, int defaultIndex, java.util.function.BooleanSupplier visibility, String... options) {
+        super(name, visibility);
+        this.options = options;
+        this.index   = defaultIndex;
+    }
+
     public String getValue()    { return options[index]; }
     public int    getIndex()    { return index; }
     public String[] getOptions(){ return options; }
