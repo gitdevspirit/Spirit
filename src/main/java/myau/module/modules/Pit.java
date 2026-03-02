@@ -4,6 +4,8 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.KeyEvent;
+import myau.events.PacketEvent;
+import myau.events.Render2DEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
@@ -11,12 +13,22 @@ import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.network.play.client.C01PacketChatMessage;
+import net.minecraft.network.play.server.S02PacketChat;
+import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
+import java.text.NumberFormat;
+import java.util.Stack;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -47,6 +59,38 @@ public class Pit extends Module {
     public final SliderSetting  aaMaxHealth    = register(new SliderSetting("  Max Health",   10,  1, 20, 1,   () -> aimAssist.getValue() && aaReqHealth.getValue()));
 
     private final TimerUtil aaTimer = new TimerUtil();
+
+    // ── Gold Requirement submodule ────────────────────────────────────────────
+
+    public final BooleanSetting goldReq = register(new BooleanSetting("Gold Req", false));
+    public final SliderSetting  grX     = register(new SliderSetting("  HUD X", 10, 0, 500, 1, () -> goldReq.getValue()));
+    public final SliderSetting  grY     = register(new SliderSetting("  HUD Y", 10, 0, 300, 1, () -> goldReq.getValue()));
+
+    private double grGained = 0, grNeeded = 0;
+    private int    grTick   = 0;
+
+    // ── Streak submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting streak   = register(new BooleanSetting("Streak", false));
+    public final SliderSetting  stX      = register(new SliderSetting("  Streak X",       5,  0, 500, 1, () -> streak.getValue()));
+    public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
+    public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
+
+    private int   stKills   = 0;
+    private int   stAssists = 0;
+    private float stXP      = 0f;
+    private float stGold    = 0f;
+    private boolean stPaused = true;
+    private final TimerUtil stTimer = new TimerUtil();
+
+    // ── AutoMath submodule ────────────────────────────────────────────────────
+
+    public final BooleanSetting autoMath       = register(new BooleanSetting("AutoMath", false));
+    public final SliderSetting  amDelay        = register(new SliderSetting("  Delay", 1000, 0, 5000, 100, () -> autoMath.getValue()));
+    public final BooleanSetting amAutoSubmit   = register(new BooleanSetting("  Auto Submit", true, () -> autoMath.getValue()));
+
+    private String amPendingSolution = null;
+    private static final ScheduledExecutorService amScheduler = Executors.newScheduledThreadPool(1);
 
     public Pit() {
         super("Pit", false);
@@ -122,6 +166,14 @@ public class Pit extends Module {
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.POST || mc.currentScreen != null) return;
 
+        // ── Gold Requirement ──────────────────────────────────────────────────
+        if (goldReq.getValue() && mc.thePlayer != null && mc.theWorld != null) {
+            grTick++;
+            if (grTick % 100 == 0) {
+                PacketUtil.sendPacket(new C01PacketChatMessage("/goldreq " + mc.thePlayer.getName()));
+            }
+        }
+
         // ── Aim Assist ────────────────────────────────────────────────────────
         if (aimAssist.getValue()) {
             if (!aaWeapon.getValue() || ItemUtil.hasRawUnbreakingEnchant()
@@ -172,6 +224,111 @@ public class Pit extends Module {
     }
 
     @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || !goldReq.getValue()) return;
+        if (event.getType() != EventType.PRE) return;
+        if (!(event.getPacket() instanceof S02PacketChat)) return;
+
+        String msg = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+        String name = mc.thePlayer != null ? mc.thePlayer.getName() : "";
+        if (!msg.contains(name + ":")) return;
+
+        try {
+            String part = msg.split(name + ":")[1].trim();
+            String[] parts = part.split("/");
+            if (parts.length == 2) {
+                grGained = Double.parseDouble(parts[0].replaceAll("[^0-9.]", ""));
+                grNeeded = Double.parseDouble(parts[1].replaceAll("[^0-9.]", ""));
+                event.setCancelled(true); // hide from chat
+            }
+        } catch (Exception ignored) {}
+
+        // ── Streak chat parsing ───────────────────────────────────────────────
+        if (streak.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            if (raw.contains("DEATH!")) {
+                stPaused = true;
+                stKills = 0; stAssists = 0; stXP = 0f; stGold = 0f;
+                stTimer.reset();
+            } else if (raw.contains("KILL!")) {
+                stKills++;
+                stPaused = false;
+            } else if (raw.contains("ASSIST!")) {
+                stAssists++;
+            } else {
+                try {
+                    if (raw.contains("XP") && raw.contains("+")) {
+                        String xpPart = raw.split("\\+")[1].split("XP")[0].trim();
+                        stXP += Float.parseFloat(xpPart);
+                    }
+                    if (raw.contains("g") && raw.split("\\+").length > 2) {
+                        String goldPart = raw.split("\\+")[2].split("g")[0].trim();
+                        stGold += Float.parseFloat(goldPart);
+                    }
+                } catch (Exception ignored2) {}
+            }
+        }
+
+        // ── AutoMath chat parsing ─────────────────────────────────────────────
+        if (autoMath.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            String prefix = "QUICK MATHS! Solve: ";
+            if (raw.startsWith(prefix)) {
+                String equation = raw.substring(prefix.length()).replace("x", "*");
+                try {
+                    double result = amEvaluate(equation.replaceAll("\\s+", ""));
+                    long rounded = Math.round(result);
+                    amPendingSolution = Long.toString(rounded);
+                    mc.thePlayer.addChatMessage(new ChatComponentText(
+                        EnumChatFormatting.LIGHT_PURPLE + "" + EnumChatFormatting.BOLD + "QUICK MATHS! "
+                        + EnumChatFormatting.GRAY + "Result: " + EnumChatFormatting.YELLOW + rounded));
+                    if (amAutoSubmit.getValue()) {
+                        amScheduler.schedule(() -> {
+                            if (amPendingSolution != null && mc.thePlayer != null) {
+                                mc.thePlayer.sendChatMessage("/ac " + amPendingSolution);
+                                amPendingSolution = null;
+                            }
+                        }, (long) amDelay.getValue(), TimeUnit.MILLISECONDS);
+                    }
+                } catch (Exception e) {
+                    mc.thePlayer.addChatMessage(new ChatComponentText(
+                        EnumChatFormatting.RED + "AutoMath error: " + e.getMessage()));
+                }
+            }
+        }
+    }
+
+    @EventTarget
+    public void onRender2D(Render2DEvent event) {
+        if (!isEnabled() || !goldReq.getValue()) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        NumberFormat nf = NumberFormat.getNumberInstance();
+        String text = "§aGold Req: §6" + nf.format(grGained) + "§7/§6" + nf.format(grNeeded) + "g";
+        mc.fontRendererObj.drawStringWithShadow(text, (float) grX.getValue(), (float) grY.getValue(), 0xFFFFFFFF);
+
+        // ── Streak HUD ────────────────────────────────────────────────────────
+        if (streak.getValue()) {
+            int sx = (int) stX.getValue();
+            int sy = (int) stY.getValue();
+            int alpha = (int)(stOpacity.getValue() / 100.0 * 255.0);
+            // Background box
+            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + 98, (alpha << 24));
+
+            String statusCol = stPaused ? "§c" : "§a";
+            String status    = stPaused ? "Last" : "Active";
+            long   elapsed   = stTimer.getElapsedTime() / 1000L;
+
+            mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, sy + 5,  0xFFFFFFFF);
+            mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"  + stKills,                              sx + 5, sy + 20, 0xFFFFFFFF);
+            mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, sy + 35, 0xFFFFFFFF);
+            mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"     + String.format("%.1f", stXP),          sx + 5, sy + 50, 0xFFFFFFFF);
+            mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"   + String.format("%.1f", stGold),        sx + 5, sy + 65, 0xFFFFFFFF);
+            mc.fontRendererObj.drawStringWithShadow("Time: "         + formatStreakTime(elapsed),             sx + 5, sy + 80, 0xFFFFFFFF);
+        }
+    }
+
+    @EventTarget
     public void onPress(KeyEvent event) {
         if (!isEnabled()) return;
         if (aimAssist.getValue()
@@ -179,5 +336,65 @@ public class Pit extends Module {
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
+    }
+
+    // ── Math solver ───────────────────────────────────────────────────────────
+
+    private double amEvaluate(String eq) throws Exception {
+        Stack<Double> vals = new Stack<>();
+        Stack<Character> ops = new Stack<>();
+        for (int i = 0; i < eq.length(); i++) {
+            char ch = eq.charAt(i);
+            if (Character.isDigit(ch) || ch == '.') {
+                StringBuilder sb = new StringBuilder();
+                while (i < eq.length() && (Character.isDigit(eq.charAt(i)) || eq.charAt(i) == '.'))
+                    sb.append(eq.charAt(i++));
+                vals.push(Double.parseDouble(sb.toString()));
+                i--;
+            } else if (ch == '(') {
+                ops.push(ch);
+            } else if (ch == ')') {
+                while (ops.peek() != '(')
+                    vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+                ops.pop();
+            } else if (amIsOp(ch)) {
+                while (!ops.isEmpty() && amPrec(ch) <= amPrec(ops.peek()))
+                    vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+                ops.push(ch);
+            }
+        }
+        while (!ops.isEmpty()) vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+        return vals.pop();
+    }
+
+    private boolean amIsOp(char c) { return c == '+' || c == '-' || c == '*' || c == '/'; }
+
+    private int amPrec(char c) {
+        if (c == '*' || c == '/') return 2;
+        if (c == '+' || c == '-') return 1;
+        return -1;
+    }
+
+    private double amApply(char op, double b, double a) throws Exception {
+        switch (op) {
+            case '+': return a + b;
+            case '-': return a - b;
+            case '*': return a * b;
+            case '/':
+                if (b == 0) throw new Exception("Division by zero");
+                return a / b;
+            default: throw new Exception("Unknown operator: " + op);
+        }
+    }
+
+    private String formatStreakTime(long seconds) {
+        long hrs  = seconds / 3600;
+        long mins = (seconds % 3600) / 60;
+        long secs = seconds % 60;
+        StringBuilder sb = new StringBuilder();
+        if (hrs  > 0) sb.append(hrs).append("hr ");
+        if (mins > 0) sb.append(mins).append("m ");
+        sb.append(secs).append("s");
+        return sb.toString().trim();
     }
 }
