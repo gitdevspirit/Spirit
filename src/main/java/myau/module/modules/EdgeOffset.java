@@ -41,7 +41,7 @@ public class EdgeOffset extends Module {
         {-HW, -HW}, {HW, -HW}, {-HW, HW}, {HW, HW}
     };
 
-    public final SliderSetting  edgeOffset     = register(new SliderSetting("Edge Offset",    0.05, 0.0, 0.3,  0.01));
+    public final SliderSetting  edgeOffset     = register(new SliderSetting("Edge Offset",    0.05, 0.0, 0.5,  0.01));
     public final SliderSetting  unsneakDelay   = register(new SliderSetting("Unsneak Delay",  50,   50,  300,  5));
     public final SliderSetting  sneakOnJump    = register(new SliderSetting("Sneak On Jump",  0,    0,   500,  5));
     public final BooleanSetting directionCheck = register(new BooleanSetting("Direction Check", true));
