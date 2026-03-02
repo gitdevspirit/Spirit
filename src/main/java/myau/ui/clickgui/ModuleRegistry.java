@@ -94,6 +94,7 @@ public class ModuleRegistry {
         playerModules.add(Myau.moduleManager.getModule(InvWalk.class));
         playerModules.add(Myau.moduleManager.getModule(Scaffold.class));
         playerModules.add(Myau.moduleManager.getModule(AutoBlockIn.class));
+        playerModules.add(Myau.moduleManager.getModule(AutoBedDefence.class));
         playerModules.add(Myau.moduleManager.getModule(AutoSwap.class));
         playerModules.add(Myau.moduleManager.getModule(SpeedMine.class));
         playerModules.add(Myau.moduleManager.getModule(FastPlace.class));
