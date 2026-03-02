@@ -58,6 +58,7 @@ public class ModuleRegistry {
         movementModules.add(Myau.moduleManager.getModule(NoSlow.class));
         movementModules.add(Myau.moduleManager.getModule(KeepSprint.class));
         movementModules.add(Myau.moduleManager.getModule(Eagle.class));
+        movementModules.add(Myau.moduleManager.getModule(EdgeOffset.class));
         movementModules.add(Myau.moduleManager.getModule(NoJumpDelay.class));
         movementModules.add(Myau.moduleManager.getModule(AntiVoid.class));
         movementModules.sort(comparator);
