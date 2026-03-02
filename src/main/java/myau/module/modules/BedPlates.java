@@ -18,7 +18,6 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ResourceLocation;
-import net.minecraft.world.chunk.Chunk;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.util.glu.GLU;
@@ -26,24 +25,21 @@ import org.lwjgl.util.glu.GLU;
 import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class BedPlates extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    // key = "x,y,z" of head block
+    private final Map<String, BedEntry> beds = new ConcurrentHashMap<>();
 
-    // key = "x,y,z" of the foot block
-    private final Map<String, Map<String, Object>> bedPositions = new ConcurrentHashMap<>();
-
-    // GL matrices captured in Render3D for projection in Render2D
+    // GL matrices captured in Render3D, used in Render2D
     private final FloatBuffer modelview  = BufferUtils.createFloatBuffer(16);
     private final FloatBuffer projection = BufferUtils.createFloatBuffer(16);
     private final IntBuffer   viewport   = BufferUtils.createIntBuffer(4);
     private double renderPosX, renderPosY, renderPosZ;
     private boolean matricesCaptured = false;
 
-    // Settings
     public final SliderSetting  renderDistance = register(new SliderSetting("Render Distance", 64, 10, 200, 5));
     public final SliderSetting  yOffset        = register(new SliderSetting("Y Offset",         1, -10, 10, 0.5));
     public final SliderSetting  scale          = register(new SliderSetting("Scale",           1.0, 0.4, 2.0, 0.1));
@@ -51,52 +47,50 @@ public class BedPlates extends Module {
     public final BooleanSetting showCount      = register(new BooleanSetting("Show Count",     true));
 
     private static final Set<String> INVALID = new HashSet<>(Arrays.asList(
-        "air","leaves","leaves2","water","lava","torch","redstone_torch",
+        "air","bed","water","flowing_water","lava","flowing_lava","fire",
+        "leaves","leaves2","log","log2",
+        "torch","redstone_torch","redstone_wire","daylight_sensor",
         "wooden_slab","stone_slab","stone_slab2","double_wooden_slab","double_stone_slab",
-        "fire","bed","piston","sticky_piston","piston_extension","log","log2",
+        "double_stone_slab2",
         "oak_stairs","spruce_stairs","birch_stairs","jungle_stairs","acacia_stairs",
         "dark_oak_stairs","stone_stairs","cobblestone_stairs","brick_stairs",
         "stone_brick_stairs","sandstone_stairs","nether_brick_stairs","quartz_stairs",
-        "red_sandstone_stairs","redstone_wire","daylight_sensor",
-        "wheat","carrots","potatoes","beetroots","farmland",
-        "wooden_door","spruce_door","birch_door","jungle_door","acacia_door","dark_oak_door",
+        "red_sandstone_stairs",
+        "piston","sticky_piston","piston_extension","piston_head",
+        "wheat","carrots","potatoes","beetroots","farmland","soul_sand",
+        "wooden_door","iron_door","spruce_door","birch_door","jungle_door",
+        "acacia_door","dark_oak_door",
         "rail","activator_rail","detector_rail","golden_rail",
-        "ladder","furnace","chest","trapped_chest","sign","dispenser","dropper",
-        "hopper","lever","stone_pressure_plate","light_weighted_pressure_plate",
-        "heavy_weighted_pressure_plate","wooden_button","stone_button",
+        "ladder","furnace","lit_furnace","chest","trapped_chest","ender_chest",
+        "sign","wall_sign","standing_sign","dispenser","dropper","hopper",
+        "lever","stone_pressure_plate","light_weighted_pressure_plate",
+        "heavy_weighted_pressure_plate","wooden_pressure_plate",
+        "wooden_button","stone_button",
         "snow_layer","cactus","reeds","jukebox","pumpkin","lit_pumpkin","cake",
         "unpowered_repeater","powered_repeater","unpowered_comparator","powered_comparator",
-        "trapdoor","skull","quartz_block","anvil",
-        "brown_mushroom_block","red_mushroom_block","cobblestone_wall","flower_pot","monster_egg"
+        "trapdoor","iron_trapdoor","skull","anvil","flower_pot",
+        "brown_mushroom_block","red_mushroom_block","cobblestone_wall",
+        "monster_egg","barrier"
     ));
+
+    private static class BedEntry {
+        BlockPos head, foot;
+        double distance;
+        Map<String, Integer> layers = Collections.emptyMap();
+        BedEntry(BlockPos head, BlockPos foot) { this.head = head; this.foot = foot; }
+    }
 
     public BedPlates() { super("BedPlates", false); }
 
-    @Override
-    public void onEnabled() {
-        bedPositions.clear();
-        matricesCaptured = false;
-    }
-
-    @Override
-    public void onDisabled() {
-        bedPositions.clear();
-        matricesCaptured = false;
-    }
-
-    // ── Events ────────────────────────────────────────────────────────────────
+    @Override public void onEnabled()  { beds.clear(); matricesCaptured = false; }
+    @Override public void onDisabled() { beds.clear(); matricesCaptured = false; }
 
     @EventTarget
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
-
         int ticks = mc.thePlayer.ticksExisted;
-
-        // Full scan every 20 ticks (1 second) — no player-dependency
         if (ticks % 20 == 0) scanForBeds();
-
-        // Update defence layers + visibility for known beds every 10 ticks
         if (ticks % 10 == 0) updateBeds();
     }
 
@@ -114,78 +108,67 @@ public class BedPlates extends Module {
         matricesCaptured = true;
     }
 
-    @SuppressWarnings("unchecked")
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !matricesCaptured || bedPositions.isEmpty()) return;
+        if (!isEnabled() || !matricesCaptured || beds.isEmpty()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
-        int sf = sr.getScaleFactor();
-        double maxDist = renderDistance.getValue();
-        double yOff    = yOffset.getValue();
-        float  sc      = (float) scale.getValue();
+        int    sf           = sr.getScaleFactor();
+        double maxDist      = renderDistance.getValue();
+        double yOff         = yOffset.getValue();
+        float  sc           = (float) scale.getValue();
 
-        List<Map<String, Object>> sorted = new ArrayList<>(bedPositions.values());
-        sorted.sort((a, b) -> Double.compare(
-                (double) b.getOrDefault("distance", 0.0),
-                (double) a.getOrDefault("distance", 0.0)));
+        List<BedEntry> sorted = new ArrayList<>(beds.values());
+        sorted.sort((a, b) -> Double.compare(b.distance, a.distance));
 
-        for (Map<String, Object> bed : sorted) {
-            if (!(boolean) bed.getOrDefault("visible", false)) continue;
-            double distance = (double) bed.getOrDefault("distance", 9999.0);
-            if (distance > maxDist) continue;
+        for (BedEntry bed : sorted) {
+            if (bed.distance > maxDist) continue;
 
-            Map<String, Integer> layers = (Map<String, Integer>) bed.getOrDefault("layers", Collections.emptyMap());
-            BlockPos p1 = (BlockPos) bed.get("position1");
-            BlockPos p2 = (BlockPos) bed.get("position2");
-            if (p1 == null) continue;
-            if (p2 == null) p2 = p1;
-
-            double wx = (p1.getX() + p2.getX()) / 2.0 + 0.5;
-            double wy =  p1.getY() + yOff;
-            double wz = (p1.getZ() + p2.getZ()) / 2.0 + 0.5;
+            double wx = (bed.head.getX() + bed.foot.getX()) / 2.0 + 0.5;
+            double wy =  bed.head.getY() + yOff;
+            double wz = (bed.head.getZ() + bed.foot.getZ()) / 2.0 + 0.5;
 
             float[] screen = worldToScreen(wx, wy, wz);
             if (screen == null) continue;
 
-            float sxPos = screen[0] / sf;
-            float syPos = (mc.displayHeight - screen[1]) / sf;
+            float sx = screen[0] / sf;
+            float sy = (mc.displayHeight - screen[1]) / sf;
 
-            float currentScale = autoScale.getValue()
-                ? (float) Math.max(0.2, sc * (1.0 - distance / maxDist))
+            float curScale = autoScale.getValue()
+                ? (float) Math.max(0.2, sc * (1.0 - bed.distance / maxDist))
                 : sc;
-            if (currentScale <= 0) continue;
+            if (curScale <= 0) continue;
 
             GlStateManager.pushMatrix();
             GlStateManager.enableBlend();
             GlStateManager.disableDepth();
 
-            if (layers.isEmpty()) {
-                drawRect(sxPos - 4 * currentScale, syPos - 4 * currentScale,
-                         sxPos + 4 * currentScale, syPos + 4 * currentScale, 0xCC44FF44);
+            if (bed.layers.isEmpty()) {
+                drawRect(sx - 4 * curScale, sy - 4 * curScale,
+                         sx + 4 * curScale, sy + 4 * curScale, 0xCC44FF44);
             } else {
-                List<String> layerKeys = new ArrayList<>(layers.keySet());
-                float itemSize = 16 * currentScale;
-                float padding  =  2 * currentScale;
+                List<String> keys = new ArrayList<>(bed.layers.keySet());
+                float itemSize = 16 * curScale;
+                float padding  =  2 * curScale;
                 float boxSize  = itemSize + padding;
-                float totalW   = layerKeys.size() * boxSize;
-                float startX   = sxPos - totalW / 2f;
-                float startY   = syPos - boxSize / 2f;
+                float totalW   = keys.size() * boxSize;
+                float startX   = sx - totalW / 2f;
+                float startY   = sy - boxSize / 2f;
 
                 drawRect(startX - padding, startY - padding,
                          startX + totalW + padding, startY + boxSize + padding, 0xCC1A1A1F);
 
-                for (int i = 0; i < layerKeys.size(); i++) {
-                    String blockName = layerKeys.get(i);
+                for (int i = 0; i < keys.size(); i++) {
+                    String blockName = keys.get(i);
                     float ix = startX + i * boxSize + padding / 2f;
                     float iy = startY + padding / 2f;
 
-                    ItemStack stack = stackFromBlockName(blockName);
+                    ItemStack stack = stackFromName(blockName);
                     if (stack != null) {
                         GlStateManager.pushMatrix();
                         GlStateManager.translate(ix, iy, 150);
-                        GlStateManager.scale(currentScale, currentScale, currentScale);
+                        GlStateManager.scale(curScale, curScale, curScale);
                         GlStateManager.enableDepth();
                         mc.getRenderItem().renderItemIntoGUI(stack, 0, 0);
                         GlStateManager.disableDepth();
@@ -193,10 +176,10 @@ public class BedPlates extends Module {
                     }
 
                     if (showCount.getValue()) {
-                        int count = layers.getOrDefault(blockName, 0);
+                        int count = bed.layers.getOrDefault(blockName, 0);
                         if (count > 1) {
                             String txt = String.valueOf(count);
-                            float textScale = currentScale * 0.55f;
+                            float textScale = curScale * 0.55f;
                             float tw = mc.fontRendererObj.getStringWidth(txt) * textScale;
                             float tx = ix + itemSize - tw + padding * 0.25f;
                             float ty = iy + itemSize - (mc.fontRendererObj.FONT_HEIGHT * textScale) + padding * 0.25f;
@@ -218,147 +201,148 @@ public class BedPlates extends Module {
 
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
-        bedPositions.clear();
+        beds.clear();
         matricesCaptured = false;
     }
 
-    // ── Scanning ──────────────────────────────────────────────────────────────
+    // ── Scanning — main thread only ───────────────────────────────────────────
 
-    /**
-     * Scans loaded chunks around the player for bed blocks.
-     * Uses getChunkFromChunkCoords (never generates) and scans block storage sections
-     * to skip empty 16x16x16 sections quickly.
-     */
     private void scanForBeds() {
         if (mc.theWorld == null || mc.thePlayer == null) return;
 
-        int chunkRadius = Math.min((int)(renderDistance.getValue() / 16) + 1, 6);
+        int chunkRadius = Math.min((int)(renderDistance.getValue() / 16) + 1, 8);
         int cx = ((int) mc.thePlayer.posX) >> 4;
         int cz = ((int) mc.thePlayer.posZ) >> 4;
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
 
-        // Snapshot chunk coords on main thread — safe to read
-        List<int[]> toScan = new ArrayList<>();
         for (int chX = cx - chunkRadius; chX <= cx + chunkRadius; chX++) {
             for (int chZ = cz - chunkRadius; chZ <= cz + chunkRadius; chZ++) {
-                // chunkExists checks the loaded chunk map without generating anything
-                if (mc.theWorld.getChunkProvider().chunkExists(chX, chZ)) {
-                    toScan.add(new int[]{chX, chZ});
-                }
-            }
-        }
+                if (!mc.theWorld.getChunkProvider().chunkExists(chX, chZ)) continue;
 
-        executor.execute(() -> {
-            try {
-                for (int[] coord : toScan) {
-                    int chX = coord[0], chZ = coord[1];
-                    // getChunkFromChunkCoords returns the already-loaded chunk, never generates
-                    net.minecraft.world.chunk.Chunk chunk = mc.theWorld.getChunkFromChunkCoords(chX, chZ);
-                    if (chunk == null) continue;
+                int baseX = chX << 4;
+                int baseZ = chZ << 4;
 
-                    int baseX = chX << 4;
-                    int baseZ = chZ << 4;
+                for (int lx = 0; lx < 16; lx++) {
+                    for (int lz = 0; lz < 16; lz++) {
+                        int wx = baseX + lx;
+                        int wz = baseZ + lz;
+                        for (int y = 0; y <= 128; y++) {
+                            if (!isBed(wx, y, wz)) continue;
 
-                    // Scan only Y levels 0-128 (beds are never above 128 in BWP)
-                    for (int lx = 0; lx < 16; lx++) {
-                        for (int lz = 0; lz < 16; lz++) {
-                            int wx = baseX + lx;
-                            int wz = baseZ + lz;
-                            for (int y = 0; y <= 128; y++) {
-                                if (getBlockAt(wx, y, wz) != Blocks.bed) continue;
+                            int meta = metaAt(wx, y, wz);
+                            // Bit 3: 1 = head block, 0 = foot. Only process head to avoid duplicates.
+                            if ((meta & 8) == 0) continue;
 
-                                // Only process head block (skip if neighbour in +X or +Z is also bed)
-                                if (getBlockAt(wx + 1, y, wz) == Blocks.bed) continue;
-                                if (getBlockAt(wx, y, wz + 1) == Blocks.bed) continue;
+                            BlockPos headPos = new BlockPos(wx, y, wz);
+                            BlockPos footPos = findFoot(wx, y, wz, meta);
 
-                                // Find second half
-                                BlockPos pos1 = new BlockPos(wx, y, wz);
-                                BlockPos pos2 = pos1;
-                                if (getBlockAt(wx - 1, y, wz) == Blocks.bed)
-                                    pos2 = new BlockPos(wx - 1, y, wz);
-                                else if (getBlockAt(wx, y, wz - 1) == Blocks.bed)
-                                    pos2 = new BlockPos(wx, y, wz - 1);
-
-                                String key = wx + "," + y + "," + wz;
-                                double dist = Math.sqrt(
-                                    (wx - myX) * (wx - myX) +
-                                    (y  - myY) * (y  - myY) +
-                                    (wz - myZ) * (wz - myZ));
-
-                                Map<String, Object> bedData = bedPositions.computeIfAbsent(key, k -> new ConcurrentHashMap<>());
-                                bedData.put("visible",   Boolean.TRUE);
-                                bedData.put("distance",  dist);
-                                bedData.put("position1", pos1);
-                                bedData.put("position2", pos2);
-                                bedData.put("layers",    getBedDefenseLayers(pos1, pos2));
-                            }
+                            String key = wx + "," + y + "," + wz;
+                            BedEntry entry = beds.computeIfAbsent(key, k -> new BedEntry(headPos, footPos));
+                            entry.head = headPos;
+                            entry.foot = footPos;
+                            entry.distance = Math.sqrt(
+                                (wx - myX) * (wx - myX) +
+                                (y  - myY) * (y  - myY) +
+                                (wz - myZ) * (wz - myZ));
+                            entry.layers = getDefenceLayers(headPos, footPos);
                         }
                     }
                 }
-            } catch (Exception ignored) {}
-        });
+            }
+        }
     }
 
-    /**
-     * Refreshes visibility and distance for already-discovered beds.
-     * Removes beds that are no longer present.
-     */
     private void updateBeds() {
-        if (bedPositions.isEmpty() || mc.theWorld == null || mc.thePlayer == null) return;
+        if (beds.isEmpty() || mc.theWorld == null || mc.thePlayer == null) return;
         double myX = mc.thePlayer.posX, myY = mc.thePlayer.posY, myZ = mc.thePlayer.posZ;
 
-        executor.execute(() -> {
-            try {
-                Iterator<Map.Entry<String, Map<String, Object>>> it = bedPositions.entrySet().iterator();
-                while (it.hasNext()) {
-                    Map<String, Object> bed = it.next().getValue();
-                    BlockPos p1 = (BlockPos) bed.get("position1");
-                    if (p1 == null) { it.remove(); continue; }
-
-                    boolean visible = getBlockAt(p1.getX(), p1.getY(), p1.getZ()) == Blocks.bed;
-                    if (!visible) { it.remove(); continue; } // Bed was destroyed — remove it
-
-                    double dist = Math.sqrt(
-                        (p1.getX() - myX) * (p1.getX() - myX) +
-                        (p1.getY() - myY) * (p1.getY() - myY) +
-                        (p1.getZ() - myZ) * (p1.getZ() - myZ));
-
-                    bed.put("distance", dist);
-                    bed.put("visible",  Boolean.TRUE);
-
-                    // Refresh defence layers
-                    BlockPos p2 = (BlockPos) bed.get("position2");
-                    bed.put("layers", getBedDefenseLayers(p1, p2 != null ? p2 : p1));
-                }
-            } catch (Exception ignored) {}
-        });
+        Iterator<Map.Entry<String, BedEntry>> it = beds.entrySet().iterator();
+        while (it.hasNext()) {
+            BedEntry bed = it.next().getValue();
+            if (!isBed(bed.head.getX(), bed.head.getY(), bed.head.getZ())) {
+                it.remove();
+                continue;
+            }
+            bed.distance = Math.sqrt(
+                (bed.head.getX() - myX) * (bed.head.getX() - myX) +
+                (bed.head.getY() - myY) * (bed.head.getY() - myY) +
+                (bed.head.getZ() - myZ) * (bed.head.getZ() - myZ));
+            bed.layers = getDefenceLayers(bed.head, bed.foot);
+        }
     }
 
-    // ── Defence layer scanning ────────────────────────────────────────────────
+    // ── Foot finder ───────────────────────────────────────────────────────────
 
-    private Map<String, Integer> getBedDefenseLayers(BlockPos pos1, BlockPos pos2) {
-        if (pos1 == null) return Collections.emptyMap();
-        if (pos2 == null) pos2 = pos1;
+    /**
+     * In 1.8, bed metadata bits 0-1 encode facing direction of the HEAD block.
+     * The foot block is placed in that same direction from the head.
+     * 0 = south (+Z), 1 = west (-X), 2 = north (-Z), 3 = east (+X)
+     */
+    private BlockPos findFoot(int hx, int hy, int hz, int meta) {
+        int dir = meta & 3;
+        int fx = hx, fz = hz;
+        if      (dir == 0) fz = hz + 1;
+        else if (dir == 1) fx = hx - 1;
+        else if (dir == 2) fz = hz - 1;
+        else               fx = hx + 1;
+        return isBed(fx, hy, fz) ? new BlockPos(fx, hy, fz) : new BlockPos(hx, hy, hz);
+    }
 
+    // ── Defence layers ────────────────────────────────────────────────────────
+
+    private Map<String, Integer> getDefenceLayers(BlockPos head, BlockPos foot) {
         Map<String, Integer> counts = new LinkedHashMap<>();
-        int minX = Math.min(pos1.getX(), pos2.getX()) - 2;
-        int maxX = Math.max(pos1.getX(), pos2.getX()) + 2;
-        int minZ = Math.min(pos1.getZ(), pos2.getZ()) - 2;
-        int maxZ = Math.max(pos1.getZ(), pos2.getZ()) + 2;
-        int baseY = pos1.getY();
+        int minX = Math.min(head.getX(), foot.getX()) - 2;
+        int maxX = Math.max(head.getX(), foot.getX()) + 2;
+        int minZ = Math.min(head.getZ(), foot.getZ()) - 2;
+        int maxZ = Math.max(head.getZ(), foot.getZ()) + 2;
+        int baseY = head.getY();
 
         for (int x = minX; x <= maxX; x++) {
             for (int z = minZ; z <= maxZ; z++) {
-                for (int dy = -1; dy <= 2; dy++) {
-                    Block block = getBlockAt(x, baseY + dy, z);
+                for (int dy = -1; dy <= 3; dy++) {
+                    Block block = blockAt(x, baseY + dy, z);
                     if (block == Blocks.air) continue;
-                    String name = getBlockName(block);
+                    String name = blockName(block);
                     if (INVALID.contains(name)) continue;
                     counts.merge(name, 1, Integer::sum);
                 }
             }
         }
         return counts;
+    }
+
+    // ── Block helpers ─────────────────────────────────────────────────────────
+
+    private boolean isBed(int x, int y, int z) {
+        try { return mc.theWorld.getBlockState(new BlockPos(x, y, z)).getBlock() == Blocks.bed; }
+        catch (Exception e) { return false; }
+    }
+
+    private int metaAt(int x, int y, int z) {
+        try {
+            net.minecraft.block.state.IBlockState s = mc.theWorld.getBlockState(new BlockPos(x, y, z));
+            return s.getBlock().getMetaFromState(s) & 0xF;
+        } catch (Exception e) { return 0; }
+    }
+
+    private Block blockAt(int x, int y, int z) {
+        try { return mc.theWorld.getBlockState(new BlockPos(x, y, z)).getBlock(); }
+        catch (Exception e) { return Blocks.air; }
+    }
+
+    private String blockName(Block block) {
+        if (block == Blocks.air) return "air";
+        ResourceLocation loc = (ResourceLocation) Block.blockRegistry.getNameForObject(block);
+        return loc == null ? "air" : loc.getResourcePath();
+    }
+
+    private ItemStack stackFromName(String name) {
+        try {
+            Block block = (Block) Block.blockRegistry.getObject(new ResourceLocation(name));
+            if (block == null || block == Blocks.air) return null;
+            return new ItemStack(block);
+        } catch (Exception e) { return null; }
     }
 
     // ── GL helpers ────────────────────────────────────────────────────────────
@@ -371,8 +355,8 @@ public class BedPlates extends Module {
         modelview.rewind(); projection.rewind(); viewport.rewind();
         boolean ok = GLU.gluProject(rx, ry, rz, modelview, projection, viewport, win);
         if (!ok) return null;
-        float wz2 = win.get(2);
-        if (wz2 < 0 || wz2 >= 1.0003684f) return null;
+        float depth = win.get(2);
+        if (depth < 0 || depth >= 1.0003684f) return null;
         return new float[]{ win.get(0), win.get(1) };
     }
 
@@ -389,25 +373,5 @@ public class BedPlates extends Module {
         GL11.glEnd();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glColor4f(1, 1, 1, 1);
-    }
-
-    private ItemStack stackFromBlockName(String name) {
-        try {
-            Block block = (Block) Block.blockRegistry.getObject(new ResourceLocation(name));
-            if (block == null || block == Blocks.air) return null;
-            return new ItemStack(block);
-        } catch (Exception e) { return null; }
-    }
-
-    private String getBlockName(Block block) {
-        if (block == Blocks.air) return "air";
-        ResourceLocation loc = (ResourceLocation) Block.blockRegistry.getNameForObject(block);
-        return loc == null ? "air" : loc.getResourcePath();
-    }
-
-    private Block getBlockAt(int x, int y, int z) {
-        try {
-            return mc.theWorld.getBlockState(new BlockPos(x, y, z)).getBlock();
-        } catch (Exception e) { return Blocks.air; }
     }
 }
