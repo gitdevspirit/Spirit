@@ -101,22 +101,12 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Butterfly: stepped cross pattern with end_stone
-        // Center column is tallest, arms step outward at decreasing heights
+        // Butterfly: simple flat cross/plus at bed level
         {
-            // Center stack (2 high, over bed head)
-            {"end_stone",  0, 1,  0},
-            {"end_stone",  0, 2,  0},
-            // 4 arms at y=1 (one step out, one below center top)
-            {"end_stone",  1, 1,  0},
-            {"end_stone", -1, 1,  0},
-            {"end_stone",  0, 1,  1},
-            {"end_stone",  0, 1, -1},
-            // 4 outer arms at y=0 (ground level, two steps out)
-            {"end_stone",  2, 0,  0},
-            {"end_stone", -2, 0,  0},
-            {"end_stone",  0, 0,  2},
-            {"end_stone",  0, 0, -2},
+            {"end_stone",  0, 0,  1},
+            {"end_stone",  0, 0, -1},
+            {"end_stone",  1, 0,  0},
+            {"end_stone", -1, 0,  0},
         },
     };
 
