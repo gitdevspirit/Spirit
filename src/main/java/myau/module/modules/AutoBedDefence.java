@@ -225,13 +225,15 @@ public class AutoBedDefence extends Module {
         boolean onBed = mc.theWorld.getBlockState(mop.getBlockPos()).getBlock() == Blocks.bed;
         if (onlyTopBeds.getValue() && onBed && mop.sideHit != EnumFacing.UP) return;
 
-        // Sneak if placing against a bed
-        if (onBed && !mc.thePlayer.isSneaking()) {
+        // Sneak if placing against a bed — only trigger once, wait for sneak to activate
+        if (onBed && !sneaked && !mc.thePlayer.isSneaking()) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), true);
             sneaked = true;
             sneakTicksLeft = (int) sneakTicks.getValue();
             return;
         }
+        // Wait for sneak to fully engage before placing
+        if (onBed && sneakTicksLeft > 0) return;
 
         hitBlock     = mop.getBlockPos();
         hitFace      = mop.sideHit.getName().toUpperCase();
@@ -245,12 +247,9 @@ public class AutoBedDefence extends Module {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null) return;
 
-        // Release sneak
+        // Release sneak after placement
         if (sneaked) {
-            if (sneakTicksLeft-- <= 0) {
-                KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), false);
-                sneaked = false;
-            }
+            if (sneakTicksLeft > 0) sneakTicksLeft--;
         }
 
         if (!pendingPlace) return;
@@ -264,6 +263,13 @@ public class AutoBedDefence extends Module {
 
         mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, hitBlock, facing, placeVec);
         mc.thePlayer.swingItem();
+
+        // Release sneak now that we've placed
+        if (sneaked) {
+            KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), false);
+            sneaked = false;
+        }
+
         index++;
     }
 
