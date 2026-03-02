@@ -18,82 +18,73 @@ import net.minecraft.init.Blocks;
 import net.minecraft.item.ItemBlock;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.*;
+import com.google.gson.*;
 
+import java.io.*;
 import java.util.*;
 
 public class AutoBedDefence extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final DropdownSetting defense     = register(new DropdownSetting("Defense",         0, "Compact", "Wide", "Wool Layer", "Obsidian", "Endstone"));
-    public final BooleanSetting  onlyTopBeds = register(new BooleanSetting("Only Top Beds",    true));
-    public final SliderSetting   delaySwap   = register(new SliderSetting("Delay After Swap",  0, 0, 10, 1));
-    public final SliderSetting   delayAim    = register(new SliderSetting("Delay After Aim",   2, 0, 10, 1));
-    public final SliderSetting   sneakTicks  = register(new SliderSetting("Sneak Hold Ticks",  5, 0, 20, 1));
-    public final SliderSetting   fov         = register(new SliderSetting("FOV",             180, 0, 180, 1));
-    public final DropdownSetting moveFix     = register(new DropdownSetting("Move Fix",        1, "NONE", "SILENT"));
+    // Loaded from JSON
+    private String[]      defenseNames = {"Loading..."};
+    private Object[][][]  defenseData  = {{}};
 
-    private static final Object[][][] DEFENSES = {
-        // Compact
-        {
-            {"wool",  1, 0,  0}, {"wool", -1, 0,  0},
-            {"wool",  0, 0,  1}, {"wool",  0, 0, -1},
-            {"wool",  1, 0,  1}, {"wool", -1, 0,  1},
-            {"wool",  1, 0, -1}, {"wool", -1, 0, -1},
-            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
-            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
-            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
-            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
-        },
-        // Wide
-        {
-            {"wool",  1, 0,  0}, {"wool", -1, 0,  0},
-            {"wool",  0, 0,  1}, {"wool",  0, 0, -1},
-            {"wool",  1, 0,  1}, {"wool", -1, 0,  1},
-            {"wool",  1, 0, -1}, {"wool", -1, 0, -1},
-            {"wool",  2, 0,  0}, {"wool", -2, 0,  0},
-            {"wool",  0, 0,  2}, {"wool",  0, 0, -2},
-            {"wool",  2, 0,  1}, {"wool", -2, 0,  1},
-            {"wool",  2, 0, -1}, {"wool", -2, 0, -1},
-            {"wool",  1, 0,  2}, {"wool", -1, 0,  2},
-            {"wool",  1, 0, -2}, {"wool", -1, 0, -2},
-            {"wool",  2, 0,  2}, {"wool", -2, 0,  2},
-            {"wool",  2, 0, -2}, {"wool", -2, 0, -2},
-            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
-            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
-            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
-            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
-        },
-        // Wool Layer
-        {
-            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
-            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
-            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
-            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
-        },
-        // Obsidian
-        {
-            {"obsidian",  1, 0,  0}, {"obsidian", -1, 0,  0},
-            {"obsidian",  0, 0,  1}, {"obsidian",  0, 0, -1},
-            {"obsidian",  1, 0,  1}, {"obsidian", -1, 0,  1},
-            {"obsidian",  1, 0, -1}, {"obsidian", -1, 0, -1},
-            {"obsidian",  1, 1,  0}, {"obsidian", -1, 1,  0},
-            {"obsidian",  0, 1,  1}, {"obsidian",  0, 1, -1},
-            {"obsidian",  1, 1,  1}, {"obsidian", -1, 1,  1},
-            {"obsidian",  1, 1, -1}, {"obsidian", -1, 1, -1},
-            {"obsidian",  0, 2,  0}, {"obsidian",  1, 2,  0}, {"obsidian", -1, 2,  0},
-            {"obsidian",  0, 2,  1}, {"obsidian",  0, 2, -1},
-            {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
-            {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
-        },
-        // Endstone: sides + front/back extensions, all flat at y=0
-        {
-            {"end_stone", -1, 0, -1}, {"end_stone", -1, 0,  0}, {"end_stone", -1, 0,  1},
-            {"end_stone",  1, 0, -1}, {"end_stone",  1, 0,  0}, {"end_stone",  1, 0,  1},
-            {"end_stone",  0, 0, -2},
-            {"end_stone",  0, 0,  2},
-        },
-    };
+    public BooleanSetting  onlyTopBeds;
+    public SliderSetting   delaySwap;
+    public SliderSetting   delayAim;
+    public SliderSetting   sneakTicks;
+    public SliderSetting   fov;
+    public DropdownSetting moveFix;
+    public DropdownSetting defense;
 
+    public AutoBedDefence() {
+        super("AutoBedDefence", false);
+        loadDefenses();
+        defense     = register(new DropdownSetting("Defense",        0, defenseNames));
+        onlyTopBeds = register(new BooleanSetting("Only Top Beds",   true));
+        delaySwap   = register(new SliderSetting("Delay After Swap", 0, 0, 10, 1));
+        delayAim    = register(new SliderSetting("Delay After Aim",  2, 0, 10, 1));
+        sneakTicks  = register(new SliderSetting("Sneak Hold Ticks", 5, 0, 20, 1));
+        fov         = register(new SliderSetting("FOV",            180, 0, 180, 1));
+        moveFix     = register(new DropdownSetting("Move Fix",       1, "NONE", "SILENT"));
+    }
+
+    private void loadDefenses() {
+        try {
+            InputStream is = AutoBedDefence.class.getResourceAsStream("/bed_defenses.json");
+            if (is == null) {
+                System.out.println("[AutoBedDefence] bed_defenses.json not found in resources!");
+                return;
+            }
+            JsonObject root = new JsonParser().parse(new InputStreamReader(is)).getAsJsonObject();
+            List<String>     names = new ArrayList<>();
+            List<Object[][]> datas = new ArrayList<>();
+
+            for (Map.Entry<String, JsonElement> entry : root.entrySet()) {
+                names.add(entry.getKey());
+                JsonArray arr = entry.getValue().getAsJsonArray();
+                Object[][] blocks = new Object[arr.size()][];
+                for (int i = 0; i < arr.size(); i++) {
+                    JsonObject b = arr.get(i).getAsJsonObject();
+                    blocks[i] = new Object[]{
+                        b.get("block").getAsString(),
+                        b.get("x").getAsInt(),
+                        b.get("y").getAsInt(),
+                        b.get("z").getAsInt()
+                    };
+                }
+                datas.add(blocks);
+            }
+            defenseNames = names.toArray(new String[0]);
+            defenseData  = datas.toArray(new Object[0][][]);
+            System.out.println("[AutoBedDefence] Loaded " + defenseNames.length + " defenses from JSON.");
+        } catch (Exception e) {
+            System.out.println("[AutoBedDefence] Failed to load JSON: " + e.getMessage());
+        }
+    }
+
+    // ── State ────────────────────────────────────────────────────────────────
     private int index;
     private boolean started, sneaked, pendingPlace;
     private String lockedDirection = "";
@@ -107,8 +98,6 @@ public class AutoBedDefence extends Module {
 
     private static final double INSET = 0.05, STEP = 0.2, JIT = 0.15;
 
-    public AutoBedDefence() { super("AutoBedDefence", false); }
-
     @Override
     public void onEnabled() {
         if (mc.thePlayer == null) return;
@@ -118,8 +107,7 @@ public class AutoBedDefence extends Module {
         bedOrigin = renderTarget = null;
         serverYaw   = mc.thePlayer.rotationYaw;
         serverPitch = mc.thePlayer.rotationPitch;
-        swapTicksLeft = 0;
-        aimTicksLeft  = 0;
+        swapTicksLeft = aimTicksLeft = 0;
         slotCache.clear();
         prevSlot = mc.thePlayer.inventory.currentItem;
     }
@@ -139,20 +127,17 @@ public class AutoBedDefence extends Module {
         if (mc.thePlayer == null || mc.theWorld == null) return;
         if (mc.currentScreen != null) return;
 
-        // Track server rotation from outgoing packets
         serverYaw   = event.getYaw();
         serverPitch = event.getPitch();
 
-        Object[][] def = DEFENSES[defense.getIndex()];
+        Object[][] def = defenseData[defense.getIndex()];
 
-        // Find bed once
         if (!started) {
             BlockPos bed = findBed(8);
             if (bed == null) return;
             bedOrigin = bed;
             int meta = mc.theWorld.getBlockState(bed).getBlock()
                     .getMetaFromState(mc.theWorld.getBlockState(bed)) & 0xF;
-            // Head block meta: 8=south, 9=west, 10=north, 11=east
             switch (meta) {
                 case 10: lockedDirection = "north"; break;
                 case 8:  lockedDirection = "south"; break;
@@ -163,7 +148,6 @@ public class AutoBedDefence extends Module {
             started = true;
         }
 
-        // Skip already-filled positions
         while (index < def.length) {
             BlockPos tgt = getTargetPos(def[index]);
             Block b = mc.theWorld.getBlockState(tgt).getBlock();
@@ -175,7 +159,6 @@ public class AutoBedDefence extends Module {
         BlockPos target = getTargetPos(def[index]);
         renderTarget = target;
 
-        // Swap to correct slot first — don't proceed until we have the right item
         String blockName = (String) def[index][0];
         int wantSlot = findSlot(blockName);
         if (wantSlot == -1) { setEnabled(false); return; }
@@ -190,7 +173,6 @@ public class AutoBedDefence extends Module {
         ItemStack held = mc.thePlayer.inventory.getCurrentItem();
         if (held == null || !(held.getItem() instanceof ItemBlock)) return;
 
-        // Find rotation toward target
         float[] rot = findBestRotation(target);
         if (rot == null) return;
 
@@ -198,27 +180,22 @@ public class AutoBedDefence extends Module {
         event.setRotation(yaw, pitch, 8);
         event.setPervRotation(moveFix.getIndex() != 0 ? yaw : mc.thePlayer.rotationYaw, 8);
 
-        // Wait for aim delay
         if (aimTicksLeft > 0) { aimTicksLeft--; return; }
 
-        // Verify raycast hits the right block face
         MovingObjectPosition mop = rayTrace(yaw, pitch, 4.5);
         if (mop == null || mop.typeOfHit != MovingObjectPosition.MovingObjectType.BLOCK) return;
         BlockPos placed = mop.getBlockPos().offset(mop.sideHit);
         if (!placed.equals(target)) return;
 
         boolean onBed = mc.theWorld.getBlockState(mop.getBlockPos()).getBlock() == Blocks.bed;
-        // Never click the side of a bed - opens GUI
         if (onBed && mop.sideHit != EnumFacing.UP) return;
 
-        // Sneak if placing against a bed — only trigger once, wait for sneak to activate
         if (onBed && !sneaked && !mc.thePlayer.isSneaking()) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), true);
             sneaked = true;
             sneakTicksLeft = (int) sneakTicks.getValue();
             return;
         }
-        // Wait for sneak to fully engage before placing
         if (onBed && sneakTicksLeft > 0) return;
 
         hitBlock     = mop.getBlockPos();
@@ -233,10 +210,7 @@ public class AutoBedDefence extends Module {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null) return;
 
-        // Release sneak after placement
-        if (sneaked) {
-            if (sneakTicksLeft > 0) sneakTicksLeft--;
-        }
+        if (sneaked && sneakTicksLeft > 0) sneakTicksLeft--;
 
         if (!pendingPlace) return;
         pendingPlace = false;
@@ -250,12 +224,10 @@ public class AutoBedDefence extends Module {
         mc.playerController.onPlayerRightClick(mc.thePlayer, mc.theWorld, held, hitBlock, facing, placeVec);
         mc.thePlayer.swingItem();
 
-        // Release sneak now that we've placed
         if (sneaked) {
             KeyBindUtil.setKeyBindState(mc.gameSettings.keyBindSneak.getKeyCode(), false);
             sneaked = false;
         }
-
         index++;
     }
 
@@ -276,8 +248,6 @@ public class AutoBedDefence extends Module {
         if (!isEnabled() || renderTarget == null) return;
         RenderUtil.drawBlockBoundingBox(renderTarget, 1.0, 0, 255, 0, 120, 1.5f);
     }
-
-    // ── Rotation ─────────────────────────────────────────────────────────────
 
     private float[] findBestRotation(BlockPos target) {
         Vec3 eye = mc.thePlayer.getPositionEyes(1.0f);
@@ -304,7 +274,6 @@ public class AutoBedDefence extends Module {
                     target.getZ() + dz[fi]);
             Block sb = mc.theWorld.getBlockState(support).getBlock();
             if (sb == Blocks.air) continue;
-            // Never click the side of a bed - it opens the GUI instead of placing
             if (sb == Blocks.bed && faces[fi] != EnumFacing.UP) continue;
 
             for (int rr = 0; rr <= GRID; rr++) {
@@ -350,8 +319,6 @@ public class AutoBedDefence extends Module {
         return null;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
     private BlockPos getTargetPos(Object[] entry) {
         int ox = (int) entry[1], oy = (int) entry[2], oz = (int) entry[3];
         int[] r = rotateOffset(ox, oz, lockedDirection);
@@ -379,8 +346,7 @@ public class AutoBedDefence extends Module {
                     if (mc.theWorld.getBlockState(bp).getBlock() != Blocks.bed) continue;
                     int meta = mc.theWorld.getBlockState(bp).getBlock()
                             .getMetaFromState(mc.theWorld.getBlockState(bp)) & 0xF;
-                    // Only consider head blocks (meta 8-11), not foot blocks (0-7)
-                    if (meta < 8) continue;
+                    if (meta < 8) continue; // head blocks only
                     double d = bp.distanceSq(p.getX(), p.getY(), p.getZ());
                     if (d < bestDist) { bestDist = d; best = bp; }
                 }
@@ -398,7 +364,6 @@ public class AutoBedDefence extends Module {
             if (s == null || !(s.getItem() instanceof ItemBlock)) continue;
             if (getBlockName(s).equalsIgnoreCase(blockName)) { slotCache.put(blockName, i); return i; }
         }
-        // Fallback: any block
         for (int i = 0; i < 9; i++) {
             ItemStack s = mc.thePlayer.inventory.getStackInSlot(i);
             if (s != null && s.getItem() instanceof ItemBlock) return i;
