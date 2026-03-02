@@ -213,7 +213,8 @@ public class AutoBedDefence extends Module {
         if (!placed.equals(target)) return;
 
         boolean onBed = mc.theWorld.getBlockState(mop.getBlockPos()).getBlock() == Blocks.bed;
-        if (onlyTopBeds.getValue() && onBed && mop.sideHit != EnumFacing.UP) return;
+        // Never click the side of a bed - opens GUI
+        if (onBed && mop.sideHit != EnumFacing.UP) return;
 
         // Sneak if placing against a bed — only trigger once, wait for sneak to activate
         if (onBed && !sneaked && !mc.thePlayer.isSneaking()) {
@@ -308,7 +309,8 @@ public class AutoBedDefence extends Module {
                     target.getZ() + dz[fi]);
             Block sb = mc.theWorld.getBlockState(support).getBlock();
             if (sb == Blocks.air) continue;
-            if (onlyTopBeds.getValue() && sb == Blocks.bed && faces[fi] != EnumFacing.UP) continue;
+            // Never click the side of a bed - it opens the GUI instead of placing
+            if (sb == Blocks.bed && faces[fi] != EnumFacing.UP) continue;
 
             for (int rr = 0; rr <= GRID; rr++) {
                 double v = clamp(rr * STEP + (Math.random() * STEP * JIT * 2 - STEP * JIT), 0, 1);
@@ -347,7 +349,7 @@ public class AutoBedDefence extends Module {
             BlockPos pl = mop.getBlockPos().offset(mop.sideHit);
             if (!pl.equals(target)) continue;
             boolean onBed = mc.theWorld.getBlockState(mop.getBlockPos()).getBlock() == Blocks.bed;
-            if (onlyTopBeds.getValue() && onBed && mop.sideHit != EnumFacing.UP) continue;
+            if (onBed && mop.sideHit != EnumFacing.UP) continue;
             return new float[]{yaw, pit};
         }
         return null;
