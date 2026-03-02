@@ -6,9 +6,7 @@ import myau.events.Render3DEvent;
 import myau.mixin.IAccessorRenderManager;
 import myau.module.BooleanSetting;
 import myau.module.Module;
-import myau.module.SliderSetting;
 import myau.util.RenderUtil;
-import myau.util.TeamUtil;
 import net.minecraft.block.Block;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -22,187 +20,212 @@ import net.minecraft.util.AxisAlignedBB;
 import org.lwjgl.opengl.GL11;
 
 import java.awt.*;
-import java.util.LinkedHashMap;
-import java.util.Map.Entry;
-import java.util.Objects;
+import java.util.*;
+import java.util.List;
 import java.util.stream.Collectors;
 
 public class ItemESP extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting  opacity   = new SliderSetting("Opacity",     50,  0, 100, 1);
-    public final BooleanSetting outline   = new BooleanSetting("Outline",    true);
-    public final BooleanSetting itemCount = new BooleanSetting("Item Count", true);
-    public final BooleanSetting autoScale = new BooleanSetting("Auto Scale", true);
-    public final BooleanSetting emeralds  = new BooleanSetting("Emeralds",   true);
-    public final BooleanSetting diamonds  = new BooleanSetting("Diamonds",   true);
-    public final BooleanSetting gold      = new BooleanSetting("Gold",       true);
-    public final BooleanSetting iron      = new BooleanSetting("Iron",       true);
+    public final BooleanSetting outline  = new BooleanSetting("Outline",  true);
+    public final BooleanSetting emeralds = new BooleanSetting("Emeralds", true);
+    public final BooleanSetting diamonds = new BooleanSetting("Diamonds", true);
+    public final BooleanSetting gold     = new BooleanSetting("Gold",     true);
+    public final BooleanSetting iron     = new BooleanSetting("Iron",     true);
 
     public ItemESP() {
         super("ItemESP", false);
-        register(opacity); register(outline); register(itemCount);
-        register(autoScale); register(emeralds); register(diamonds);
-        register(gold); register(iron);
+        register(outline);
+        register(emeralds); register(diamonds);
+        register(gold);     register(iron);
     }
 
-    // ── Item type checks ─────────────────────────────────────────────────────
+    // ── Item type helpers ─────────────────────────────────────────────────────
 
-    private boolean shouldHighlightItem(int itemId) {
-        return (emeralds.getValue() && isEmeraldItem(itemId))
-            || (diamonds.getValue() && isDiamondItem(itemId))
-            || (gold.getValue()     && isGoldItem(itemId))
-            || (iron.getValue()     && isIronItem(itemId));
+    private boolean shouldShow(int id) {
+        return (emeralds.getValue() && isEmerald(id))
+            || (diamonds.getValue() && isDiamond(id))
+            || (gold.getValue()     && isGold(id))
+            || (iron.getValue()     && isIron(id));
     }
 
-    private boolean isEmeraldItem(int itemId) {
-        Item item = Item.getItemById(itemId);
-        Block block = Block.getBlockFromItem(item);
-        return item == Items.emerald || block == Blocks.emerald_block || block == Blocks.emerald_ore;
+    private boolean isEmerald(int id) {
+        Item item = Item.getItemById(id);
+        Block b = Block.getBlockFromItem(item);
+        return item == Items.emerald || b == Blocks.emerald_block || b == Blocks.emerald_ore;
     }
 
-    private boolean isDiamondItem(int itemId) {
-        Item item = Item.getItemById(itemId);
-        Block block = Block.getBlockFromItem(item);
+    private boolean isDiamond(int id) {
+        Item item = Item.getItemById(id);
+        Block b = Block.getBlockFromItem(item);
         return item == Items.diamond
             || item == Items.diamond_sword      || item == Items.diamond_pickaxe
             || item == Items.diamond_shovel     || item == Items.diamond_axe
             || item == Items.diamond_hoe        || item == Items.diamond_helmet
             || item == Items.diamond_chestplate || item == Items.diamond_leggings
-            || item == Items.diamond_boots      || block == Blocks.diamond_block
-            || block == Blocks.diamond_ore;
+            || item == Items.diamond_boots      || b == Blocks.diamond_block
+            || b == Blocks.diamond_ore;
     }
 
-    private boolean isGoldItem(int itemId) {
-        Item item = Item.getItemById(itemId);
-        Block block = Block.getBlockFromItem(item);
-        return item == Items.gold_ingot || item == Items.gold_nugget
-            || item == Items.golden_apple || block == Blocks.gold_block
-            || block == Blocks.gold_ore;
+    private boolean isGold(int id) {
+        Item item = Item.getItemById(id);
+        Block b = Block.getBlockFromItem(item);
+        return item == Items.gold_ingot   || item == Items.gold_nugget
+            || item == Items.golden_apple || b == Blocks.gold_block
+            || b == Blocks.gold_ore;
     }
 
-    private boolean isIronItem(int itemId) {
-        Item item = Item.getItemById(itemId);
-        Block block = Block.getBlockFromItem(item);
-        return item == Items.iron_ingot || block == Blocks.iron_block || block == Blocks.iron_ore;
+    private boolean isIron(int id) {
+        Item item = Item.getItemById(id);
+        Block b = Block.getBlockFromItem(item);
+        return item == Items.iron_ingot || b == Blocks.iron_block || b == Blocks.iron_ore;
     }
 
-    private Color getItemColor(int itemId) {
-        if (isEmeraldItem(itemId)) return new Color(ChatColors.GREEN.toAwtColor());
-        if (isDiamondItem(itemId)) return new Color(ChatColors.AQUA.toAwtColor());
-        if (isGoldItem(itemId))    return new Color(ChatColors.YELLOW.toAwtColor());
-        if (isIronItem(itemId))    return new Color(ChatColors.WHITE.toAwtColor());
+    private Color getColor(int id) {
+        if (isEmerald(id)) return new Color(ChatColors.GREEN.toAwtColor());
+        if (isDiamond(id)) return new Color(ChatColors.AQUA.toAwtColor());
+        if (isGold(id))    return new Color(ChatColors.YELLOW.toAwtColor());
+        if (isIron(id))    return new Color(ChatColors.WHITE.toAwtColor());
         return new Color(ChatColors.GRAY.toAwtColor());
     }
 
-    private int getItemPriority(int itemId) {
-        if (isEmeraldItem(itemId)) return 4;
-        if (isDiamondItem(itemId)) return 3;
-        if (isGoldItem(itemId))    return 2;
-        if (isIronItem(itemId))    return 1;
+    private int getPriority(int id) {
+        if (isEmerald(id)) return 4;
+        if (isDiamond(id)) return 3;
+        if (isGold(id))    return 2;
+        if (isIron(id))    return 1;
         return 0;
     }
 
-    // ── Events ────────────────────────────────────────────────────────────────
+    /** Short display name for the nametag label */
+    private String getLabel(int id) {
+        Item item = Item.getItemById(id);
+        if (item == Items.emerald)           return "Emerald";
+        if (item == Items.diamond)           return "Diamond";
+        if (item == Items.golden_apple)      return "Gapple";
+        if (item == Items.gold_ingot)        return "Gold";
+        if (item == Items.gold_nugget)       return "Gold Nugget";
+        if (item == Items.iron_ingot)        return "Iron";
+        Block b = Block.getBlockFromItem(item);
+        if (b == Blocks.emerald_block)       return "Emerald Block";
+        if (b == Blocks.emerald_ore)         return "Emerald Ore";
+        if (b == Blocks.diamond_block)       return "Diamond Block";
+        if (b == Blocks.diamond_ore)         return "Diamond Ore";
+        if (b == Blocks.gold_block)          return "Gold Block";
+        if (b == Blocks.gold_ore)            return "Gold Ore";
+        if (b == Blocks.iron_block)          return "Iron Block";
+        if (b == Blocks.iron_ore)            return "Iron Ore";
+        // Diamond gear
+        if (item == Items.diamond_sword)      return "Diamond Sword";
+        if (item == Items.diamond_pickaxe)    return "Diamond Pick";
+        if (item == Items.diamond_axe)        return "Diamond Axe";
+        if (item == Items.diamond_shovel)     return "Diamond Shovel";
+        if (item == Items.diamond_hoe)        return "Diamond Hoe";
+        if (item == Items.diamond_helmet)     return "Diamond Helmet";
+        if (item == Items.diamond_chestplate) return "Diamond Chest";
+        if (item == Items.diamond_leggings)   return "Diamond Legs";
+        if (item == Items.diamond_boots)      return "Diamond Boots";
+        return "Item";
+    }
+
+    // ── Render ────────────────────────────────────────────────────────────────
 
     @EventTarget
     public void onRender(Render3DEvent event) {
         if (!isEnabled()) return;
         if (mc.theWorld == null || mc.thePlayer == null) return;
 
+        // Collect + merge items at same block position
         LinkedHashMap<ItemData, Integer> itemMap = new LinkedHashMap<>();
         for (Entity entity : mc.theWorld.loadedEntityList) {
             if (entity.ticksExisted < 3) continue;
             if (!(entity instanceof EntityItem)) continue;
 
-            EntityItem entityItem = (EntityItem) entity;
-            ItemStack stack = entityItem.getEntityItem();
+            EntityItem ei = (EntityItem) entity;
+            ItemStack stack = ei.getEntityItem();
             if (stack == null || stack.stackSize <= 0) continue;
 
-            int itemId = Item.getIdFromItem(stack.getItem());
-            if (!shouldHighlightItem(itemId)) continue;
+            int id = Item.getIdFromItem(stack.getItem());
+            if (!shouldShow(id)) continue;
 
-            double x = RenderUtil.lerpDouble(entityItem.posX, entityItem.lastTickPosX, event.getPartialTicks());
-            double y = RenderUtil.lerpDouble(entityItem.posY, entityItem.lastTickPosY, event.getPartialTicks());
-            double z = RenderUtil.lerpDouble(entityItem.posZ, entityItem.lastTickPosZ, event.getPartialTicks());
-            ItemData data = new ItemData(itemId, x, y, z);
-            Integer existing = itemMap.get(data);
-            itemMap.put(data, stack.stackSize + (existing == null ? 0 : existing));
+            double x = RenderUtil.lerpDouble(ei.posX, ei.lastTickPosX, event.getPartialTicks());
+            double y = RenderUtil.lerpDouble(ei.posY, ei.lastTickPosY, event.getPartialTicks());
+            double z = RenderUtil.lerpDouble(ei.posZ, ei.lastTickPosZ, event.getPartialTicks());
+
+            ItemData data = new ItemData(id, x, y, z);
+            itemMap.merge(data, stack.stackSize, Integer::sum);
         }
 
         if (itemMap.isEmpty()) return;
 
         IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
-        int alphaFill = (int)(opacity.getValue() / 100.0 * 255.0);
 
-        // Push GL state once for all items
+        // Sort by priority (emerald first)
+        List<Map.Entry<ItemData, Integer>> entries = itemMap.entrySet().stream()
+            .sorted((a, b) -> Integer.compare(getPriority(b.getKey().itemId), getPriority(a.getKey().itemId)))
+            .collect(Collectors.toList());
+
         GlStateManager.pushMatrix();
         GlStateManager.pushAttrib();
         GlStateManager.disableLighting();
 
-        for (Entry<ItemData, Integer> itemEntry : itemMap.entrySet().stream()
-                .sorted((a, b) -> Integer.compare(
-                        getItemPriority(a.getKey().itemId),
-                        getItemPriority(b.getKey().itemId)))
-                .collect(Collectors.toList())) {
+        for (Map.Entry<ItemData, Integer> entry : entries) {
+            int id    = entry.getKey().itemId;
+            int count = entry.getValue();
+            Color col = getColor(id);
+            int cr = col.getRed(), cg = col.getGreen(), cb = col.getBlue();
 
-            Color itemColor = getItemColor(itemEntry.getKey().itemId);
-            int cr = itemColor.getRed(), cg = itemColor.getGreen(), cb = itemColor.getBlue();
-            double x = itemEntry.getKey().x - rm.getRenderPosX();
-            double y = itemEntry.getKey().y - rm.getRenderPosY();
-            double z = itemEntry.getKey().z - rm.getRenderPosZ();
-            double distance = mc.getRenderViewEntity().getDistance(
-                    itemEntry.getKey().x, itemEntry.getKey().y, itemEntry.getKey().z);
-            double scale = autoScale.getValue()
-                    ? 0.5 + 0.375 * ((Math.max(6.0, distance) - 6.0) / 28.0)
-                    : 0.5;
+            double rx = entry.getKey().x - rm.getRenderPosX();
+            double ry = entry.getKey().y - rm.getRenderPosY();
+            double rz = entry.getKey().z - rm.getRenderPosZ();
 
-            AxisAlignedBB bb = new AxisAlignedBB(
-                    x - scale * 0.5, y,         z - scale * 0.5,
-                    x + scale * 0.5, y + scale, z + scale * 0.5);
+            double dist = mc.getRenderViewEntity().getDistance(
+                entry.getKey().x, entry.getKey().y, entry.getKey().z);
+            double boxSize = 0.5 + 0.375 * ((Math.max(6.0, dist) - 6.0) / 28.0);
 
-            // Filled box with opacity from slider
-            if (alphaFill > 0) {
-                GL11.glEnable(GL11.GL_BLEND);
-                GL11.glDisable(GL11.GL_TEXTURE_2D);
-                GL11.glDisable(GL11.GL_DEPTH_TEST);
-                GL11.glDepthMask(false);
-                GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-                // Pass alpha directly into drawFilledBox via color override
-                RenderUtil.drawFilledBox(bb, cr, cg, cb, alphaFill);
-                GL11.glDepthMask(true);
-                GL11.glEnable(GL11.GL_DEPTH_TEST);
-                GL11.glEnable(GL11.GL_TEXTURE_2D);
-                GL11.glDisable(GL11.GL_BLEND);
-            }
-
-            // Outline
+            // Optional outline box
             if (outline.getValue()) {
+                AxisAlignedBB bb = new AxisAlignedBB(
+                    rx - boxSize * 0.5, ry,           rz - boxSize * 0.5,
+                    rx + boxSize * 0.5, ry + boxSize, rz + boxSize * 0.5);
                 RenderUtil.enableRenderState();
-                RenderUtil.drawBoundingBox(bb, cr, cg, cb, 255, 1.5F);
+                RenderUtil.drawBoundingBox(bb, cr, cg, cb, 255, 1.5f);
                 RenderUtil.disableRenderState();
             }
 
-            // Item count label
-            if (itemCount.getValue()) {
-                GlStateManager.pushMatrix();
-                GlStateManager.translate(x, y + scale * 0.5, z);
-                GlStateManager.rotate(mc.getRenderManager().playerViewY * -1.0F, 0.0F, 1.0F, 0.0F);
-                float flip = mc.gameSettings.thirdPersonView == 2 ? -1.0F : 1.0F;
-                GlStateManager.rotate(mc.getRenderManager().playerViewX, flip, 0.0F, 0.0F);
-                double fontScale = autoScale.getValue()
-                        ? -0.04375 - 0.0328125 * ((Math.max(6.0, distance) - 6.0) / 28.0)
-                        : -0.04375;
-                GlStateManager.scale(fontScale, fontScale, 1.0);
-                GlStateManager.disableDepth();
-                String countText = String.valueOf(itemEntry.getValue());
-                RenderUtil.drawOutlinedString(
-                        countText,
-                        ((float) mc.fontRendererObj.getStringWidth(countText) / 2.0F - 0.5F) * -1.0F,
-                        ((float)(mc.fontRendererObj.FONT_HEIGHT / 2) - 0.5F) * -1.0F);
-                GlStateManager.enableDepth();
-                GlStateManager.popMatrix();
-            }
+            // Nametag: "Diamond 5x"
+            String label = getLabel(id) + " " + count + "x";
+
+            GlStateManager.pushMatrix();
+            // Position tag above the item
+            GlStateManager.translate(rx, ry + boxSize + 0.15, rz);
+            // Billboard — face the camera
+            GlStateManager.rotate(mc.getRenderManager().playerViewY * -1.0f, 0f, 1f, 0f);
+            float flip = mc.gameSettings.thirdPersonView == 2 ? -1f : 1f;
+            GlStateManager.rotate(mc.getRenderManager().playerViewX, flip, 0f, 0f);
+
+            // Scale: small at close range, larger further away
+            double fs = -(0.025 + 0.02 * ((Math.max(6.0, dist) - 6.0) / 28.0));
+            GlStateManager.scale(fs, fs, 1.0);
+
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GlStateManager.enableBlend();
+
+            float tw = mc.fontRendererObj.getStringWidth(label) / 2f;
+            float th = mc.fontRendererObj.FONT_HEIGHT / 2f;
+
+            // Dark background pill
+            int bgColor = 0xAA000000;
+            float pad = 2f;
+            drawFlatRect(-tw - pad, -th - pad, tw + pad, th + pad, bgColor);
+
+            // Colored text with shadow
+            int textColor = (255 << 24) | (cr << 16) | (cg << 8) | cb;
+            mc.fontRendererObj.drawStringWithShadow(label, -tw, -th, textColor);
+
+            GlStateManager.disableBlend();
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GlStateManager.popMatrix();
         }
 
         GlStateManager.enableLighting();
@@ -210,7 +233,23 @@ public class ItemESP extends Module {
         GlStateManager.popMatrix();
     }
 
-    // ── Inner class ───────────────────────────────────────────────────────────
+    /** Draws a flat (non-3D) rect in the current GL matrix space */
+    private void drawFlatRect(float x1, float y1, float x2, float y2, int color) {
+        float a = ((color >> 24) & 0xFF) / 255f;
+        float r = ((color >> 16) & 0xFF) / 255f;
+        float g = ((color >>  8) & 0xFF) / 255f;
+        float b = ( color        & 0xFF) / 255f;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(r, g, b, a);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(x1, y2); GL11.glVertex2f(x2, y2);
+        GL11.glVertex2f(x2, y1); GL11.glVertex2f(x1, y1);
+        GL11.glEnd();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    // ── ItemData ──────────────────────────────────────────────────────────────
 
     public static class ItemData {
         private final int hashCode;
@@ -224,12 +263,12 @@ public class ItemESP extends Module {
         }
 
         @Override
-        public boolean equals(Object object) {
-            if (this == object) return true;
-            if (object == null || getClass() != object.getClass()) return false;
-            ItemData o = (ItemData) object;
-            return itemId == o.itemId && (int) x == (int) o.x
-                && (int) y == (int) o.y && (int) z == (int) o.z;
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ItemData)) return false;
+            ItemData d = (ItemData) o;
+            return itemId == d.itemId && (int) x == (int) d.x
+                && (int) y == (int) d.y && (int) z == (int) d.z;
         }
 
         @Override public int hashCode() { return hashCode; }
