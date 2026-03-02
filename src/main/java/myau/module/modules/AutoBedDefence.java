@@ -89,7 +89,7 @@ public class AutoBedDefence extends Module {
         {
             {"end_stone", -1, 0, -1}, {"end_stone", -1, 0,  0}, {"end_stone", -1, 0,  1},
             {"end_stone",  1, 0, -1}, {"end_stone",  1, 0,  0}, {"end_stone",  1, 0,  1},
-            {"end_stone",  0, 0, -2},
+            {"end_stone",  0, 0, -2}, {"end_stone",  0, 0, -3},
             {"end_stone",  0, 0,  2},
         },
     };
