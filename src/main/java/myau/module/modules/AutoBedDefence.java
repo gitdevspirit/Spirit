@@ -85,17 +85,19 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Endstone: wide cross/butterfly pattern at bed level
+        // Endstone: 12 block defence - back wall + side arms + cover over bed
         {
-            // Center 3x3
-            {"end_stone",  0, 0,  0},
-            {"end_stone",  1, 0,  0}, {"end_stone", -1, 0,  0},
-            {"end_stone",  0, 0,  1}, {"end_stone",  0, 0, -1},
-            {"end_stone",  1, 0,  1}, {"end_stone", -1, 0,  1},
-            {"end_stone",  1, 0, -1}, {"end_stone", -1, 0, -1},
-            // Extended arms (2 blocks out each direction)
-            {"end_stone",  2, 0,  0}, {"end_stone", -2, 0,  0},
-            {"end_stone",  0, 0,  2}, {"end_stone",  0, 0, -2},
+            // Back wall (3 wide, y=1, behind bed head)
+            {"end_stone", -1, 1, -1}, {"end_stone",  0, 1, -1}, {"end_stone",  1, 1, -1},
+            // Over bed head (y=1)
+            {"end_stone", -1, 1,  0}, {"end_stone",  1, 1,  0},
+            // Over bed foot (y=1)
+            {"end_stone", -1, 1,  1}, {"end_stone",  1, 1,  1},
+            // Side blocks at ground level (y=0)
+            {"end_stone", -1, 0,  0}, {"end_stone",  1, 0,  0},
+            {"end_stone", -1, 0,  1}, {"end_stone",  1, 0,  1},
+            // Front block
+            {"end_stone",  0, 1,  2},
         },
         // Doubles: two thick rows on sides + front/back caps
         {
