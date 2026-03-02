@@ -83,7 +83,6 @@ public class ModuleRegistry {
         renderModules.add(Myau.moduleManager.getModule(Trajectories.class));
         renderModules.add(Myau.moduleManager.getModule(Radar.class));
         renderModules.add(Myau.moduleManager.getModule(FPScounter.class));
-        renderModules.add(Myau.moduleManager.getModule(BedPlates.class));
         renderModules.sort(comparator);
 
         playerModules = new ArrayList<>();
