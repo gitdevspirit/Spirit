@@ -126,7 +126,6 @@ public class Myau {
         moduleManager.modules.put(AC.class,               new AC());
         moduleManager.modules.put(Notifications.class,    new Notifications());
         moduleManager.modules.put(Session.class,          new Session());
-        moduleManager.modules.put(Clutch.class,           new Clutch());
         moduleManager.modules.put(ItemAlerts.class,       new ItemAlerts());
         moduleManager.modules.put(InfoHUD.class,           new InfoHUD());
         moduleManager.modules.put(HitBox.class,          new HitBox());
