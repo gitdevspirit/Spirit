@@ -96,6 +96,7 @@ public class Myau {
         moduleManager.modules.put(Chams.class,           new Chams());
         moduleManager.modules.put(ChestESP.class,        new ChestESP());
         moduleManager.modules.put(ChestStealer.class,    new ChestStealer());
+        moduleManager.modules.put(Clutch.class,          new Clutch());
         moduleManager.modules.put(Eagle.class,           new Eagle());
         moduleManager.modules.put(ESP.class,             new ESP());
         moduleManager.modules.put(FastPlace.class,       new FastPlace());
@@ -124,6 +125,7 @@ public class Myau {
         moduleManager.modules.put(KeepSprint.class,      new KeepSprint());
         moduleManager.modules.put(FlagDetector.class,    new FlagDetector());
         moduleManager.modules.put(AC.class,               new AC());
+        moduleManager.modules.put(AutoBedDefence.class,   new AutoBedDefence());
         moduleManager.modules.put(Notifications.class,    new Notifications());
         moduleManager.modules.put(Session.class,          new Session());
         moduleManager.modules.put(ItemAlerts.class,       new ItemAlerts());
