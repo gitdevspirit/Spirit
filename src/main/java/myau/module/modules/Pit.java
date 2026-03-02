@@ -8,6 +8,7 @@ import myau.event.types.EventType;
 import myau.events.KeyEvent;
 import myau.events.PacketEvent;
 import myau.events.Render2DEvent;
+import myau.events.Render3DEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
