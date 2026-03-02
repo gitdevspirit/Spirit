@@ -40,35 +40,66 @@ public class AutoBedDefence extends Module {
     // "obsidian" = full obsidian fortress
 
     private static final Object[][][] DEFENSES = {
-        // Compact: 8 blocks surrounding the bed head at y+1
+        // Compact: surround bed head with walls (y=0 sides) + roof (y=1)
+        // Offsets relative to bed head block. y=0 = same level, y=1 = one above
         {
-            {"wool", 0, 1, 0}, {"wool", 1, 1, 0}, {"wool", -1, 1, 0},
-            {"wool", 0, 1, 1}, {"wool", 0, 1, -1},
-            {"wool", 1, 1, 1}, {"wool", -1, 1, 1},
-            {"wool", 1, 1, -1}, {"wool", -1, 1, -1},
+            // Sides at bed level
+            {"wool",  1, 0,  0}, {"wool", -1, 0,  0},
+            {"wool",  0, 0,  1}, {"wool",  0, 0, -1},
+            {"wool",  1, 0,  1}, {"wool", -1, 0,  1},
+            {"wool",  1, 0, -1}, {"wool", -1, 0, -1},
+            // Roof
+            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
+            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
+            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
+            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
         },
-        // Wide: 2-layer surround
+        // Wide: 2-block wall surround + roof
         {
-            {"wool", 0, 1, 0},
-            {"wool", 2, 1, 0}, {"wool", -2, 1, 0},
-            {"wool", 0, 1, 2}, {"wool", 0, 1, -2},
-            {"wool", 2, 1, 1}, {"wool", -2, 1, 1},
-            {"wool", 2, 1, -1}, {"wool", -2, 1, -1},
-            {"wool", 1, 1, 2}, {"wool", -1, 1, 2},
-            {"wool", 1, 1, -2}, {"wool", -1, 1, -2},
+            // Inner ring at bed level
+            {"wool",  1, 0,  0}, {"wool", -1, 0,  0},
+            {"wool",  0, 0,  1}, {"wool",  0, 0, -1},
+            {"wool",  1, 0,  1}, {"wool", -1, 0,  1},
+            {"wool",  1, 0, -1}, {"wool", -1, 0, -1},
+            // Outer ring at bed level
+            {"wool",  2, 0,  0}, {"wool", -2, 0,  0},
+            {"wool",  0, 0,  2}, {"wool",  0, 0, -2},
+            {"wool",  2, 0,  1}, {"wool", -2, 0,  1},
+            {"wool",  2, 0, -1}, {"wool", -2, 0, -1},
+            {"wool",  1, 0,  2}, {"wool", -1, 0,  2},
+            {"wool",  1, 0, -2}, {"wool", -1, 0, -2},
+            {"wool",  2, 0,  2}, {"wool", -2, 0,  2},
+            {"wool",  2, 0, -2}, {"wool", -2, 0, -2},
+            // Roof inner
+            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
+            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
+            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
+            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
         },
-        // Wool layer: flat cheap cover
+        // Wool layer: just cover top of bed
         {
-            {"wool", 0, 1, 0}, {"wool", 1, 1, 0}, {"wool", -1, 1, 0},
-            {"wool", 0, 1, 1}, {"wool", 0, 1, -1},
+            {"wool",  0, 1,  0}, {"wool",  1, 1,  0}, {"wool", -1, 1,  0},
+            {"wool",  0, 1,  1}, {"wool",  0, 1, -1},
+            {"wool",  1, 1,  1}, {"wool", -1, 1,  1},
+            {"wool",  1, 1, -1}, {"wool", -1, 1, -1},
         },
-        // Obsidian: solid fortress
+        // Obsidian: solid walls + double-height roof
         {
-            {"obsidian", 0, 1, 0}, {"obsidian", 1, 1, 0}, {"obsidian", -1, 1, 0},
-            {"obsidian", 0, 1, 1}, {"obsidian", 0, 1, -1},
-            {"obsidian", 1, 1, 1}, {"obsidian", -1, 1, 1},
-            {"obsidian", 1, 1, -1}, {"obsidian", -1, 1, -1},
-            {"obsidian", 0, 2, 0},
+            // Level 0 walls
+            {"obsidian",  1, 0,  0}, {"obsidian", -1, 0,  0},
+            {"obsidian",  0, 0,  1}, {"obsidian",  0, 0, -1},
+            {"obsidian",  1, 0,  1}, {"obsidian", -1, 0,  1},
+            {"obsidian",  1, 0, -1}, {"obsidian", -1, 0, -1},
+            // Level 1 walls
+            {"obsidian",  1, 1,  0}, {"obsidian", -1, 1,  0},
+            {"obsidian",  0, 1,  1}, {"obsidian",  0, 1, -1},
+            {"obsidian",  1, 1,  1}, {"obsidian", -1, 1,  1},
+            {"obsidian",  1, 1, -1}, {"obsidian", -1, 1, -1},
+            // Roof at level 2
+            {"obsidian",  0, 2,  0}, {"obsidian",  1, 2,  0}, {"obsidian", -1, 2,  0},
+            {"obsidian",  0, 2,  1}, {"obsidian",  0, 2, -1},
+            {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
+            {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
     };
 
