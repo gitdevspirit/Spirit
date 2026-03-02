@@ -67,19 +67,31 @@ public class Pit extends Module {
         return true;
     }
 
-    private boolean playerHasArmorTier(EntityPlayer p, String tier) {
-        for (int i = 1; i <= 4; i++) {
-            ItemStack armor = p.getCurrentArmor(i - 1);
+    private int countArmorPieces(EntityPlayer p, String tier) {
+        int count = 0;
+        for (int i = 0; i < 4; i++) {
+            ItemStack armor = p.getCurrentArmor(i);
             if (armor == null || !(armor.getItem() instanceof ItemArmor)) continue;
             ItemArmor.ArmorMaterial mat = ((ItemArmor) armor.getItem()).getArmorMaterial();
             String matName = mat.name().toLowerCase();
-            if (tier.equalsIgnoreCase("Leather") && matName.equals("cloth"))   return true;
-            if (tier.equalsIgnoreCase("Chain")   && matName.equals("chain"))   return true;
-            if (tier.equalsIgnoreCase("Iron")    && matName.equals("iron"))    return true;
-            if (tier.equalsIgnoreCase("Gold")    && matName.equals("gold"))    return true;
-            if (tier.equalsIgnoreCase("Diamond") && matName.equals("diamond")) return true;
+            boolean matches =
+                (tier.equalsIgnoreCase("Leather") && matName.equals("cloth"))   ||
+                (tier.equalsIgnoreCase("Chain")   && matName.equals("chain"))   ||
+                (tier.equalsIgnoreCase("Iron")    && matName.equals("iron"))    ||
+                (tier.equalsIgnoreCase("Gold")    && matName.equals("gold"))    ||
+                (tier.equalsIgnoreCase("Diamond") && matName.equals("diamond"));
+            if (matches) count++;
         }
-        return false;
+        return count;
+    }
+
+    private boolean playerHasArmorTier(EntityPlayer p, String tier) {
+        if (tier.equals("Any")) return true;
+        // Target must have at least 2 pieces of the specified tier
+        if (countArmorPieces(p, tier) < 2) return false;
+        // And must NOT have 2 or more diamond pieces (to avoid locking onto diamond players)
+        if (!tier.equalsIgnoreCase("Diamond") && countArmorPieces(p, "Diamond") >= 2) return false;
+        return true;
     }
 
     private boolean isValidAaTarget(EntityPlayer p) {
