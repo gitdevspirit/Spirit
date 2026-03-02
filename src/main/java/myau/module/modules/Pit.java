@@ -2,6 +2,7 @@ package myau.module.modules;
 
 import myau.Myau;
 import myau.mixin.IAccessorKeyBinding;
+import myau.mixin.IAccessorRenderManager;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.KeyEvent;
@@ -19,7 +20,9 @@ import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.EnumChatFormatting;
+import org.lwjgl.opengl.GL11;
 import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.Vec3;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
@@ -27,6 +30,9 @@ import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
 import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.Stack;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -103,6 +109,14 @@ public class Pit extends Module {
     public final SliderSetting   agFov       = register(new SliderSetting("  FOV",         30,  1,  360,   1,   () -> autoGrinder.getValue()));
 
     private int agTicks = 0;
+
+    // ── Gamble submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting gamble          = register(new BooleanSetting("Gamble", false));
+    public final BooleanSetting gambleGiantStop = register(new BooleanSetting("  Giant Ticket Stop", true, () -> gamble.getValue()));
+
+    private final List<Vec3> gambleWaypoints = new ArrayList<>();
+    private boolean gambleTracking = false;
 
     public Pit() {
         super("Pit", false);
@@ -344,6 +358,32 @@ public class Pit extends Module {
                 }
             }
         }
+
+        // ── Gamble chat parsing ───────────────────────────────────────────────
+        if (gamble.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            if (raw.contains("MAJOR EVENT! GAMBLE starting now")) {
+                gambleTracking = true;
+            } else if (raw.contains("PIT EVENT ENDED: GAMBLE!")) {
+                gambleTracking = false;
+                gambleWaypoints.clear();
+            } else if (gambleTracking) {
+                Matcher m = Pattern.compile("-?\d+\s-?\d+\s-?\d+").matcher(raw);
+                while (m.find()) {
+                    String[] c = m.group().split(" ");
+                    try {
+                        gambleWaypoints.add(new Vec3(
+                            Integer.parseInt(c[0]),
+                            Integer.parseInt(c[1]),
+                            Integer.parseInt(c[2])));
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (gambleGiantStop.getValue() && raw.contains("GIANT TICKET! Claimed By")) {
+                gambleTracking = false;
+                gambleWaypoints.clear();
+            }
+        }
     }
 
     @EventTarget
@@ -373,6 +413,38 @@ public class Pit extends Module {
             mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"     + String.format("%.1f", stXP),          sx + 5, sy + 50, 0xFFFFFFFF);
             mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"   + String.format("%.1f", stGold),        sx + 5, sy + 65, 0xFFFFFFFF);
             mc.fontRendererObj.drawStringWithShadow("Time: "         + formatStreakTime(elapsed),             sx + 5, sy + 80, 0xFFFFFFFF);
+        }
+    }
+
+    @EventTarget
+    public void onRender3D(Render3DEvent event) {
+        if (!isEnabled() || !gamble.getValue() || !gambleTracking || gambleWaypoints.isEmpty()) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+
+        for (Vec3 wp : gambleWaypoints) {
+            double rx = wp.xCoord - rm.getRenderPosX();
+            double ry = wp.yCoord - rm.getRenderPosY();
+            double rz = wp.zCoord - rm.getRenderPosZ();
+
+            GL11.glPushMatrix();
+            GL11.glTranslated(rx, ry + 0.5, rz);
+            GL11.glRotatef(-mc.getRenderManager().playerViewY, 0f, 1f, 0f);
+            GL11.glRotatef(mc.getRenderManager().playerViewX, 1f, 0f, 0f);
+            float scale = 0.02666667f;
+            GL11.glScalef(-scale, -scale, scale);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            String label = "Gamble " + (int)wp.xCoord + " " + (int)wp.yCoord + " " + (int)wp.zCoord;
+            int w = mc.fontRendererObj.getStringWidth(label) / 2;
+            mc.fontRendererObj.drawStringWithShadow(label, -w, 0, 0xFFFFFF);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glPopMatrix();
         }
     }
 
