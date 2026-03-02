@@ -85,17 +85,18 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Endstone: 12 block defence - ground level first, then stack on top
+        // Endstone: 12 block defence
         {
-            // Ground level sides first (these are the supports for y=1 blocks)
+            // Ground level sides first (supports for y=1)
             {"end_stone", -1, 0,  0}, {"end_stone",  1, 0,  0},
             {"end_stone", -1, 0,  1}, {"end_stone",  1, 0,  1},
-            // Back wall at y=0 (support for back y=1 blocks)
-            {"end_stone", -1, 0, -1}, {"end_stone",  0, 0, -1}, {"end_stone",  1, 0, -1},
-            // Now y=1 on top of the ground blocks
+            // y=1 on top of side blocks
             {"end_stone", -1, 1,  0}, {"end_stone",  1, 1,  0},
             {"end_stone", -1, 1,  1}, {"end_stone",  1, 1,  1},
-            {"end_stone",  0, 1, -1},
+            // Top over the bed head
+            {"end_stone",  0, 1,  0},
+            // Back wall (y=1, behind head, using ground as support)
+            {"end_stone", -1, 1, -1}, {"end_stone",  0, 1, -1}, {"end_stone",  1, 1, -1},
         },
         // Doubles: two thick rows on sides + front/back caps
         {
