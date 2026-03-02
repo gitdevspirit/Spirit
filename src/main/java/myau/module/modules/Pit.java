@@ -1,6 +1,7 @@
 package myau.module.modules;
 
 import myau.Myau;
+import myau.mixin.IAccessorKeyBinding;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.KeyEvent;
@@ -18,6 +19,7 @@ import net.minecraft.network.play.client.C01PacketChatMessage;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
@@ -92,8 +94,23 @@ public class Pit extends Module {
     private String amPendingSolution = null;
     private static final ScheduledExecutorService amScheduler = Executors.newScheduledThreadPool(1);
 
+    // ── AutoGrinder submodule ─────────────────────────────────────────────────
+
+    public final BooleanSetting autoGrinder  = register(new BooleanSetting("AutoGrinder", false));
+    public final DropdownSetting agSorting   = register(new DropdownSetting("  Sorting",    0, () -> autoGrinder.getValue(), "Distance", "Health"));
+    public final DropdownSetting agMode      = register(new DropdownSetting("  Mode",       0, () -> autoGrinder.getValue(), "Legit", "Blatant"));
+    public final SliderSetting   agRange     = register(new SliderSetting("  Attack Range", 4.0, 3.0, 6.0, 0.1, () -> autoGrinder.getValue()));
+    public final SliderSetting   agFov       = register(new SliderSetting("  FOV",         30,  1,  360,   1,   () -> autoGrinder.getValue()));
+
+    private int agTicks = 0;
+
     public Pit() {
         super("Pit", false);
+    }
+
+    @Override
+    public void onDisabled() {
+        if (mc.thePlayer != null) agSetKeys(false);
     }
 
     // ── Aim Assist logic ──────────────────────────────────────────────────────
@@ -221,6 +238,37 @@ public class Pit extends Module {
                 }
             }
         }
+
+        // ── AutoGrinder ───────────────────────────────────────────────────────
+        if (autoGrinder.getValue()) {
+            agTicks++;
+            EntityLivingBase agTarget = agGetTarget();
+            if (agTarget == null) {
+                agSetKeys(false);
+            } else {
+                // Rotations
+                double[] yawPitch = agGetYawPitch(agTarget);
+                float targetYaw   = (float) yawPitch[0];
+                float targetPitch = (float) yawPitch[1];
+                if (agMode.getValue().equals("Legit")) {
+                    float smoothYaw   = mc.thePlayer.rotationYaw   + 0.1f * (targetYaw   - mc.thePlayer.rotationYaw);
+                    float smoothPitch = mc.thePlayer.rotationPitch + 0.1f * (targetPitch - mc.thePlayer.rotationPitch);
+                    Myau.rotationManager.setRotation(smoothYaw, smoothPitch, 1, false);
+                } else {
+                    Myau.rotationManager.setRotation(targetYaw, targetPitch, 1, true);
+                }
+                agSetKeys(true);
+                // Attack every 2 ticks within range
+                if (agTicks % 2 == 0 && mc.thePlayer.getDistanceToEntity(agTarget) <= agRange.getValue()) {
+                    double yawDiff   = Math.abs(mc.thePlayer.rotationYaw   - targetYaw);
+                    double pitchDiff = Math.abs(mc.thePlayer.rotationPitch - targetPitch);
+                    if (agMode.getValue().equals("Blatant") || (yawDiff <= agFov.getValue() && pitchDiff <= agFov.getValue())) {
+                        PlayerUtil.attackEntity(agTarget);
+                        mc.thePlayer.swingItem();
+                    }
+                }
+            }
+        }
     }
 
     @EventTarget
@@ -335,6 +383,48 @@ public class Pit extends Module {
                 && event.getKey() == mc.gameSettings.keyBindAttack.getKeyCode()
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
+        }
+    }
+
+    // ── AutoGrinder helpers ───────────────────────────────────────────────────
+
+    private EntityLivingBase agGetTarget() {
+        if (mc.theWorld == null || mc.thePlayer == null) return null;
+        List<EntityLivingBase> targets = mc.theWorld.loadedEntityList.stream()
+            .filter(e -> e instanceof EntityLivingBase && e != mc.thePlayer)
+            .map(e -> (EntityLivingBase) e)
+            .filter(e -> !e.isDead && e.getHealth() > 0)
+            .collect(Collectors.toList());
+
+        if (agSorting.getValue().equals("Health")) {
+            return targets.stream()
+                .min(Comparator.comparing(EntityLivingBase::getHealth))
+                .orElse(null);
+        } else {
+            return targets.stream()
+                .min(Comparator.comparingDouble(e -> mc.thePlayer.getDistanceToEntity(e)))
+                .orElse(null);
+        }
+    }
+
+    private double[] agGetYawPitch(EntityLivingBase target) {
+        double dx = target.posX - mc.thePlayer.posX;
+        double dy = target.posY + target.getEyeHeight() - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
+        double dz = target.posZ - mc.thePlayer.posZ;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double pitch = -Math.asin(dy / dist) * (180.0 / Math.PI);
+        double yaw   =  Math.atan2(dz, dx)   * (180.0 / Math.PI) - 90.0;
+        return new double[]{yaw, pitch};
+    }
+
+    private void agSetKeys(boolean on) {
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindForward).setPressed(on);
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindAttack).setPressed(on);
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindJump).setPressed(on);
+        if (!on) {
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindBack).setPressed(false);
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindLeft).setPressed(false);
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindRight).setPressed(false);
         }
     }
 
