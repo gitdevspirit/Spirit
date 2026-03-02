@@ -14,6 +14,14 @@ public class SliderSetting extends Setting {
         this.step  = step;
     }
 
+    public SliderSetting(String name, double value, double min, double max, double step, java.util.function.BooleanSupplier visibility) {
+        super(name, visibility);
+        this.value = value;
+        this.min   = min;
+        this.max   = max;
+        this.step  = step;
+    }
+
     public double getValue() { return value; }
     public double getMin()   { return min; }
     public double getMax()   { return max; }
