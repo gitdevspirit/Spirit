@@ -57,6 +57,7 @@ public class NameTags extends Module {
 
     // Info layers
     public final BooleanSetting  armor            = new BooleanSetting("Armor",            true);
+    public final BooleanSetting  enchants         = new BooleanSetting("Enchants",         true);
     public final BooleanSetting  effects          = new BooleanSetting("Effects",          true);
 
     // Target filters
@@ -81,6 +82,7 @@ public class NameTags extends Module {
         register(distanceMode);
         register(healthMode);
         register(armor);
+        register(enchants);
         register(effects);
         register(players);
         register(friends);
@@ -237,6 +239,16 @@ public class NameTags extends Module {
                         int offset = renderingItems.size() * -8;
                         for (int i = 0; i < renderingItems.size(); i++) {
                             RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
+                            if (enchants.getValue()) {
+                                GlStateManager.pushMatrix();
+                                float enchScale = 0.45f;
+                                GlStateManager.scale(enchScale, enchScale, 1f);
+                                RenderUtil.renderEnchantmentText(renderingItems.get(i),
+                                        (offset + i * 16) * enchScale,
+                                        (-height - 16 - 8) * enchScale,
+                                        enchScale);
+                                GlStateManager.popMatrix();
+                            }
                         }
                         height += 16;
                     }
