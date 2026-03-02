@@ -24,7 +24,7 @@ import java.util.*;
 public class AutoBedDefence extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final DropdownSetting defense     = register(new DropdownSetting("Defense",         0, "Compact", "Wide", "Wool Layer", "Obsidian", "Endstone", "Doubles"));
+    public final DropdownSetting defense     = register(new DropdownSetting("Defense",         0, "Compact", "Wide", "Wool Layer", "Obsidian", "Endstone"));
     public final BooleanSetting  onlyTopBeds = register(new BooleanSetting("Only Top Beds",    true));
     public final SliderSetting   delaySwap   = register(new SliderSetting("Delay After Swap",  0, 0, 10, 1));
     public final SliderSetting   delayAim    = register(new SliderSetting("Delay After Aim",   2, 0, 10, 1));
@@ -85,29 +85,12 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Endstone: 12 block defence
+        // Endstone: sides + front/back extensions, all flat at y=0
         {
-            // Ground level sides first (supports for y=1)
-            {"end_stone", -1, 0,  0}, {"end_stone",  1, 0,  0},
-            {"end_stone", -1, 0,  1}, {"end_stone",  1, 0,  1},
-            // y=1 on top of side blocks
-            {"end_stone", -1, 1,  0}, {"end_stone",  1, 1,  0},
-            {"end_stone", -1, 1,  1}, {"end_stone",  1, 1,  1},
-            // Top over the bed head
-            {"end_stone",  0, 1,  0},
-            // Back wall (y=1, behind head, using ground as support)
-            {"end_stone", -1, 1, -1}, {"end_stone",  0, 1, -1}, {"end_stone",  1, 1, -1},
-        },
-        // Doubles: two thick rows on sides + front/back caps
-        {
-            // Left column (3 wide)
             {"end_stone", -1, 0, -1}, {"end_stone", -1, 0,  0}, {"end_stone", -1, 0,  1},
-            // Right column (3 wide)
             {"end_stone",  1, 0, -1}, {"end_stone",  1, 0,  0}, {"end_stone",  1, 0,  1},
-            // Front/back extended arms
-            {"end_stone",  0, 0, -1}, {"end_stone",  0, 0,  1},
-            {"end_stone", -1, 0, -2}, {"end_stone",  0, 0, -2}, {"end_stone",  1, 0, -2},
-            {"end_stone", -1, 0,  2}, {"end_stone",  0, 0,  2}, {"end_stone",  1, 0,  2},
+            {"end_stone",  0, 0, -2},
+            {"end_stone",  0, 0,  2},
         },
     };
 
