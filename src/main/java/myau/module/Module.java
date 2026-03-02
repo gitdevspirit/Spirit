@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import myau.Myau;
 import myau.module.modules.HUD;
+import myau.module.modules.Notifications;
 import myau.util.KeyBindUtil;
 
 public abstract class Module {
@@ -75,9 +76,12 @@ public abstract class Module {
 
          try {
             if (Myau.notificationManager != null) {
-               String action = this.enabled ? "was toggled successfully" : "was untoggled successfully";
-               int color = this.enabled ? '\uff00' : 16711680;
-               Myau.notificationManager.add(this.getName() + " " + action, color);
+               Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
+               if (notifModule != null && notifModule.isEnabled()) {
+                  String action = this.enabled ? "toggled" : "untoggled";
+                  long dur = (long)(notifModule.duration.getValue() * 1000.0);
+                  Myau.notificationManager.add(this.getName() + " " + action, dur, this.enabled ? 0xE991B8 : 0x666666);
+               }
             }
          } catch (Exception var4) {
          }
