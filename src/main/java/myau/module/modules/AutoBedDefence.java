@@ -85,19 +85,17 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Endstone: 12 block defence - back wall + side arms + cover over bed
+        // Endstone: 12 block defence - ground level first, then stack on top
         {
-            // Back wall (3 wide, y=1, behind bed head)
-            {"end_stone", -1, 1, -1}, {"end_stone",  0, 1, -1}, {"end_stone",  1, 1, -1},
-            // Over bed head (y=1)
-            {"end_stone", -1, 1,  0}, {"end_stone",  1, 1,  0},
-            // Over bed foot (y=1)
-            {"end_stone", -1, 1,  1}, {"end_stone",  1, 1,  1},
-            // Side blocks at ground level (y=0)
+            // Ground level sides first (these are the supports for y=1 blocks)
             {"end_stone", -1, 0,  0}, {"end_stone",  1, 0,  0},
             {"end_stone", -1, 0,  1}, {"end_stone",  1, 0,  1},
-            // Front block
-            {"end_stone",  0, 1,  2},
+            // Back wall at y=0 (support for back y=1 blocks)
+            {"end_stone", -1, 0, -1}, {"end_stone",  0, 0, -1}, {"end_stone",  1, 0, -1},
+            // Now y=1 on top of the ground blocks
+            {"end_stone", -1, 1,  0}, {"end_stone",  1, 1,  0},
+            {"end_stone", -1, 1,  1}, {"end_stone",  1, 1,  1},
+            {"end_stone",  0, 1, -1},
         },
         // Doubles: two thick rows on sides + front/back caps
         {
@@ -170,12 +168,13 @@ public class AutoBedDefence extends Module {
             bedOrigin = bed;
             int meta = mc.theWorld.getBlockState(bed).getBlock()
                     .getMetaFromState(mc.theWorld.getBlockState(bed)) & 0xF;
+            // Head block meta: 8=south, 9=west, 10=north, 11=east
             switch (meta) {
-                case 10: case 0: lockedDirection = "north"; break;
-                case 8:  case 2: lockedDirection = "south"; break;
-                case 9:  case 3: lockedDirection = "west";  break;
-                case 11: case 1: lockedDirection = "east";  break;
-                default:         lockedDirection = "north"; break;
+                case 10: lockedDirection = "north"; break;
+                case 8:  lockedDirection = "south"; break;
+                case 9:  lockedDirection = "west";  break;
+                case 11: lockedDirection = "east";  break;
+                default: lockedDirection = "north"; break;
             }
             started = true;
         }
@@ -392,6 +391,10 @@ public class AutoBedDefence extends Module {
                 for (int z = p.getZ() - range; z <= p.getZ() + range; z++) {
                     BlockPos bp = new BlockPos(x, y, z);
                     if (mc.theWorld.getBlockState(bp).getBlock() != Blocks.bed) continue;
+                    int meta = mc.theWorld.getBlockState(bp).getBlock()
+                            .getMetaFromState(mc.theWorld.getBlockState(bp)) & 0xF;
+                    // Only consider head blocks (meta 8-11), not foot blocks (0-7)
+                    if (meta < 8) continue;
                     double d = bp.distanceSq(p.getX(), p.getY(), p.getZ());
                     if (d < bestDist) { bestDist = d; best = bp; }
                 }
