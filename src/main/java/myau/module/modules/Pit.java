@@ -118,6 +118,21 @@ public class Pit extends Module {
     private final List<Vec3> gambleWaypoints = new ArrayList<>();
     private boolean gambleTracking = false;
 
+    // ── Prestige List submodule ───────────────────────────────────────────────
+
+    public final BooleanSetting prestigeList   = register(new BooleanSetting("Prestige List",     false));
+    public final SliderSetting  plX            = register(new SliderSetting("  PL X",    5,   0, 500, 1,  () -> prestigeList.getValue()));
+    public final SliderSetting  plY            = register(new SliderSetting("  PL Y",   50,   0, 300, 1,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP0           = register(new BooleanSetting("  Prestige 0",     true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP1_4         = register(new BooleanSetting("  Prestige 1-4",   true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP5_9         = register(new BooleanSetting("  Prestige 5-9",   true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP10_14       = register(new BooleanSetting("  Prestige 10-14", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP15_19       = register(new BooleanSetting("  Prestige 15-19", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP20_24       = register(new BooleanSetting("  Prestige 20-24", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP25_29       = register(new BooleanSetting("  Prestige 25-29", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP30_34       = register(new BooleanSetting("  Prestige 30-34", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP35_39       = register(new BooleanSetting("  Prestige 35-39", true,  () -> prestigeList.getValue()));
+
     public Pit() {
         super("Pit", false);
     }
@@ -368,7 +383,7 @@ public class Pit extends Module {
                 gambleTracking = false;
                 gambleWaypoints.clear();
             } else if (gambleTracking) {
-                Matcher m = Pattern.compile("-?\d+\s-?\d+\s-?\d+").matcher(raw);
+                Matcher m = Pattern.compile("-?\\d+\\s-?\\d+\\s-?\\d+").matcher(raw);
                 while (m.find()) {
                     String[] c = m.group().split(" ");
                     try {
@@ -414,6 +429,24 @@ public class Pit extends Module {
             mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"   + String.format("%.1f", stGold),        sx + 5, sy + 65, 0xFFFFFFFF);
             mc.fontRendererObj.drawStringWithShadow("Time: "         + formatStreakTime(elapsed),             sx + 5, sy + 80, 0xFFFFFFFF);
         }
+
+        // ── Prestige List HUD ─────────────────────────────────────────────────
+        if (prestigeList.getValue() && mc.theWorld != null) {
+            float px = (float) plX.getValue();
+            float py = (float) plY.getValue();
+            int oy = 0;
+            for (EntityPlayer player : mc.theWorld.playerEntities) {
+                if (player == mc.thePlayer) continue;
+                if (!plIsMatch(player)) continue;
+                String name     = player.getDisplayName().getUnformattedText();
+                String armor    = plGetArmor(player);
+                String location = player.posY >= 85.0 ? "§aIn Spawn" : "§cDown";
+                int color = armor.equals("Chain") ? 0xFFAAAAAA : armor.equals("Diamond") ? 0xFF5555FF : 0xFFFFFFFF;
+                String line = name + " - " + armor + " " + location;
+                mc.fontRendererObj.drawStringWithShadow(line, px, py + oy, color);
+                oy += mc.fontRendererObj.FONT_HEIGHT + 1;
+            }
+        }
     }
 
     @EventTarget
@@ -456,6 +489,32 @@ public class Pit extends Module {
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
+    }
+
+    // ── Prestige List helpers ─────────────────────────────────────────────────
+
+    private boolean plIsMatch(EntityPlayer player) {
+        String name = player.getDisplayName().getFormattedText();
+        return (plP0.getValue()     && name.contains("§7["))
+            || (plP1_4.getValue()   && name.contains("§9["))
+            || (plP5_9.getValue()   && name.contains("§e["))
+            || (plP10_14.getValue() && name.contains("§6["))
+            || (plP15_19.getValue() && name.contains("§c["))
+            || (plP20_24.getValue() && name.contains("§5["))
+            || (plP25_29.getValue() && name.contains("§d["))
+            || (plP30_34.getValue() && name.contains("§f["))
+            || (plP35_39.getValue() && name.contains("§b["));
+    }
+
+    private String plGetArmor(EntityPlayer player) {
+        for (int i = 0; i < 4; i++) {
+            ItemStack s = player.getCurrentArmor(i);
+            if (s == null || !(s.getItem() instanceof ItemArmor)) continue;
+            ItemArmor.ArmorMaterial mat = ((ItemArmor) s.getItem()).getArmorMaterial();
+            if (mat == ItemArmor.ArmorMaterial.CHAIN)   return "Chain";
+            if (mat == ItemArmor.ArmorMaterial.DIAMOND) return "Diamond";
+        }
+        return "None";
     }
 
     // ── AutoGrinder helpers ───────────────────────────────────────────────────
