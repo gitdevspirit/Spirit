@@ -5,6 +5,7 @@ import myau.event.EventTarget;
 import myau.events.Render3DEvent;
 import myau.mixin.IAccessorRenderManager;
 import myau.module.BooleanSetting;
+import myau.module.SliderSetting;
 import myau.module.Module;
 import myau.util.RenderUtil;
 import net.minecraft.block.Block;
@@ -27,15 +28,16 @@ import java.util.stream.Collectors;
 public class ItemESP extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final BooleanSetting outline  = new BooleanSetting("Outline",  true);
-    public final BooleanSetting emeralds = new BooleanSetting("Emeralds", true);
+    public final BooleanSetting outline   = new BooleanSetting("Outline",    true);
+    public final SliderSetting  bgOpacity = new SliderSetting("BG Opacity", 67, 0, 100, 1);
+    public final BooleanSetting emeralds  = new BooleanSetting("Emeralds",  true);
     public final BooleanSetting diamonds = new BooleanSetting("Diamonds", true);
     public final BooleanSetting gold     = new BooleanSetting("Gold",     true);
     public final BooleanSetting iron     = new BooleanSetting("Iron",     true);
 
     public ItemESP() {
         super("ItemESP", false);
-        register(outline);
+        register(outline); register(bgOpacity);
         register(emeralds); register(diamonds);
         register(gold);     register(iron);
     }
@@ -215,7 +217,8 @@ public class ItemESP extends Module {
             float th = mc.fontRendererObj.FONT_HEIGHT / 2f;
 
             // Dark background pill
-            int bgColor = 0xAA000000;
+            int bgAlpha = (int)(bgOpacity.getValue() / 100.0 * 255.0);
+            int bgColor = (bgAlpha << 24) | 0x000000;
             float pad = 2f;
             drawFlatRect(-tw - pad, -th - pad, tw + pad, th + pad, bgColor);
 
