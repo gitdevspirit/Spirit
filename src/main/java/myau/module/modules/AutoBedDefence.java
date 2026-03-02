@@ -85,12 +85,17 @@ public class AutoBedDefence extends Module {
             {"obsidian",  1, 2,  1}, {"obsidian", -1, 2,  1},
             {"obsidian",  1, 2, -1}, {"obsidian", -1, 2, -1},
         },
-        // Endstone: sides + front/back extensions, all flat at y=0
+        // Endstone: 3 wide sides covering head+foot, front/back arms
+        // z=0 = bed head, z=1 = bed foot (always, after rotation)
         {
-            {"end_stone", -1, 0, -1}, {"end_stone", -1, 0,  0}, {"end_stone", -1, 0,  1},
-            {"end_stone",  1, 0, -1}, {"end_stone",  1, 0,  0}, {"end_stone",  1, 0,  1},
-            {"end_stone",  0, 0, -2}, {"end_stone",  0, 0, -3},
-            {"end_stone",  0, 0,  2},
+            // Left side (covering head z=0, foot z=1, plus one each side)
+            {"end_stone", -1, 0, -1}, {"end_stone", -1, 0,  0}, {"end_stone", -1, 0,  1}, {"end_stone", -1, 0,  2},
+            // Right side
+            {"end_stone",  1, 0, -1}, {"end_stone",  1, 0,  0}, {"end_stone",  1, 0,  1}, {"end_stone",  1, 0,  2},
+            // Behind head
+            {"end_stone",  0, 0, -2},
+            // In front of foot
+            {"end_stone",  0, 0,  3},
         },
     };
 
