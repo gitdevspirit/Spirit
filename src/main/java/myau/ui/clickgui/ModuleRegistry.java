@@ -73,11 +73,10 @@ public class ModuleRegistry {
         renderModules.add(Myau.moduleManager.getModule(Indicators.class));
         renderModules.add(Myau.moduleManager.getModule(BedESP.class));
         renderModules.add(Myau.moduleManager.getModule(ItemESP.class));
-        renderModules.add(Myau.moduleManager.getModule(InfoHUD.class));
         renderModules.add(Myau.moduleManager.getModule(ViewClip.class));
-        renderModules.add(Myau.moduleManager.getModule(Session.class));
         renderModules.add(Myau.moduleManager.getModule(NoHurtCam.class));
         renderModules.add(Myau.moduleManager.getModule(HUD.class));
+        renderModules.add(Myau.moduleManager.getModule(InfoHUD.class));
         renderModules.add(Myau.moduleManager.getModule(GuiModule.class));
         renderModules.add(Myau.moduleManager.getModule(ChestESP.class));
         renderModules.add(Myau.moduleManager.getModule(Trajectories.class));
@@ -95,6 +94,7 @@ public class ModuleRegistry {
         playerModules.add(Myau.moduleManager.getModule(InvWalk.class));
         playerModules.add(Myau.moduleManager.getModule(Scaffold.class));
         playerModules.add(Myau.moduleManager.getModule(AutoBlockIn.class));
+        playerModules.add(Myau.moduleManager.getModule(Clutch.class));
         playerModules.add(Myau.moduleManager.getModule(AutoSwap.class));
         playerModules.add(Myau.moduleManager.getModule(SpeedMine.class));
         playerModules.add(Myau.moduleManager.getModule(FastPlace.class));
@@ -106,7 +106,6 @@ public class ModuleRegistry {
 
         miscModules = new ArrayList<>();
         miscModules.add(Myau.moduleManager.getModule(Spammer.class));
-        miscModules.add(Myau.moduleManager.getModule(AC.class));
         miscModules.add(Myau.moduleManager.getModule(BedNuker.class));
         miscModules.add(Myau.moduleManager.getModule(BedTracker.class));
         miscModules.add(Myau.moduleManager.getModule(LightningTracker.class));
@@ -116,10 +115,13 @@ public class ModuleRegistry {
         miscModules.add(Myau.moduleManager.getModule(AntiObfuscate.class));
         miscModules.add(Myau.moduleManager.getModule(AutoAnduril.class));
         miscModules.add(Myau.moduleManager.getModule(InventoryClicker.class));
-        miscModules.add(Myau.moduleManager.getModule(ItemAlerts.class));
         miscModules.add(Myau.moduleManager.getModule(Disabler.class));
         miscModules.add(Myau.moduleManager.getModule(ClientSpoofer.class));
         miscModules.add(Myau.moduleManager.getModule(AutoHypixel.class));
+        miscModules.add(Myau.moduleManager.getModule(Session.class));
+        miscModules.add(Myau.moduleManager.getModule(Notifications.class));
+        miscModules.add(Myau.moduleManager.getModule(AC.class));
+        miscModules.add(Myau.moduleManager.getModule(ItemAlerts.class));
         miscModules.sort(comparator);
     }
 }
