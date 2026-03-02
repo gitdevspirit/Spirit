@@ -122,6 +122,7 @@ public class ModuleRegistry {
         miscModules.add(Myau.moduleManager.getModule(Notifications.class));
         miscModules.add(Myau.moduleManager.getModule(AC.class));
         miscModules.add(Myau.moduleManager.getModule(ItemAlerts.class));
+        miscModules.add(Myau.moduleManager.getModule(Pit.class));
         miscModules.sort(comparator);
     }
 }
