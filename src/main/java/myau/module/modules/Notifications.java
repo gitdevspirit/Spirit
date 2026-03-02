@@ -4,6 +4,8 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.events.Render2DEvent;
 import myau.management.NotificationManager;
+import myau.module.BooleanSetting;
+import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.ui.clickgui.RoundedUtils;
@@ -16,19 +18,24 @@ import java.util.List;
 public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting duration = register(new SliderSetting("Duration",    3.0, 1.0, 8.0, 0.5));
-    public final SliderSetting width    = register(new SliderSetting("Width",       160,  80, 300,   5));
-    public final SliderSetting corner   = register(new SliderSetting("Corner",        5,   2,  12,   1));
+    public final SliderSetting   duration  = register(new SliderSetting("Duration",       3.0,  1.0,  8.0, 0.5));
+    public final SliderSetting   scale     = register(new SliderSetting("Scale",           1.0,  0.5,  2.0, 0.05));
+    public final DropdownSetting anchorX   = register(new DropdownSetting("Anchor X",       2,  "Left", "Center", "Right"));
+    public final DropdownSetting anchorY   = register(new DropdownSetting("Anchor Y",       2,  "Top", "Center", "Bottom"));
+    public final SliderSetting   offsetX   = register(new SliderSetting("X Offset",         0, -500,  500,  1));
+    public final SliderSetting   offsetY   = register(new SliderSetting("Y Offset",         0, -500,  500,  1));
+    public final BooleanSetting  slideAnim = register(new BooleanSetting("Slide Anim",   true));
 
-    private static final int ACCENT     = 0xFFE991B8;
-    private static final int BG         = 0xDD1A1A1F;
-    private static final int BAR_ON     = 0xFFE991B8;
-    private static final int BAR_OFF    = 0xFF666666;
-    private static final int PAD        = 8;
-    private static final int NOTIF_H    = 36;
-    private static final int GAP        = 6;
-    private static final float ANIM_IN  = 200f;  // ms to slide in
-    private static final float ANIM_OUT = 300f;  // ms to slide out before expiry
+    private static final int PILL_ON   = 0xFFE991B8;
+    private static final int PILL_OFF  = 0xFF555555;
+    private static final int PILL_TEXT = 0xFF1A0D12;
+    private static final int BG        = 0xCC18181E;
+    private static final int MSG_ON    = 0xFFE991B8;
+    private static final int MSG_OFF   = 0xFF888888;
+
+    private static final float ANIM_IN  = 180f;
+    private static final float ANIM_OUT = 250f;
+    private static final int   GAP      = 5;
 
     public Notifications() { super("Notifications", true); }
 
@@ -37,78 +44,112 @@ public class Notifications extends Module {
         if (mc.thePlayer == null) return;
         if (Myau.notificationManager == null) return;
 
+        List<NotificationManager.NotificationEntry> active = Myau.notificationManager.getActive();
+        if (active.isEmpty()) return;
+
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth();
         int sh = sr.getScaledHeight();
 
-        int notifW = (int) width.getValue();
-        float durationMs = (float)(duration.getValue() * 1000.0);
+        float sf     = (float) scale.getValue();
+        int   fontH  = mc.fontRendererObj.FONT_HEIGHT;
+        int   padV   = (int)(3 * sf);
+        int   padH   = (int)(6 * sf);
+        int   notifH = (int)((fontH + padV * 2) * sf);
+        int   pill2pad = (int)(5 * sf);
 
-        List<NotificationManager.NotificationEntry> active = Myau.notificationManager.getActive();
+        // Measure total stack height for centering
+        int totalH = active.size() * notifH + Math.max(0, active.size() - 1) * GAP;
 
-        // Draw from bottom up
-        int baseY = sh - 10;
+        // Base anchor
+        float baseX, baseY;
+        switch (anchorX.getIndex()) {
+            case 0:  baseX = 10f; break;
+            case 1:  baseX = sw / 2f; break;
+            default: baseX = sw - 10f; break;
+        }
+        switch (anchorY.getIndex()) {
+            case 0:  baseY = 10f; break;
+            case 1:  baseY = sh / 2f - totalH / 2f; break;
+            default: baseY = sh - 10f; break;
+        }
+        baseX += (float) offsetX.getValue();
+        baseY += (float) offsetY.getValue();
 
-        for (int i = active.size() - 1; i >= 0; i--) {
+        boolean stackUp = anchorY.getIndex() == 2;
+        boolean fromRight = anchorX.getIndex() == 2;
+
+        for (int i = 0; i < active.size(); i++) {
             NotificationManager.NotificationEntry n = active.get(i);
+            boolean on = !n.message.contains("untoggled");
 
-            long age   = n.getAge();
-            long total = n.durationMillis > 0 ? n.durationMillis : (long) durationMs;
+            String[] parts = n.message.split(" ");
+            String pillText = parts.length > 0 ? parts[0].toUpperCase() : n.message.toUpperCase();
+            String msgText  = on ? "enabled" : "disabled";
 
-            // Slide-in / slide-out X offset
-            float slideX;
-            if (age < ANIM_IN) {
-                // sliding in from right
-                float t = age / ANIM_IN;
-                t = 1f - (1f - t) * (1f - t); // ease out
-                slideX = notifW * (1f - t);
-            } else if (total - age < ANIM_OUT) {
-                // sliding out to right
-                float t = (total - age) / ANIM_OUT;
-                t = t * t; // ease in
-                slideX = notifW * (1f - t);
+            // Widths
+            int pillTextW = (int)(mc.fontRendererObj.getStringWidth(pillText) * sf);
+            int pillW     = pillTextW + pill2pad * 2;
+            int msgW      = (int)(mc.fontRendererObj.getStringWidth(msgText) * sf);
+            int notifW    = (int)(4 * sf) + pillW + (int)(8 * sf) + msgW + padH;
+
+            // Y per notification
+            float ny;
+            if (stackUp) {
+                ny = baseY - notifH - i * (notifH + GAP);
             } else {
-                slideX = 0f;
+                ny = baseY + i * (notifH + GAP);
             }
 
-            int x = (int)(sw - notifW - 10 + slideX);
-            int y = baseY - NOTIF_H;
+            // X (right-anchored by default)
+            float nx;
+            switch (anchorX.getIndex()) {
+                case 0:  nx = baseX; break;
+                case 1:  nx = baseX - notifW / 2f; break;
+                default: nx = baseX - notifW; break;
+            }
 
-            float cr = (float)(int) corner.getValue();
+            // Slide animation
+            if (slideAnim.getValue()) {
+                long age   = n.getAge();
+                long total = n.durationMillis;
+                float slideOff = 0f;
+                if (age < ANIM_IN) {
+                    float t = 1f - (float)Math.pow(1f - age / ANIM_IN, 2);
+                    slideOff = (notifW + 20) * (1f - t);
+                } else if (total > 0 && total - age < ANIM_OUT) {
+                    float t = (float)Math.pow((total - age) / ANIM_OUT, 2);
+                    slideOff = (notifW + 20) * (1f - t);
+                }
+                nx += fromRight ? slideOff : -slideOff;
+            }
+
+            float textY = ny + (notifH - fontH * sf) / 2f;
 
             // Background
-            RoundedUtils.drawRoundedRect(x, y, notifW, NOTIF_H, cr, BG);
+            RoundedUtils.drawRoundedRect(nx, ny, notifW, notifH, notifH / 2f, BG);
 
-            // Left accent bar (pink if enabled message, grey if disabled)
-            boolean wasEnabled = !n.message.contains("untoggled");
-            int barColor = wasEnabled ? BAR_ON : BAR_OFF;
-            RoundedUtils.drawRoundedRect(x, y, 3, NOTIF_H, cr, barColor);
+            // Pill
+            float pillX = nx + (int)(4 * sf);
+            float pillY = ny + (int)(3 * sf);
+            float pillH = notifH - (int)(6 * sf);
+            RoundedUtils.drawRoundedRect(pillX, pillY, pillW, pillH, pillH / 2f,
+                    on ? PILL_ON : PILL_OFF);
 
-            // Progress bar at bottom
-            float progress = Math.max(0f, 1f - (float) age / total);
-            int barW = (int)((notifW - 6) * progress);
-            if (barW > 0) {
-                RoundedUtils.drawRoundedRect(x + 3, y + NOTIF_H - 3, barW, 3, 1, barColor);
-            }
-
-            // Title: module name
-            String[] parts = n.message.split(" ");
-            String moduleName = parts.length > 0 ? parts[0] : n.message;
-            String statusText = wasEnabled ? "enabled" : "disabled";
-
+            // Text
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(770, 771);
-            GlStateManager.color(1f, 1f, 1f, 1f);
             GlStateManager.enableTexture2D();
+            GlStateManager.color(1f, 1f, 1f, 1f);
 
-            // Module name in accent/grey
-            int nameColor = wasEnabled ? ACCENT : 0xFF888888;
-            mc.fontRendererObj.drawString(moduleName, x + PAD, y + 8, nameColor, true);
+            // Pill label
+            mc.fontRendererObj.drawString(pillText,
+                    pillX + pill2pad, textY, PILL_TEXT, false);
 
-            // Status line in lighter grey
-            mc.fontRendererObj.drawString(statusText, x + PAD, y + 20, 0xFF555555, true);
-
-            baseY -= NOTIF_H + GAP;
+            // Message
+            mc.fontRendererObj.drawString(msgText,
+                    pillX + pillW + (int)(8 * sf), textY,
+                    on ? MSG_ON : MSG_OFF, false);
         }
     }
 }
