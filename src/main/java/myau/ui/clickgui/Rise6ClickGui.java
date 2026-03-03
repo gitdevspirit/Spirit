@@ -54,8 +54,14 @@ public class Rise6ClickGui extends GuiScreen {
         int W = sw(), H = sh();
 
 
-        // ── Background tint behind GUI ────────────────────────────────────────
-        RoundedUtils.drawRoundedRect(6, barY() - 4, W - 12, H - barY(), 8, 0x33000000);
+        // ── Full-screen dim ───────────────────────────────────────────────────
+        drawRect(0, 0, W, H, 0xAA000000);
+
+        // ── Panel background ──────────────────────────────────────────────────
+        RoundedUtils.drawRoundedRect(6, barY() - 4, W - 12, H - barY() + 4, 10, 0xDD0A0A0A);
+
+        // ── Top accent bar ────────────────────────────────────────────────────
+        RoundedUtils.drawRoundedRect(6, barY() - 4, W - 12, 2, 2, GuiColors.ACCENT);
 
         // ── Tab row ───────────────────────────────────────────────────────────
         for (int i = 0; i < TAB_NAMES.length; i++) {
