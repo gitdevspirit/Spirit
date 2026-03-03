@@ -1,6 +1,13 @@
 package myau.module.modules;
 
 import myau.Myau;
+import net.minecraft.nbt.NBTTagCompound;
+import net.minecraft.nbt.NBTTagList;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.enchantment.Enchantment;
+import net.minecraft.event.HoverEvent;
+import net.minecraft.util.ChatStyle;
+import net.minecraft.util.IChatComponent;
 import myau.util.ChatUtil;
 import myau.mixin.IAccessorKeyBinding;
 import myau.ui.clickgui.Rise6ClickGui;
@@ -13,6 +20,7 @@ import myau.events.Render2DEvent;
 import myau.events.Render3DEvent;
 import myau.events.LoadWorldEvent;
 import myau.events.TickEvent;
+import myau.events.UpdateEvent;
 import myau.module.BooleanSetting;
 import myau.module.KeybindSetting;
 import myau.module.DropdownSetting;
@@ -111,6 +119,7 @@ public class Pit extends Module {
     public final BooleanSetting stShowXP      = register(new BooleanSetting("  Show XP",       true,  () -> streak.getValue()));
     public final BooleanSetting stShowGold    = register(new BooleanSetting("  Show Gold",     true,  () -> streak.getValue()));
     public final BooleanSetting stShowTime    = register(new BooleanSetting("  Show Time",     true,  () -> streak.getValue()));
+    public final BooleanSetting stShowKD      = register(new BooleanSetting("  Show K/D",      true,  () -> streak.getValue()));
 
     // ── Events submodule ──────────────────────────────────────────────────────
 
@@ -127,6 +136,7 @@ public class Pit extends Module {
     private int                evTick       = 0;
 
     public  int   stKills   = 0;
+    public  int   stDeaths  = 0;
     public  int   stAssists = 0;
     private float stXP      = 0f;
     private float stGold    = 0f;
@@ -182,6 +192,15 @@ public class Pit extends Module {
 
     // Static so NameTags can read it
     public static final Set<String> kosNames = new HashSet<>();
+
+    // ── Death Recap submodule ─────────────────────────────────────────────────
+    public final BooleanSetting deathRecap   = register(new BooleanSetting("Death Recap", false));
+    public final KeybindSetting kb_deathRecap = register(new KeybindSetting("  Death Recap Key", 0));
+
+    // Death Recap state
+    private String   drKillerName   = "";
+    private ItemStack drKillerWeapon = null;
+    private float    drMyHP         = 0f;
 
     // ── Prestige List submodule ───────────────────────────────────────────────
 
@@ -437,8 +456,10 @@ public class Pit extends Module {
             String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
             if (raw.contains("DEATH!")) {
                 stPaused = true;
+                stDeaths++;
                 stKills = 0; stAssists = 0; stXP = 0f; stGold = 0f;
                 stTimer.reset();
+                if (deathRecap.getValue()) sendDeathRecap(raw);
             } else if (raw.contains("KILL!")) {
                 stKills++;
                 stPaused = false;
@@ -642,6 +663,7 @@ public class Pit extends Module {
             if (stShowXP.getValue())      rows++;
             if (stShowGold.getValue())    rows++;
             if (stShowTime.getValue())    rows++;
+            if (stShowKD.getValue())      rows++;
             int boxH = 8 + rows * sp;
             net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
 
@@ -651,7 +673,13 @@ public class Pit extends Module {
             if (stShowAssists.getValue()) { mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp; }
             if (stShowXP.getValue())      { mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp; }
             if (stShowGold.getValue())    { mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowTime.getValue())    { mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF); }
+            if (stShowTime.getValue())    { mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowKD.getValue()) {
+                String kdStr = stDeaths == 0
+                    ? (stKills == 0 ? "0.00" : String.valueOf(stKills) + ".00")
+                    : String.format("%.2f", (float) stKills / (float) stDeaths);
+                mc.fontRendererObj.drawStringWithShadow("\u00a7eK/D\u00a7f: \u00a7e" + kdStr, sx + 5, ly, 0xFFFFFFFF);
+            }
         }
 
 
@@ -740,10 +768,30 @@ public class Pit extends Module {
     public void onLoadWorld(LoadWorldEvent event) {
         btTargets.clear();
         // Also reset streak, gold req, events on lobby swap
-        stKills = 0; stAssists = 0; stXP = 0; stGold = 0;
+        stKills = 0; stAssists = 0; stXP = 0; stGold = 0; stDeaths = 0;
         stPaused = true;
         grGained = 0; grNeeded = 0;
         evList.clear(); evResponse = null; evPassIndex = 0;
+    }
+
+    @EventTarget
+    public void onUpdate(myau.events.UpdateEvent event) {
+        if (!isEnabled() || !deathRecap.getValue()) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        // Track closest recently-attacking player as likely killer
+        float myHP = mc.thePlayer.getHealth();
+        for (Object obj : mc.theWorld.playerEntities) {
+            if (!(obj instanceof EntityPlayer)) continue;
+            EntityPlayer p = (EntityPlayer) obj;
+            if (p == mc.thePlayer) continue;
+            if (p.deathTime > 0) continue;
+            // If player is within 8 blocks and swinging, record as potential killer
+            if (mc.thePlayer.getDistanceToEntity(p) < 8.0f && p.isSwingInProgress) {
+                drKillerName   = p.getName();
+                drKillerWeapon = p.getHeldItem();
+                drMyHP         = myHP;
+            }
+        }
     }
 
     @EventTarget
@@ -763,6 +811,7 @@ public class Pit extends Module {
         if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) { bountyTracker.toggle(); Myau.moduleManager.playSound(); notifySubmodule("Bounty Tracker",  bountyTracker.getValue()); }
         if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); notifySubmodule("Prestige List",   prestigeList.getValue()); }
         if (kb_kosList.getKeyCode()        != 0 && k == kb_kosList.getKeyCode())        { kosList.toggle();        Myau.moduleManager.playSound(); notifySubmodule("KOS List",        kosList.getValue()); }
+        if (kb_deathRecap.getKeyCode()     != 0 && k == kb_deathRecap.getKeyCode())     { deathRecap.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Death Recap",     deathRecap.getValue()); }
 
         // AimAssist attack timer
         if (aimAssist.getValue()
@@ -770,6 +819,67 @@ public class Pit extends Module {
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
+    }
+
+    private void sendDeathRecap(String deathMsg) {
+        // Parse killer name from message if possible
+        // Hypixel Pit death: "☠ You were killed by KillerName ..."
+        String killer = drKillerName;
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("killed by (\\S+)").matcher(deathMsg);
+        if (m.find()) killer = m.group(1);
+        if (killer.isEmpty()) killer = "Unknown";
+
+        float hp = drMyHP;
+        String hpStr = String.format("%.1f", hp);
+
+        // Build base message
+        IChatComponent msg = new ChatComponentText("");
+
+        // Header
+        msg.appendSibling(new ChatComponentText("§c§l☠ Killed by ")
+            .setChatStyle(new ChatStyle().setColor(EnumChatFormatting.RED).setBold(true)));
+        msg.appendSibling(new ChatComponentText("§f" + killer));
+        msg.appendSibling(new ChatComponentText("  §7HP: §c" + hpStr + "§7/§c20"));
+
+        ChatUtil.send(msg);
+
+        // Weapon line with hover
+        if (drKillerWeapon != null) {
+            String weaponName = drKillerWeapon.getDisplayName();
+
+            // Build enchant list for hover
+            StringBuilder enchants = new StringBuilder(weaponName + "\n");
+            try {
+                NBTTagList enchList = drKillerWeapon.getEnchantmentTagList();
+                if (enchList != null) {
+                    for (int i = 0; i < enchList.tagCount(); i++) {
+                        NBTTagCompound tag = enchList.getCompoundTagAt(i);
+                        int id  = tag.getShort("id");
+                        int lvl = tag.getShort("lvl");
+                        Enchantment enc = Enchantment.getEnchantmentById(id);
+                        if (enc != null) {
+                            enchants.append("§7").append(enc.getTranslatedName(lvl)).append("\n");
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // Hover item component
+            IChatComponent weaponComp = new ChatComponentText("§7  Weapon: §f" + weaponName + " §8(hover)");
+            ChatStyle style = new ChatStyle();
+            style.setChatHoverEvent(new HoverEvent(
+                HoverEvent.Action.SHOW_ITEM,
+                new ChatComponentText(drKillerWeapon.writeToNBT(new NBTTagCompound()).toString())
+            ));
+            weaponComp.setChatStyle(style);
+            ChatUtil.send(weaponComp);
+        }
+
+        // Reset
+        drKillerName   = "";
+        drKillerWeapon = null;
+        drMyHP         = 0f;
     }
 
     private void notifySubmodule(String name, boolean on) {
