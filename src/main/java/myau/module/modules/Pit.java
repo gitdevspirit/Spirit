@@ -463,7 +463,7 @@ public class Pit extends Module {
 
             // New/updated bounty: "☆ PlayerName now has a bounty of 1,234g!"
             java.util.regex.Matcher mSet = java.util.regex.Pattern
-                .compile("^[\u2606\u2605]?\s*(\S+) now has a bounty of ([\d,]+)g")
+                .compile("^[\u2606\u2605]?\\s*(\\S+) now has a bounty of ([\\d,]+)g")
                 .matcher(raw);
             if (mSet.find()) {
                 btTargets.put(mSet.group(1), mSet.group(2) + "g");
@@ -471,7 +471,7 @@ public class Pit extends Module {
 
             // Bounty claimed: "☆ PlayerName's bounty of 1,234g was claimed by KillerName!"
             java.util.regex.Matcher mClaim = java.util.regex.Pattern
-                .compile("^[\u2606\u2605]?\s*(\S+)'s bounty of [\d,]+g was claimed by (\S+)")
+                .compile("^[\u2606\u2605]?\\s*(\\S+)'s bounty of [\\d,]+g was claimed by (\\S+)")
                 .matcher(raw);
             if (mClaim.find()) {
                 btTargets.remove(mClaim.group(1));
@@ -479,7 +479,7 @@ public class Pit extends Module {
 
             // Bounty reset: "☆ PlayerName's bounty has been reset"
             java.util.regex.Matcher mReset = java.util.regex.Pattern
-                .compile("^[\u2606\u2605]?\s*(\S+)'s bounty has been reset")
+                .compile("^[\u2606\u2605]?\\s*(\\S+)'s bounty has been reset")
                 .matcher(raw);
             if (mReset.find()) {
                 btTargets.remove(mReset.group(1));
