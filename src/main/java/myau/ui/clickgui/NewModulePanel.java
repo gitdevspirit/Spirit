@@ -2,7 +2,9 @@ package myau.ui.clickgui;
 
 import myau.Myau;
 import myau.module.*;
+import myau.module.modules.HUD;
 import myau.module.modules.Pit;
+import myau.util.ChatUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
@@ -279,6 +281,11 @@ public class NewModulePanel {
                     } else if (button == 0 && hdr) {
                         ((BooleanSetting)s).toggle();
                         Myau.moduleManager.playSound();
+                        HUD hud = (HUD) Myau.moduleManager.getModule(HUD.class);
+                        if (hud != null && hud.toggleAlerts.getValue()) {
+                            String status = ((BooleanSetting)s).getValue() ? "&a&lON" : "&c&lOFF";
+                            ChatUtil.sendFormatted(String.format("%s%s: %s&r", Myau.clientName, s.getName(), status));
+                        }
                     }
                 }
                 // Skip collapsed children in click handling too
