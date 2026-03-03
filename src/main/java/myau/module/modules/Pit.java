@@ -102,7 +102,12 @@ public class Pit extends Module {
     public final SliderSetting  stX      = register(new SliderSetting("  Streak X",       5,  0, 500, 1, () -> streak.getValue()));
     public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
     public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
-    public final SliderSetting  stSpacing = register(new SliderSetting("  Line Spacing",  15,  8,  20, 1, () -> streak.getValue()));
+    public final SliderSetting  stSpacing  = register(new SliderSetting("  Line Spacing",  15,  8,  20, 1, () -> streak.getValue()));
+    public final BooleanSetting stShowKills   = register(new BooleanSetting("  Show Kills",    true,  () -> streak.getValue()));
+    public final BooleanSetting stShowAssists = register(new BooleanSetting("  Show Assists",  true,  () -> streak.getValue()));
+    public final BooleanSetting stShowXP      = register(new BooleanSetting("  Show XP",       true,  () -> streak.getValue()));
+    public final BooleanSetting stShowGold    = register(new BooleanSetting("  Show Gold",     true,  () -> streak.getValue()));
+    public final BooleanSetting stShowTime    = register(new BooleanSetting("  Show Time",     true,  () -> streak.getValue()));
 
     // ── Events submodule ──────────────────────────────────────────────────────
 
@@ -568,20 +573,27 @@ public class Pit extends Module {
             int sy = (int) stY.getValue();
             int sp = (int) stSpacing.getValue();
             int alpha = (int)(stOpacity.getValue() / 100.0 * 255.0);
-            int boxH = 10 + sp * 6; // header + 5 data rows + padding
-            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
-
             String statusCol = stPaused ? "§c" : "§a";
             String status    = stPaused ? "Last" : "Active";
             long   elapsed   = stTimer.getElapsedTime() / 1000L;
 
+            // Count visible rows for dynamic box height
+            int rows = 1; // header always shown
+            if (stShowKills.getValue())   rows++;
+            if (stShowAssists.getValue()) rows++;
+            if (stShowXP.getValue())      rows++;
+            if (stShowGold.getValue())    rows++;
+            if (stShowTime.getValue())    rows++;
+            int boxH = 8 + rows * sp;
+            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
+
             int ly = sy + 4;
             mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"   + stKills,                             sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF);
+            if (stShowKills.getValue())   { mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"   + stKills,                             sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowAssists.getValue()) { mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowXP.getValue())      { mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowGold.getValue())    { mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowTime.getValue())    { mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF); }
         }
 
 
