@@ -120,6 +120,12 @@ public class Pit extends Module {
     public final BooleanSetting stShowGold    = register(new BooleanSetting("  Show Gold",     true,  () -> streak.getValue()));
     public final BooleanSetting stShowTime    = register(new BooleanSetting("  Show Time",     true,  () -> streak.getValue()));
     public final BooleanSetting stShowKD      = register(new BooleanSetting("  Show K/D",      true,  () -> streak.getValue()));
+    public final SliderSetting  stOrdKills   = register(new SliderSetting("  Kills Order",   1, 1, 6, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdAssists = register(new SliderSetting("  Assists Order", 2, 1, 6, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdXP      = register(new SliderSetting("  XP Order",      3, 1, 6, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdGold    = register(new SliderSetting("  Gold Order",    4, 1, 6, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdTime    = register(new SliderSetting("  Time Order",    5, 1, 6, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdKD      = register(new SliderSetting("  K/D Order",     6, 1, 6, 1, () -> streak.getValue()));
 
     // ── Events submodule ──────────────────────────────────────────────────────
 
@@ -479,66 +485,6 @@ public class Pit extends Module {
             }
         }
 
-        // ── KOS command parsing ───────────────────────────────────────────────
-        if (event.getType() == myau.event.types.EventType.SEND
-                && event.getPacket() instanceof net.minecraft.network.play.client.C01PacketChatMessage) {
-            String kosMsg = ((net.minecraft.network.play.client.C01PacketChatMessage) event.getPacket()).getMessage();
-            String[] kosParts = kosMsg.trim().split(" ");
-            if (kosParts.length >= 1 && kosParts[0].equalsIgnoreCase(".kos")) {
-                event.setCancelled(true);
-                String kosAction = kosParts.length > 1 ? kosParts[1].toLowerCase() : "help";
-                String kosTarget = kosParts.length > 2 ? kosParts[2] : "";
-                if (kosAction.equals("add") && !kosTarget.isEmpty()) {
-                    if (!kosNames.contains(kosTarget)) {
-                        kosNames.add(kosTarget);
-                        ChatUtil.sendFormatted("&c[KOS] &fYou have added &c" + kosTarget + " &fto your KOS list.");
-                    } else {
-                        ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fis already on your KOS list.");
-                    }
-                } else if (kosAction.equals("remove") && !kosTarget.isEmpty()) {
-                    boolean removed = false;
-                    java.util.Iterator<String> it = kosNames.iterator();
-                    while (it.hasNext()) {
-                        if (it.next().equalsIgnoreCase(kosTarget)) { it.remove(); removed = true; break; }
-                    }
-                    if (removed) ChatUtil.sendFormatted("&c[KOS] &fYou have removed &c" + kosTarget + " &ffrom your KOS list.");
-                    else         ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fwas not found on your KOS list.");
-                } else if (kosAction.equals("list")) {
-                    if (kosNames.isEmpty()) {
-                        ChatUtil.sendFormatted("&c[KOS] &fYour KOS list is empty.");
-                    } else {
-                        ChatUtil.sendFormatted("&c[KOS] &fKOS List &7(" + kosNames.size() + " players)&f:");
-                        int idx = 1;
-                        for (String n : kosNames) {
-                            ChatUtil.sendFormatted("  &7" + idx++ + ". &c" + n);
-                        }
-                    }
-                } else if ((kosAction.equals("up") || kosAction.equals("down")) && !kosTarget.isEmpty()) {
-                    int foundIdx = -1;
-                    for (int i = 0; i < kosNames.size(); i++) {
-                        if (((java.util.LinkedList<String>)kosNames).get(i).equalsIgnoreCase(kosTarget)) { foundIdx = i; break; }
-                    }
-                    if (foundIdx == -1) {
-                        ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fnot found.");
-                    } else {
-                        java.util.LinkedList<String> ll = (java.util.LinkedList<String>) kosNames;
-                        if (kosAction.equals("up") && foundIdx > 0) {
-                            String s = ll.remove(foundIdx); ll.add(foundIdx - 1, s);
-                            ChatUtil.sendFormatted("&c[KOS] &fMoved &c" + kosTarget + " &fup.");
-                        } else if (kosAction.equals("down") && foundIdx < ll.size() - 1) {
-                            String s = ll.remove(foundIdx); ll.add(foundIdx + 1, s);
-                            ChatUtil.sendFormatted("&c[KOS] &fMoved &c" + kosTarget + " &fdown.");
-                        } else {
-                            ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fis already at the " + (kosAction.equals("up") ? "top" : "bottom") + ".");
-                        }
-                    }
-                } else {
-                    ChatUtil.sendFormatted("&c[KOS] &fCommands: &c.kos add/remove/list/up/down <name>");
-                }
-                return;
-            }
-        }
-
         // ── AutoMath chat parsing ─────────────────────────────────────────────
         if (autoMath.getValue()) {
             String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
@@ -701,18 +647,23 @@ public class Pit extends Module {
             int boxH = 8 + rows * sp;
             net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
 
+            // Build ordered row list
+            java.util.Map<Integer, String[]> stRows = new java.util.TreeMap<>();
+            String kdStr = stDeaths == 0
+                ? (stKills == 0 ? "0.00" : stKills + ".00")
+                : String.format("%.2f", (float) stKills / (float) stDeaths);
+            if (stShowKills.getValue())   stRows.put((int)stOrdKills.getValue(),   new String[]{"§aKills§f: §a"   + stKills});
+            if (stShowAssists.getValue()) stRows.put((int)stOrdAssists.getValue(), new String[]{"§cAssists§f: §c" + stAssists});
+            if (stShowXP.getValue())      stRows.put((int)stOrdXP.getValue(),      new String[]{"§bXP§f: §f"      + String.format("%.1f", stXP)});
+            if (stShowGold.getValue())    stRows.put((int)stOrdGold.getValue(),    new String[]{"§6Gold§f: §6"    + String.format("%.1f", stGold)});
+            if (stShowTime.getValue())    stRows.put((int)stOrdTime.getValue(),    new String[]{"§fTime§f: §f"    + formatStreakTime(elapsed)});
+            if (stShowKD.getValue())      stRows.put((int)stOrdKD.getValue(),      new String[]{"§eK/D§f: §e"     + kdStr});
+
             int ly = sy + 4;
             mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, ly, 0xFFFFFFFF); ly += sp;
-            if (stShowKills.getValue())   { mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"   + stKills,                             sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowAssists.getValue()) { mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowXP.getValue())      { mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowGold.getValue())    { mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowTime.getValue())    { mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF); ly += sp; }
-            if (stShowKD.getValue()) {
-                String kdStr = stDeaths == 0
-                    ? (stKills == 0 ? "0.00" : String.valueOf(stKills) + ".00")
-                    : String.format("%.2f", (float) stKills / (float) stDeaths);
-                mc.fontRendererObj.drawStringWithShadow("\u00a7eK/D\u00a7f: \u00a7e" + kdStr, sx + 5, ly, 0xFFFFFFFF);
+            for (String[] row : stRows.values()) {
+                mc.fontRendererObj.drawStringWithShadow(row[0], sx + 5, ly, 0xFFFFFFFF);
+                ly += sp;
             }
         }
 
