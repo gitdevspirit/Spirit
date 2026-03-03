@@ -27,6 +27,7 @@ public class KosCommand extends Command {
                     reply("&c[KOS] &c" + target + " &fis already on your KOS list.");
                 } else {
                     Pit.kosNames.add(target);
+                    Pit.saveKosList();
                     reply("&c[KOS] &fYou have added &c" + target + " &fto your KOS list.");
                 }
                 break;
@@ -34,7 +35,7 @@ public class KosCommand extends Command {
             case "remove":
                 if (target.isEmpty()) { reply("&c[KOS] &fUsage: .kos remove <name>"); return; }
                 boolean removed = Pit.kosNames.removeIf(n -> n.equalsIgnoreCase(target));
-                if (removed) reply("&c[KOS] &fYou have removed &c" + target + " &ffrom your KOS list.");
+if (removed) { Pit.saveKosList(); reply("&c[KOS] &fYou have removed &c" + target + " &ffrom your KOS list."); }
                 else         reply("&c[KOS] &c" + target + " &fwas not found on your KOS list.");
                 break;
 
@@ -80,6 +81,7 @@ public class KosCommand extends Command {
         }
         String s = ll.remove(idx);
         ll.add(newIdx, s);
+        Pit.saveKosList();
         reply("&c[KOS] &fMoved &c" + target + (dir < 0 ? " &fup." : " &fdown."));
     }
 }
