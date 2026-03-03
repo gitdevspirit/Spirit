@@ -126,8 +126,8 @@ public class Pit extends Module {
     private int                evPassIndex  = 0;
     private int                evTick       = 0;
 
-    private int   stKills   = 0;
-    private int   stAssists = 0;
+    public  int   stKills   = 0;
+    public  int   stAssists = 0;
     private float stXP      = 0f;
     private float stGold    = 0f;
     private boolean stPaused = true;
@@ -461,20 +461,19 @@ public class Pit extends Module {
         // ── KOS command parsing ───────────────────────────────────────────────
         if (event.getType() == myau.event.types.EventType.SEND
                 && event.getPacket() instanceof net.minecraft.network.play.client.C01PacketChatMessage) {
-            String msg = ((net.minecraft.network.play.client.C01PacketChatMessage) event.getPacket()).getMessage();
-            String[] parts = msg.trim().split(" ");
-            if (parts.length >= 3 && parts[0].equalsIgnoreCase(".kos")) {
+            String kosMsg = ((net.minecraft.network.play.client.C01PacketChatMessage) event.getPacket()).getMessage();
+            String[] kosParts = kosMsg.trim().split(" ");
+            if (kosParts.length >= 2 && kosParts[0].equalsIgnoreCase(".kos")) {
                 event.setCancelled(true);
-                String action = parts[1].toLowerCase();
-                String name   = parts[2];
-                if (action.equals("add")) {
-                    kosNames.add(name);
-                    ChatUtil.sendFormatted("&c[KOS] &fAdded &c" + name + " &fto KOS list.");
-                } else if (action.equals("remove")) {
-                    kosNames.remove(name);
-                    ChatUtil.sendFormatted("&c[KOS] &fRemoved &c" + name + " &ffrom KOS list.");
-                } else if (action.equals("list")) {
-                    event.setCancelled(true);
+                String kosAction = kosParts.length > 1 ? kosParts[1].toLowerCase() : "";
+                String kosTarget = kosParts.length > 2 ? kosParts[2] : "";
+                if (kosAction.equals("add") && !kosTarget.isEmpty()) {
+                    kosNames.add(kosTarget);
+                    ChatUtil.sendFormatted("&c[KOS] &fAdded &c" + kosTarget + " &fto KOS list.");
+                } else if (kosAction.equals("remove") && !kosTarget.isEmpty()) {
+                    kosNames.remove(kosTarget);
+                    ChatUtil.sendFormatted("&c[KOS] &fRemoved &c" + kosTarget + " &ffrom KOS list.");
+                } else if (kosAction.equals("list")) {
                     if (kosNames.isEmpty()) {
                         ChatUtil.sendFormatted("&c[KOS] &fList is empty.");
                     } else {
