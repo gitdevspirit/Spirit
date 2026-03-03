@@ -1,87 +1,34 @@
 package myau.command.commands;
 
+import myau.Myau;
 import myau.command.Command;
-import myau.module.modules.Pit;
+import myau.module.modules.NickHider;
 
-public class KosCommand extends Command {
+public class NameProtectCommand extends Command {
 
-    public KosCommand() {
-        super("kos");
-        setDescription("Manage your KOS list. Usage: .kos add/remove/list/up/down <name>");
+    public NameProtectCommand() {
+        super("nick", "nameprotect", "np");
+        setDescription("Set a fake name for NickHider. Usage: .nick <name|reset>");
     }
 
     @Override
     public void execute(String[] args) {
+        NickHider nh = (NickHider) Myau.moduleManager.getModule(NickHider.class);
+        if (nh == null) { reply("&cNickHider module not found."); return; }
+
         if (args.length == 0) {
-            reply("&c[KOS] &fCommands: &c.kos add/remove/list/up/down <name>");
+            reply("&7Current fake name: &f" + nh.protectName);
+            reply("&7Usage: &f.nick <name|reset>");
             return;
         }
 
-        String action = args[0].toLowerCase();
-        String target = args.length > 1 ? args[1] : "";
-
-        switch (action) {
-            case "add":
-                if (target.isEmpty()) { reply("&c[KOS] &fUsage: .kos add <name>"); return; }
-                if (Pit.kosNames.contains(target)) {
-                    reply("&c[KOS] &c" + target + " &fis already on your KOS list.");
-                } else {
-                    Pit.kosNames.add(target);
-                    Pit.saveKosList();
-                    reply("&c[KOS] &fYou have added &c" + target + " &fto your KOS list.");
-                }
-                break;
-
-            case "remove":
-                if (target.isEmpty()) { reply("&c[KOS] &fUsage: .kos remove <name>"); return; }
-                boolean removed = Pit.kosNames.removeIf(n -> n.equalsIgnoreCase(target));
-if (removed) { Pit.saveKosList(); reply("&c[KOS] &fYou have removed &c" + target + " &ffrom your KOS list."); }
-                else         reply("&c[KOS] &c" + target + " &fwas not found on your KOS list.");
-                break;
-
-            case "list":
-                if (Pit.kosNames.isEmpty()) {
-                    reply("&c[KOS] &fYour KOS list is empty.");
-                } else {
-                    reply("&c[KOS] &fKOS List &7(" + Pit.kosNames.size() + " players)&f:");
-                    int i = 1;
-                    for (String name : Pit.kosNames) {
-                        reply("  &7" + i++ + ". &c" + name);
-                    }
-                }
-                break;
-
-            case "up":
-                if (target.isEmpty()) { reply("&c[KOS] &fUsage: .kos up <name>"); return; }
-                moveKos(target, -1);
-                break;
-
-            case "down":
-                if (target.isEmpty()) { reply("&c[KOS] &fUsage: .kos down <name>"); return; }
-                moveKos(target, 1);
-                break;
-
-            default:
-                reply("&c[KOS] &fCommands: &c.kos add/remove/list/up/down <name>");
-                break;
+        if (args[0].equalsIgnoreCase("reset")) {
+            nh.protectName = "You";
+            reply("&7Fake name reset to &fYou&7.");
+        } else {
+            nh.protectName = args[0];
+            reply("&7Fake name set to &f" + args[0] + "&7.");
+            if (!nh.isEnabled()) reply("&7Tip: enable &fNickHider &7in the GUI to activate.");
         }
-    }
-
-    private void moveKos(String target, int dir) {
-        java.util.LinkedList<String> ll = (java.util.LinkedList<String>) Pit.kosNames;
-        int idx = -1;
-        for (int i = 0; i < ll.size(); i++) {
-            if (ll.get(i).equalsIgnoreCase(target)) { idx = i; break; }
-        }
-        if (idx == -1) { reply("&c[KOS] &c" + target + " &fnot found."); return; }
-        int newIdx = idx + dir;
-        if (newIdx < 0 || newIdx >= ll.size()) {
-            reply("&c[KOS] &c" + target + " &fis already at the " + (dir < 0 ? "top" : "bottom") + ".");
-            return;
-        }
-        String s = ll.remove(idx);
-        ll.add(newIdx, s);
-        Pit.saveKosList();
-        reply("&c[KOS] &fMoved &c" + target + (dir < 0 ? " &fup." : " &fdown."));
     }
 }
