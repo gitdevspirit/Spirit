@@ -7,6 +7,8 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.opengl.GL11;
 
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -27,6 +29,7 @@ public class NewModulePanel {
     private final Map<Module, Float> toggleAnim = new HashMap<>();
     private int scrollOffset = 0;
 
+    private final Set<Setting> collapsedHeaders = new HashSet<>();
     private SliderSetting  draggingSlider;
     private int            sliderBarX, sliderBarW;
     private KeybindSetting listeningKeybind;
@@ -119,8 +122,13 @@ public class NewModulePanel {
         drawRect(x + 2, y + 4, x + 3, y + sh - 4, GuiColors.ACCENT_DIM);
 
         int oy = y + 5;
+        boolean skipUntilNextHeader = false;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
+            // A "header" is a BooleanSetting whose name does NOT start with spaces
+            boolean isHeader = s instanceof BooleanSetting && !s.getName().startsWith(" ");
+            if (isHeader) skipUntilNextHeader = collapsedHeaders.contains(s);
+            if (!isHeader && skipUntilNextHeader) continue;
             gl();
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
@@ -144,18 +152,26 @@ public class NewModulePanel {
                 oy += 16;
             } else if (s instanceof BooleanSetting) {
                 BooleanSetting bs = (BooleanSetting) s;
-                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, 0xFF777777);
-                // Checkbox box
-                int cbX = x + w - 14, cbY = oy + 2, cbS = 9;
-                drawRect(cbX, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? GuiColors.ACCENT : 0xFF2A2A2A);
-                drawRect(cbX, cbY, cbX + cbS, cbY + 1, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
-                drawRect(cbX, cbY + cbS - 1, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
-                drawRect(cbX, cbY, cbX + 1, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
-                drawRect(cbX + cbS - 1, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
-                // Tick when on
-                if (bs.getValue()) {
-                    gl();
-                    mc.fontRendererObj.drawString("\u2713", cbX + 1, cbY + 1, 0xFF1A0D12);
+                boolean hdr = !s.getName().startsWith(" ");
+                boolean col = collapsedHeaders.contains(s);
+                int nameColor = hdr ? (bs.getValue() ? GuiColors.ACCENT : 0xFFFFFFFF) : 0xFF777777;
+                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, nameColor);
+                if (hdr) {
+                    // Show collapse arrow on right
+                    String arrow = col ? ">" : "v";
+                    mc.fontRendererObj.drawString(arrow, x + w - 10, oy + 2, 0xFF555555);
+                } else {
+                    // Checkbox box
+                    int cbX = x + w - 14, cbY = oy + 2, cbS = 9;
+                    drawRect(cbX, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? GuiColors.ACCENT : 0xFF2A2A2A);
+                    drawRect(cbX, cbY, cbX + cbS, cbY + 1, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                    drawRect(cbX, cbY + cbS - 1, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                    drawRect(cbX, cbY, cbX + 1, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                    drawRect(cbX + cbS - 1, cbY, cbX + cbS, cbY + cbS, bs.getValue() ? 0xFFFFFFFF : 0xFF444444);
+                    if (bs.getValue()) {
+                        gl();
+                        mc.fontRendererObj.drawString("\u2713", cbX + 1, cbY + 1, 0xFF1A0D12);
+                    }
                 }
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
@@ -213,8 +229,12 @@ public class NewModulePanel {
 
     private void settingClick(Module m, int x, int y, int w, int mx, int my, int button) {
         int oy = y + 5;
+        boolean skipClick = false;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
+            boolean isHeaderClick = s instanceof BooleanSetting && !s.getName().startsWith(" ");
+            if (isHeaderClick) skipClick = collapsedHeaders.contains(s);
+            if (!isHeaderClick && skipClick) continue;
             if (s instanceof SliderSetting) {
                 SliderSetting sl = (SliderSetting) s;
                 int bx = x + 8, by = oy + 13, bw = w - 16;
@@ -229,7 +249,20 @@ public class NewModulePanel {
                 }
                 oy += 16;
             } else if (s instanceof BooleanSetting) {
-                if (button == 0 && mx >= x && mx <= x + w && my >= oy && my <= oy + 16) ((BooleanSetting)s).toggle();
+                boolean hdr = !s.getName().startsWith(" ");
+                if (my >= oy && my <= oy + 16) {
+                    if (button == 1 && hdr) {
+                        // Right-click header: toggle collapse
+                        if (collapsedHeaders.contains(s)) collapsedHeaders.remove(s);
+                        else collapsedHeaders.add(s);
+                        return;
+                    } else if (button == 0 && !hdr) {
+                        ((BooleanSetting)s).toggle();
+                    } else if (button == 0 && hdr) {
+                        ((BooleanSetting)s).toggle();
+                    }
+                }
+                // Skip collapsed children in click handling too
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
@@ -260,8 +293,12 @@ public class NewModulePanel {
 
     private int settingsH(Module m) {
         int h = 10;
+        boolean skip = false;
         for (Setting s : m.getSettings()) {
             if (!s.isVisible()) continue;
+            boolean isHeader = s instanceof BooleanSetting && !s.getName().startsWith(" ");
+            if (isHeader) skip = collapsedHeaders.contains(s);
+            if (!isHeader && skip) continue;
             h += s instanceof SliderSetting ? SET_ROW : 16;
         }
         return h;
