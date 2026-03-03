@@ -13,6 +13,7 @@ import myau.events.Render3DEvent;
 import myau.events.LoadWorldEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
+import myau.module.KeybindSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
@@ -62,6 +63,7 @@ public class Pit extends Module {
     public final BooleanSetting hudPreview  = register(new BooleanSetting("HUD Preview", false));
 
     public final BooleanSetting aimAssist = register(new BooleanSetting("Aim Assist", false));
+    public final KeybindSetting kb_aimAssist = register(new KeybindSetting("  Aim Assist Key", 0));
 
     // ── Aim Assist settings — only visible when aimAssist is on ──────────────
 
@@ -86,6 +88,7 @@ public class Pit extends Module {
     // ── Gold Requirement submodule ────────────────────────────────────────────
 
     public final BooleanSetting goldReq = register(new BooleanSetting("Gold Req", false));
+    public final KeybindSetting kb_goldReq = register(new KeybindSetting("  Gold Req Key", 0));
     public final SliderSetting  grX     = register(new SliderSetting("  HUD X", 10, 0, 500, 1, () -> goldReq.getValue()));
     public final SliderSetting  grY     = register(new SliderSetting("  HUD Y", 10, 0, 300, 1, () -> goldReq.getValue()));
 
@@ -95,6 +98,7 @@ public class Pit extends Module {
     // ── Streak submodule ──────────────────────────────────────────────────────
 
     public final BooleanSetting streak   = register(new BooleanSetting("Streak", false));
+    public final KeybindSetting kb_streak = register(new KeybindSetting("  Streak Key", 0));
     public final SliderSetting  stX      = register(new SliderSetting("  Streak X",       5,  0, 500, 1, () -> streak.getValue()));
     public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
     public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
@@ -102,6 +106,7 @@ public class Pit extends Module {
     // ── Events submodule ──────────────────────────────────────────────────────
 
     public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
+    public final KeybindSetting kb_pitEvents = register(new KeybindSetting("  Events Key", 0));
     public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
     public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
     public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
@@ -122,6 +127,7 @@ public class Pit extends Module {
     // ── AutoMath submodule ────────────────────────────────────────────────────
 
     public final BooleanSetting autoMath       = register(new BooleanSetting("AutoMath", false));
+    public final KeybindSetting kb_autoMath = register(new KeybindSetting("  AutoMath Key", 0));
     public final SliderSetting  amDelay        = register(new SliderSetting("  Delay", 1000, 0, 5000, 100, () -> autoMath.getValue()));
     public final BooleanSetting amAutoSubmit   = register(new BooleanSetting("  Auto Submit", true, () -> autoMath.getValue()));
 
@@ -131,6 +137,7 @@ public class Pit extends Module {
     // ── Bounty Tracker submodule ─────────────────────────────────────────────
 
     public final BooleanSetting bountyTracker = register(new BooleanSetting("Bounty Tracker", false));
+    public final KeybindSetting kb_bountyTracker = register(new KeybindSetting("  Bounty Key", 0));
     public final SliderSetting  btX           = register(new SliderSetting("  BT X",   5,  0, 500, 1, () -> bountyTracker.getValue()));
     public final SliderSetting  btY           = register(new SliderSetting("  BT Y",  50,  0, 300, 1, () -> bountyTracker.getValue()));
 
@@ -140,6 +147,7 @@ public class Pit extends Module {
     // ── AutoGrinder submodule ─────────────────────────────────────────────────
 
     public final BooleanSetting autoGrinder  = register(new BooleanSetting("AutoGrinder", false));
+    public final KeybindSetting kb_autoGrinder = register(new KeybindSetting("  AutoGrinder Key", 0));
     public final DropdownSetting agSorting   = register(new DropdownSetting("  Sorting",    0, () -> autoGrinder.getValue(), "Distance", "Health"));
     public final DropdownSetting agMode      = register(new DropdownSetting("  Mode",       0, () -> autoGrinder.getValue(), "Legit", "Blatant"));
     public final SliderSetting   agRange     = register(new SliderSetting("  Attack Range", 4.0, 3.0, 6.0, 0.1, () -> autoGrinder.getValue()));
@@ -150,6 +158,7 @@ public class Pit extends Module {
     // ── Gamble submodule ──────────────────────────────────────────────────────
 
     public final BooleanSetting gamble          = register(new BooleanSetting("Gamble", false));
+    public final KeybindSetting kb_gamble = register(new KeybindSetting("  Gamble Key", 0));
     public final BooleanSetting gambleGiantStop = register(new BooleanSetting("  Giant Ticket Stop", true, () -> gamble.getValue()));
 
     private final List<Vec3> gambleWaypoints = new ArrayList<>();
@@ -158,6 +167,7 @@ public class Pit extends Module {
     // ── Prestige List submodule ───────────────────────────────────────────────
 
     public final BooleanSetting prestigeList   = register(new BooleanSetting("Prestige List",     false));
+    public final KeybindSetting kb_prestigeList = register(new KeybindSetting("  Prestige Key", 0));
     public final SliderSetting  plX            = register(new SliderSetting("  PL X",    5,   0, 500, 1,  () -> prestigeList.getValue()));
     public final SliderSetting  plY            = register(new SliderSetting("  PL Y",   50,   0, 300, 1,  () -> prestigeList.getValue()));
     public final BooleanSetting plP0           = register(new BooleanSetting("  Prestige 0",     true,  () -> prestigeList.getValue()));
@@ -666,8 +676,23 @@ public class Pit extends Module {
     @EventTarget
     public void onPress(KeyEvent event) {
         if (!isEnabled()) return;
+        int k = event.getKey();
+        if (k == 0) return;
+
+        // Submodule keybinds
+        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     aimAssist.toggle();
+        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       goldReq.toggle();
+        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        streak.toggle();
+        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     pitEvents.toggle();
+        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      autoMath.toggle();
+        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   autoGrinder.toggle();
+        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        gamble.toggle();
+        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) bountyTracker.toggle();
+        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  prestigeList.toggle();
+
+        // AimAssist attack timer
         if (aimAssist.getValue()
-                && event.getKey() == mc.gameSettings.keyBindAttack.getKeyCode()
+                && k == mc.gameSettings.keyBindAttack.getKeyCode()
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
