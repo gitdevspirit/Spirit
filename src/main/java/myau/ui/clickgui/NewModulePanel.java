@@ -87,7 +87,7 @@ public class NewModulePanel {
         int borderColor = en
             ? ((borderAlpha << 24) | (GuiColors.ACCENT & 0x00FFFFFF))
             : ((borderAlpha << 24) | 0x666666);
-        RoundedUtils.drawRoundedOutline(x, y, CARD_W, CARD_H, CARD_H / 2f, 1.2f, borderColor);
+        RoundedUtils.drawRoundedOutline((float)x, (float)y, (float)CARD_W, (float)CARD_H, CARD_H / 2f, 1.2f, borderColor);
 
         // Status dot
         RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3,
