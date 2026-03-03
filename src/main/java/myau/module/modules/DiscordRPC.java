@@ -1,160 +1,121 @@
 package myau.module.modules;
 
-import com.jagrosh.discordipc.IPCClient;
-import com.jagrosh.discordipc.IPCListener;
-import com.jagrosh.discordipc.entities.RichPresence;
-import com.jagrosh.discordipc.entities.pipe.PipeStatus;
 import myau.event.EventTarget;
-import myau.events.TickEvent;
 import myau.event.types.EventType;
+import myau.events.TickEvent;
 import myau.module.Category;
-import myau.module.DropdownSetting;
 import myau.module.Module;
+import myau.util.DiscordIPC;
 import myau.util.ServerUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.util.EnumChatFormatting;
 
 public class DiscordRPC extends Module {
 
-    private static final long APP_ID = 1478309687198875700; // Spirit client app id placeholder
+    // Replace with your Discord application client ID
+    private static final long CLIENT_ID = 1226739642587750420L;
 
     private final Minecraft mc = Minecraft.getMinecraft();
-    private IPCClient client;
-    private boolean connected = false;
-    private int tickCount = 0;
-    private long sessionStart = System.currentTimeMillis() / 1000L;
-
-    // Detected game state
-    private String lastState   = "";
+    private DiscordIPC ipc;
+    private int tick = 0;
+    private long sessionStart;
     private String lastDetails = "";
+    private String lastState   = "";
 
     public DiscordRPC() {
-        super("Discord RPC", "Shows Spirit client presence in Discord.", Category.MISC);
+        super("Discord RPC", "Shows Spirit in your Discord status.", Category.MISC);
     }
 
     @Override
     public void onEnabled() {
         sessionStart = System.currentTimeMillis() / 1000L;
-        connect();
+        connectAsync();
     }
 
     @Override
     public void onDisabled() {
-        disconnect();
-    }
-
-    private void connect() {
-        try {
-            client = new IPCClient(APP_ID);
-            client.setListener(new IPCListener() {});
-            client.connect();
-            connected = true;
-            updatePresence();
-        } catch (Exception e) {
-            connected = false;
+        if (ipc != null) {
+            final DiscordIPC toClose = ipc;
+            new Thread(toClose::close).start();
+            ipc = null;
         }
-    }
-
-    private void disconnect() {
-        if (client != null) {
-            try { client.close(); } catch (Exception ignored) {}
-            client = null;
-        }
-        connected = false;
+        lastDetails = "";
+        lastState   = "";
     }
 
     @EventTarget
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
+        tick++;
 
-        // Reconnect if pipe died
-        if (!connected || client == null || client.getStatus() == PipeStatus.DISCONNECTED) {
-            tickCount++;
-            if (tickCount % 200 == 0) connect(); // retry every ~10s
+        // Retry connection every ~15s if disconnected
+        if (ipc == null || !ipc.isConnected()) {
+            if (tick % 300 == 0) connectAsync();
             return;
         }
 
-        // Update presence every 4 seconds (80 ticks)
-        tickCount++;
-        if (tickCount % 80 != 0) return;
-
-        updatePresence();
-    }
-
-    private void updatePresence() {
-        if (!connected || client == null) return;
+        // Update every 4s
+        if (tick % 80 != 0) return;
 
         String details = buildDetails();
         String state   = buildState();
-
-        // Only send update if something changed
         if (details.equals(lastDetails) && state.equals(lastState)) return;
         lastDetails = details;
         lastState   = state;
 
-        try {
-            RichPresence.Builder rp = new RichPresence.Builder();
-            rp.setDetails(details);
-            rp.setState(state);
-            rp.setStartTimestamp(sessionStart);
-            rp.setLargeImage("spirit_logo", "Spirit");
-            client.sendRichPresence(rp.build());
-        } catch (Exception ignored) {}
+        final String d = details, s = state;
+        final long ts = sessionStart;
+        new Thread(() -> ipc.setActivity(d, s, ts)).start();
+    }
+
+    private void connectAsync() {
+        new Thread(() -> {
+            ipc = new DiscordIPC(CLIENT_ID);
+            ipc.connect();
+        }).start();
     }
 
     private String buildDetails() {
         if (mc.thePlayer == null || mc.theWorld == null) return "In Menu";
-
-        // Detect server
         ServerData sd = mc.getCurrentServerData();
         if (sd == null) return "Singleplayer";
-
         String ip = sd.serverIP.toLowerCase();
-        if (ip.contains("hypixel")) {
-            return "Hypixel — " + detectHypixelGame();
-        }
+        if (ip.contains("hypixel")) return "Hypixel - " + detectHypixelGame();
         return sd.serverIP;
     }
 
     private String detectHypixelGame() {
         if (!ServerUtil.isHypixel()) return "Lobby";
-
-        java.util.ArrayList<String> lines = ServerUtil.getScoreboardLines();
-        for (String line : lines) {
-            String clean = net.minecraft.util.EnumChatFormatting.getTextWithoutFormattingCodes(line).trim();
-            if (clean.contains("THE PIT"))          return "The Pit";
-            if (clean.contains("BED WARS"))         return "BedWars";
-            if (clean.contains("SKYWARS"))          return "SkyWars";
-            if (clean.contains("MURDER MYSTERY"))   return "Murder Mystery";
-            if (clean.contains("DUELS"))            return "Duels";
-            if (clean.contains("BUILD BATTLE"))     return "Build Battle";
-            if (clean.contains("HOUSING"))          return "Housing";
-            if (clean.contains("ARCADE"))           return "Arcade";
-            if (clean.contains("UHC"))              return "UHC";
-            if (clean.contains("SPEED UHC"))        return "Speed UHC";
-            if (clean.contains("BLITZ"))            return "Blitz SG";
-            if (clean.contains("MEGA WALLS"))       return "Mega Walls";
-            if (clean.contains("COPS AND CRIMS"))   return "Cops and Crims";
-            if (clean.contains("WARLORDS"))         return "Warlords";
-            if (clean.contains("SMASH HEROES"))     return "Smash Heroes";
-            if (clean.contains("TNT GAMES"))        return "TNT Games";
-            if (clean.contains("VAMPIREZ"))         return "VampireZ";
-            if (clean.contains("PAINTBALL"))        return "Paintball";
-            if (clean.contains("QUAKE"))            return "Quakecraft";
+        for (String line : ServerUtil.getScoreboardLines()) {
+            String c = EnumChatFormatting.getTextWithoutFormattingCodes(line).trim();
+            if (c.contains("THE PIT"))        return "The Pit";
+            if (c.contains("BED WARS"))       return "BedWars";
+            if (c.contains("SKYWARS"))        return "SkyWars";
+            if (c.contains("MURDER MYSTERY")) return "Murder Mystery";
+            if (c.contains("DUELS"))          return "Duels";
+            if (c.contains("BUILD BATTLE"))   return "Build Battle";
+            if (c.contains("UHC"))            return "UHC";
+            if (c.contains("SPEED UHC"))      return "Speed UHC";
+            if (c.contains("BLITZ"))          return "Blitz SG";
+            if (c.contains("ARCADE"))         return "Arcade";
+            if (c.contains("HOUSING"))        return "Housing";
+            if (c.contains("MEGA WALLS"))     return "Mega Walls";
+            if (c.contains("WARLORDS"))       return "Warlords";
+            if (c.contains("SMASH HEROES"))   return "Smash Heroes";
+            if (c.contains("TNT GAMES"))      return "TNT Games";
+            if (c.contains("VAMPIREZ"))       return "VampireZ";
+            if (c.contains("QUAKE"))          return "Quakecraft";
         }
         return "Lobby";
     }
 
     private String buildState() {
         if (mc.thePlayer == null) return "";
-
-        // In Pit: show streak info
         Pit pit = (Pit) myau.Myau.moduleManager.getModule(Pit.class);
         if (pit != null && pit.isEnabled() && pit.streak.getValue()) {
             return "Streak: " + pit.stKills + "K / " + pit.stAssists + "A";
         }
-
-        // Generic: show player name
         return "Playing as " + mc.thePlayer.getName();
     }
 }
