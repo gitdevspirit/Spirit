@@ -2,7 +2,9 @@ package myau.ui.hud;
 
 import myau.Myau;
 import myau.module.Module;
+import myau.module.BooleanSetting;
 import myau.module.modules.HUD;
+import myau.module.modules.Pit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 
@@ -28,6 +30,20 @@ public class ArraylistHUD {
             if (m.isEnabled() && !m.isHidden()) enabled.add(m);
         }
 
+        // Collect active Pit submodules as fake entries
+        List<String[]> pitEntries = new ArrayList<>(); // [name, suffix]
+        Pit pit = (Pit) Myau.moduleManager.getModule(Pit.class);
+        if (pit != null && pit.isEnabled()) {
+            for (myau.module.Setting s : pit.getSettings()) {
+                if (s instanceof BooleanSetting && !s.getName().startsWith(" ")) {
+                    BooleanSetting bs = (BooleanSetting) s;
+                    if (bs.getValue()) {
+                        pitEntries.add(new String[]{ s.getName().toLowerCase(), "" });
+                    }
+                }
+            }
+        }
+
         // Sort by display width descending so longest is at top
         enabled.sort(Comparator.comparingInt((Module m) -> {
             String[] suffix = m.getSuffix();
@@ -40,24 +56,38 @@ public class ArraylistHUD {
         int lineHeight = mc.fontRendererObj.FONT_HEIGHT + 1;
         boolean shadow = hud.shadow.getValue();
 
-        for (int i = 0; i < enabled.size(); i++) {
-            Module module = enabled.get(i);
+        // Combine: module entries + pit submodule entries, all sorted by width
+        List<String[]> allEntries = new ArrayList<>();
+        for (Module m : enabled) {
+            String[] suffArr = m.getSuffix();
+            String suffix = suffArr.length > 0 ? " " + suffArr[0].toLowerCase() : "";
+            allEntries.add(new String[]{ m.getName().toLowerCase(), suffix, "module" });
+        }
+        for (String[] pe : pitEntries) {
+            allEntries.add(new String[]{ pe[0], pe[1], "pit" });
+        }
 
-            String name      = module.getName().toLowerCase();
-            String[] suffArr = module.getSuffix();
-            String suffix    = suffArr.length > 0 ? " " + suffArr[0].toLowerCase() : "";
+        // Sort by total display width descending
+        allEntries.sort(java.util.Comparator.comparingInt(
+            (String[] e) -> mc.fontRendererObj.getStringWidth(e[0] + e[1])
+        ).reversed());
+
+        for (int i = 0; i < allEntries.size(); i++) {
+            String[] entry  = allEntries.get(i);
+            String name     = entry[0];
+            String suffix   = entry[1];
+            boolean isPit   = entry[2].equals("pit");
 
             int nameW  = mc.fontRendererObj.getStringWidth(name);
             int totalW = nameW + mc.fontRendererObj.getStringWidth(suffix);
 
-            // Right-align with a 2px margin from the screen edge
             int textX = sr.getScaledWidth() - totalW - 2;
             int textY = 4 + i * lineHeight;
 
-            // Module name in the configurable list color
-            mc.fontRendererObj.drawString(name, textX, textY, nameColor.getRGB() | 0xFF000000, shadow);
+            // Pit submodules use accent color, normal modules use list color
+            int nColor = isPit ? (accentColor.getRGB() | 0xFF000000) : (nameColor.getRGB() | 0xFF000000);
+            mc.fontRendererObj.drawString(name, textX, textY, nColor, shadow);
 
-            // Suffix in HUD accent color
             if (!suffix.isEmpty()) {
                 mc.fontRendererObj.drawString(suffix, textX + nameW, textY,
                         accentColor.getRGB() | 0xFF000000, shadow);
