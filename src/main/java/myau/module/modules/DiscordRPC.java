@@ -3,7 +3,6 @@ package myau.module.modules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.TickEvent;
-import myau.module.Category;
 import myau.module.Module;
 import myau.util.DiscordIPC;
 import myau.util.ServerUtil;
@@ -24,7 +23,7 @@ public class DiscordRPC extends Module {
     private String lastState   = "";
 
     public DiscordRPC() {
-        super("Discord RPC", "Shows Spirit in your Discord status.", Category.MISC);
+        super("Discord RPC", false);
     }
 
     @Override
