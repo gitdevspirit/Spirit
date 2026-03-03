@@ -37,6 +37,62 @@ public class RoundedUtils {
         GlStateManager.popMatrix();
     }
 
+    public static void drawRoundedOutline(float x, float y, float width, float height, float radius, float thickness, int color) {
+        float r = (color >> 16 & 0xFF) / 255f;
+        float g = (color >> 8  & 0xFF) / 255f;
+        float b = (color       & 0xFF) / 255f;
+        float a = (color >> 24 & 0xFF) / 255f;
+
+        GlStateManager.pushMatrix();
+        GlStateManager.enableBlend();
+        GlStateManager.disableTexture2D();
+        GlStateManager.tryBlendFuncSeparate(
+            GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA,
+            GL11.GL_ONE, GL11.GL_ZERO
+        );
+        GL11.glColor4f(r, g, b, a);
+        GL11.glLineWidth(thickness);
+        GL11.glEnable(GL11.GL_LINE_SMOOTH);
+        GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
+
+        GL11.glBegin(GL11.GL_LINE_STRIP);
+        // top-left corner
+        for (int i = 180; i <= 270; i += 5) {
+            double angle = Math.toRadians(i);
+            GL11.glVertex2f(x + radius + (float)(Math.cos(angle) * radius),
+                            y + radius + (float)(Math.sin(angle) * radius));
+        }
+        // top-right corner
+        for (int i = 270; i <= 360; i += 5) {
+            double angle = Math.toRadians(i);
+            GL11.glVertex2f(x + width - radius + (float)(Math.cos(angle) * radius),
+                            y + radius + (float)(Math.sin(angle) * radius));
+        }
+        // bottom-right corner
+        for (int i = 0; i <= 90; i += 5) {
+            double angle = Math.toRadians(i);
+            GL11.glVertex2f(x + width - radius + (float)(Math.cos(angle) * radius),
+                            y + height - radius + (float)(Math.sin(angle) * radius));
+        }
+        // bottom-left corner
+        for (int i = 90; i <= 180; i += 5) {
+            double angle = Math.toRadians(i);
+            GL11.glVertex2f(x + radius + (float)(Math.cos(angle) * radius),
+                            y + height - radius + (float)(Math.sin(angle) * radius));
+        }
+        // close back to top-left
+        double angle = Math.toRadians(180);
+        GL11.glVertex2f(x + radius + (float)(Math.cos(angle) * radius),
+                        y + radius + (float)(Math.sin(angle) * radius));
+        GL11.glEnd();
+
+        GL11.glDisable(GL11.GL_LINE_SMOOTH);
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
+        GL11.glColor4f(1f, 1f, 1f, 1f);
+        GlStateManager.popMatrix();
+    }
+
     private static void drawQuad(float x1, float y1, float x2, float y2) {
         GL11.glBegin(GL11.GL_QUADS);
         GL11.glVertex2f(x1, y1);
