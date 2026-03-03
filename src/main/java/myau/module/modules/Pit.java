@@ -2,6 +2,7 @@ package myau.module.modules;
 
 import myau.Myau;
 import myau.mixin.IAccessorKeyBinding;
+import myau.ui.clickgui.Rise6ClickGui;
 import myau.mixin.IAccessorRenderManager;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
@@ -94,6 +95,19 @@ public class Pit extends Module {
     public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
     public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
 
+    // ── Events submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
+    public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
+
+    private final List<String> evList       = new ArrayList<>();
+    private String             evResponse   = null;
+    private long               evLastFetch  = 0L;
+    private int                evPassIndex  = 0;
+    private int                evTick       = 0;
+
     private int   stKills   = 0;
     private int   stAssists = 0;
     private float stXP      = 0f;
@@ -127,19 +141,6 @@ public class Pit extends Module {
 
     private final List<Vec3> gambleWaypoints = new ArrayList<>();
     private boolean gambleTracking = false;
-
-    // ── Events submodule ──────────────────────────────────────────────────────
-
-    public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
-    public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
-    public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
-    public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
-
-    private final List<String> evList       = new ArrayList<>();
-    private String             evResponse   = null;
-    private long               evLastFetch  = 0L;
-    private int                evPassIndex  = 0;
-    private int                evTick       = 0;
 
     // ── Prestige List submodule ───────────────────────────────────────────────
 
@@ -472,12 +473,16 @@ public class Pit extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!isEnabled() || !goldReq.getValue()) return;
+        if (!isEnabled()) return;
+        if (mc.currentScreen instanceof Rise6ClickGui) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
-        NumberFormat nf = NumberFormat.getNumberInstance();
-        String text = "§aGold Req: §6" + nf.format(grGained) + "§7/§6" + nf.format(grNeeded) + "g";
-        mc.fontRendererObj.drawStringWithShadow(text, (float) grX.getValue(), (float) grY.getValue(), 0xFFFFFFFF);
+        // ── Gold Req HUD ──────────────────────────────────────────────────────
+        if (goldReq.getValue()) {
+            NumberFormat nf = NumberFormat.getNumberInstance();
+            String text = "§aGold Req: §6" + nf.format(grGained) + "§7/§6" + nf.format(grNeeded) + "g";
+            mc.fontRendererObj.drawStringWithShadow(text, (float) grX.getValue(), (float) grY.getValue(), 0xFFFFFFFF);
+        }
 
         // ── Streak HUD ────────────────────────────────────────────────────────
         if (streak.getValue()) {
