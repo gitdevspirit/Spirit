@@ -16,7 +16,7 @@ import net.minecraft.client.multiplayer.ServerData;
 
 public class DiscordRPC extends Module {
 
-    private static final long APP_ID = 1226739642587750420L; // Spirit client app id placeholder
+    private static final long APP_ID = 1478309687198875700; // Spirit client app id placeholder
 
     private final Minecraft mc = Minecraft.getMinecraft();
     private IPCClient client;
