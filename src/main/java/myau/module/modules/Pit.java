@@ -1,6 +1,7 @@
 package myau.module.modules;
 
 import myau.Myau;
+import myau.util.ChatUtil;
 import myau.mixin.IAccessorKeyBinding;
 import myau.ui.clickgui.Rise6ClickGui;
 import myau.mixin.IAccessorRenderManager;
@@ -695,15 +696,15 @@ public class Pit extends Module {
         if (k == 0) return;
 
         // Submodule keybinds
-        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     { aimAssist.toggle();     Myau.moduleManager.playSound(); }
-        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       { goldReq.toggle();       Myau.moduleManager.playSound(); }
-        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        { streak.toggle();        Myau.moduleManager.playSound(); }
-        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     { pitEvents.toggle();     Myau.moduleManager.playSound(); }
-        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      { autoMath.toggle();      Myau.moduleManager.playSound(); }
-        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   { autoGrinder.toggle();   Myau.moduleManager.playSound(); }
-        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        { gamble.toggle();        Myau.moduleManager.playSound(); }
-        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) { bountyTracker.toggle(); Myau.moduleManager.playSound(); }
-        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); }
+        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     { aimAssist.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Aim Assist",     aimAssist.getValue()); }
+        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       { goldReq.toggle();       Myau.moduleManager.playSound(); notifySubmodule("Gold Req",        goldReq.getValue()); }
+        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        { streak.toggle();        Myau.moduleManager.playSound(); notifySubmodule("Streak",          streak.getValue()); }
+        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     { pitEvents.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Events",          pitEvents.getValue()); }
+        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      { autoMath.toggle();      Myau.moduleManager.playSound(); notifySubmodule("AutoMath",        autoMath.getValue()); }
+        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   { autoGrinder.toggle();   Myau.moduleManager.playSound(); notifySubmodule("AutoGrinder",     autoGrinder.getValue()); }
+        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        { gamble.toggle();        Myau.moduleManager.playSound(); notifySubmodule("Gamble",          gamble.getValue()); }
+        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) { bountyTracker.toggle(); Myau.moduleManager.playSound(); notifySubmodule("Bounty Tracker",  bountyTracker.getValue()); }
+        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); notifySubmodule("Prestige List",   prestigeList.getValue()); }
 
         // AimAssist attack timer
         if (aimAssist.getValue()
@@ -711,6 +712,13 @@ public class Pit extends Module {
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
+    }
+
+    private void notifySubmodule(String name, boolean on) {
+        myau.module.modules.HUD hud = (myau.module.modules.HUD) Myau.moduleManager.getModule(myau.module.modules.HUD.class);
+        if (hud == null || !hud.toggleAlerts.getValue()) return;
+        String status = on ? "&a&lON" : "&c&lOFF";
+        ChatUtil.sendFormatted(String.format("%s%s: %s&r", Myau.clientName, name, status));
     }
 
     // ── Events helpers ────────────────────────────────────────────────────────
