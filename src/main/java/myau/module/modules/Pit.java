@@ -30,7 +30,16 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.NumberFormat;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -118,6 +127,19 @@ public class Pit extends Module {
 
     private final List<Vec3> gambleWaypoints = new ArrayList<>();
     private boolean gambleTracking = false;
+
+    // ── Events submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
+    public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
+
+    private final List<String> evList       = new ArrayList<>();
+    private String             evResponse   = null;
+    private long               evLastFetch  = 0L;
+    private int                evPassIndex  = 0;
+    private int                evTick       = 0;
 
     // ── Prestige List submodule ───────────────────────────────────────────────
 
@@ -212,6 +234,52 @@ public class Pit extends Module {
     @EventTarget
     public void onTick(TickEvent event) {
         if (!isEnabled() || event.getType() != EventType.POST || mc.currentScreen != null) return;
+
+        // ── Events fetch ─────────────────────────────────────────────────────
+        if (pitEvents.getValue()) {
+            evTick++;
+            // Fetch every ~20 ticks (1s) off main thread
+            if (evTick % 20 == 0) {
+                long now = System.currentTimeMillis();
+                if (now - evLastFetch > 1000L) {
+                    evLastFetch = now;
+                    new Thread(() -> {
+                        try {
+                            StringBuilder sb = new StringBuilder();
+                            URL url = new URL("https://raw.githubusercontent.com/BrookeAFK/brookeafk-api/main/events.js");
+                            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                            conn.setRequestProperty("accept", "application/json");
+                            InputStream is = conn.getInputStream();
+                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                            String line;
+                            while ((line = br.readLine()) != null) sb.append(line);
+                            br.close();
+                            evResponse = sb.toString();
+                        } catch (Exception ignored) {}
+                    }).start();
+                }
+            }
+            // Parse response on tick
+            if (evResponse != null) {
+                try {
+                    JsonArray arr = new JsonParser().parse(evResponse).getAsJsonArray();
+                    evList.clear();
+                    int count = (int) evCount.getValue();
+                    for (int i = evPassIndex; i < evPassIndex + count; i++) {
+                        try {
+                            String name = arr.get(i).getAsJsonObject().get("event").getAsString();
+                            long ts     = arr.get(i).getAsJsonObject().get("timestamp").getAsLong();
+                            long ms     = ts - Instant.now().toEpochMilli();
+                            if (ms < 0) { evPassIndex++; continue; }
+                            long mins = TimeUnit.MILLISECONDS.toMinutes(ms);
+                            long secs = TimeUnit.MILLISECONDS.toSeconds(ms) % 60;
+                            evList.add(name + " [" + String.format("%02d:%02d", mins, secs) + "]");
+                        } catch (Exception ignored) {}
+                    }
+                } catch (Exception ignored) {}
+                evResponse = null;
+            }
+        }
 
         // ── Gold Requirement ──────────────────────────────────────────────────
         if (goldReq.getValue() && mc.thePlayer != null && mc.theWorld != null) {
@@ -448,6 +516,29 @@ public class Pit extends Module {
                 oy += mc.fontRendererObj.FONT_HEIGHT + 1;
             }
         }
+
+        // ── Events HUD ────────────────────────────────────────────────────────
+        if (pitEvents.getValue() && !evList.isEmpty()) {
+            float ex = (float) evX.getValue();
+            float ey = (float) evY.getValue();
+            int maxW = 0;
+            for (String info : evList)
+                maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \[")[0]));
+            for (String info : evList) {
+                String[] parts = info.split(" \[");
+                String evName  = parts[0];
+                String evTime  = parts[1].replace("]", "");
+                int color = evGetColor(evName);
+                mc.fontRendererObj.drawStringWithShadow(evName, ex, ey, color);
+                float tx = ex + maxW + 2;
+                mc.fontRendererObj.drawStringWithShadow("[", tx, ey, 0xFFAAAAAA);
+                tx += mc.fontRendererObj.getStringWidth("[");
+                mc.fontRendererObj.drawStringWithShadow(evTime, tx, ey, 0xFF00FF00);
+                tx += mc.fontRendererObj.getStringWidth(evTime);
+                mc.fontRendererObj.drawStringWithShadow("]", tx, ey, 0xFFAAAAAA);
+                ey += mc.fontRendererObj.FONT_HEIGHT + 2;
+            }
+        }
     }
 
     @EventTarget
@@ -490,6 +581,31 @@ public class Pit extends Module {
                 && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
             aaTimer.reset();
         }
+    }
+
+    // ── Events helpers ────────────────────────────────────────────────────────
+
+    private int evGetColor(String name) {
+        if (name.contains("Blockhead"))        return 0xFFFFAA00;
+        if (name.contains("Pizza"))            return 0xFFFF6655;
+        if (name.contains("Beast"))            return 0xFF558855;
+        if (name.contains("Robbery"))          return 0xFFFFAA00;
+        if (name.contains("Spire"))            return 0xFFAA55AA;
+        if (name.contains("Squads"))           return 0xFF5555FF;
+        if (name.contains("Team Deathmatch"))  return 0xFFAA55AA;
+        if (name.contains("Raffle"))           return 0xFFFFAA00;
+        if (name.contains("Rage Pit"))         return 0xFFFF6655;
+        if (name.contains("2x Rewards"))       return 0xFF00AA00;
+        if (name.contains("Giant Cake"))       return 0xFFFFAAFF;
+        if (name.contains("KOTL"))             return 0xFF558855;
+        if (name.contains("Dragon Egg"))       return 0xFFAA55AA;
+        if (name.contains("Auction"))          return 0xFFFFFF55;
+        if (name.contains("Quick Maths"))      return 0xFFAA55AA;
+        if (name.contains("KOTH"))             return 0xFF5555FF;
+        if (name.contains("Care Package"))     return 0xFFFFAA00;
+        if (name.contains("All bounty"))       return 0xFFFFAA00;
+        if (name.contains("Gamble"))           return 0xFFFFAA00;
+        return 0xFFFFFFFF;
     }
 
     // ── Prestige List helpers ─────────────────────────────────────────────────
