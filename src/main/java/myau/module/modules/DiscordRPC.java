@@ -13,7 +13,7 @@ import net.minecraft.util.EnumChatFormatting;
 public class DiscordRPC extends Module {
 
     // Replace with your Discord application client ID
-    private static final long CLIENT_ID = 1478309687198875700;
+    private static final long CLIENT_ID = 1478309687198875700L;
 
     private final Minecraft mc = Minecraft.getMinecraft();
     private DiscordIPC ipc;
