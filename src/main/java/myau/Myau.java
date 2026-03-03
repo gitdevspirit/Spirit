@@ -8,6 +8,7 @@ import myau.render.RenderEventBridge;
 import net.minecraftforge.common.MinecraftForge;
 import myau.command.commands.BindCommand;
 import myau.command.commands.HideCommand;
+import myau.command.commands.KosCommand;
 import myau.command.commands.SpammerCommand;
 import myau.command.commands.ConfigCommand;
 import myau.config.Config;
@@ -62,6 +63,7 @@ public class Myau {
         commandManager.register(new BindCommand());
         commandManager.register(new HideCommand(true));   // .hide
         commandManager.register(new HideCommand(false));  // .show
+        commandManager.register(new KosCommand());
         commandManager.register(new SpammerCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
@@ -89,14 +91,16 @@ public class Myau {
         moduleManager.modules.put(BedNuker.class,        new BedNuker());
         moduleManager.modules.put(BedESP.class,          new BedESP());
         moduleManager.modules.put(BedTracker.class,      new BedTracker());
+        moduleManager.modules.put(BedPlates.class,       new BedPlates());
         moduleManager.modules.put(Blink.class,           new Blink());
         moduleManager.modules.put(BackTrack.class,       new BackTrack());
         moduleManager.modules.put(FPScounter.class,      new FPScounter());
         moduleManager.modules.put(Chams.class,           new Chams());
         moduleManager.modules.put(ChestESP.class,        new ChestESP());
         moduleManager.modules.put(ChestStealer.class,    new ChestStealer());
+        moduleManager.modules.put(Clutch.class,          new Clutch());
         moduleManager.modules.put(Eagle.class,           new Eagle());
-        moduleManager.modules.put(EdgeOffset.class,      new EdgeOffset());
+        moduleManager.modules.put(EdgeOffset.class,       new EdgeOffset());
         moduleManager.modules.put(ESP.class,             new ESP());
         moduleManager.modules.put(FastPlace.class,       new FastPlace());
         moduleManager.modules.put(ServerLag.class,       new ServerLag());
@@ -150,8 +154,8 @@ public class Myau {
         moduleManager.modules.put(SafeWalk.class,        new SafeWalk());
         moduleManager.modules.put(Scaffold.class,        new Scaffold());
         moduleManager.modules.put(AutoBlockIn.class,     new AutoBlockIn());
-        moduleManager.modules.put(Pit.class,             new Pit());
         moduleManager.modules.put(Spammer.class,         new Spammer());
+        moduleManager.modules.put(Pit.class,             new Pit());
         moduleManager.modules.put(Speed.class,           new Speed());
         moduleManager.modules.put(SpeedMine.class,       new SpeedMine());
         moduleManager.modules.put(Sprint.class,          new Sprint());
