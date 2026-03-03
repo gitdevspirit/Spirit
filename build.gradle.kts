@@ -60,7 +60,6 @@ repositories {
     maven("https://repo.spongepowered.org/maven/")
     // If you don't want to log in with your real minecraft account, remove this line
     maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1")
-    maven("https://repo.spring.io/libs-milestone")
 }
 val shadowImpl: Configuration by configurations.creating {
     configurations.implementation.get().extendsFrom(this)
@@ -78,7 +77,6 @@ dependencies {
     runtimeOnly("me.djtheredstoner:DevAuth-forge-legacy:1.2.1")
 
     shadowImpl("org.reflections:reflections:0.10.2")
-    shadowImpl("com.github.jagrosh:DiscordIPC:0.4")
     compileOnly(files("libs/optifine-1.8.9.jar"))
 }
 // Tasks:
