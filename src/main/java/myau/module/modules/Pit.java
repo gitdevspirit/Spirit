@@ -523,9 +523,9 @@ public class Pit extends Module {
             float ey = (float) evY.getValue();
             int maxW = 0;
             for (String info : evList)
-                maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \[")[0]));
+                maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \\[")[0]));
             for (String info : evList) {
-                String[] parts = info.split(" \[");
+                String[] parts = info.split(" \\[");
                 String evName  = parts[0];
                 String evTime  = parts[1].replace("]", "");
                 int color = evGetColor(evName);
