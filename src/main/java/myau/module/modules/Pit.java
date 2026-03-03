@@ -10,6 +10,7 @@ import myau.events.KeyEvent;
 import myau.events.PacketEvent;
 import myau.events.Render2DEvent;
 import myau.events.Render3DEvent;
+import myau.events.LoadWorldEvent;
 import myau.events.TickEvent;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
@@ -42,6 +43,7 @@ import java.text.NumberFormat;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.Stack;
@@ -125,6 +127,15 @@ public class Pit extends Module {
 
     private String amPendingSolution = null;
     private static final ScheduledExecutorService amScheduler = Executors.newScheduledThreadPool(1);
+
+    // ── Bounty Tracker submodule ─────────────────────────────────────────────
+
+    public final BooleanSetting bountyTracker = register(new BooleanSetting("Bounty Tracker", false));
+    public final SliderSetting  btX           = register(new SliderSetting("  BT X",   5,  0, 500, 1, () -> bountyTracker.getValue()));
+    public final SliderSetting  btY           = register(new SliderSetting("  BT Y",  50,  0, 300, 1, () -> bountyTracker.getValue()));
+
+    // name -> bounty amount string
+    private final LinkedHashMap<String, String> btTargets = new LinkedHashMap<>();
 
     // ── AutoGrinder submodule ─────────────────────────────────────────────────
 
@@ -446,6 +457,35 @@ public class Pit extends Module {
             }
         }
 
+        // ── Bounty Tracker chat parsing ───────────────────────────────────────
+        if (bountyTracker.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+
+            // New/updated bounty: "☆ PlayerName now has a bounty of 1,234g!"
+            java.util.regex.Matcher mSet = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\s*(\S+) now has a bounty of ([\d,]+)g")
+                .matcher(raw);
+            if (mSet.find()) {
+                btTargets.put(mSet.group(1), mSet.group(2) + "g");
+            }
+
+            // Bounty claimed: "☆ PlayerName's bounty of 1,234g was claimed by KillerName!"
+            java.util.regex.Matcher mClaim = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\s*(\S+)'s bounty of [\d,]+g was claimed by (\S+)")
+                .matcher(raw);
+            if (mClaim.find()) {
+                btTargets.remove(mClaim.group(1));
+            }
+
+            // Bounty reset: "☆ PlayerName's bounty has been reset"
+            java.util.regex.Matcher mReset = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\s*(\S+)'s bounty has been reset")
+                .matcher(raw);
+            if (mReset.find()) {
+                btTargets.remove(mReset.group(1));
+            }
+        }
+
         // ── Gamble chat parsing ───────────────────────────────────────────────
         if (gamble.getValue()) {
             String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
@@ -546,6 +586,19 @@ public class Pit extends Module {
                 ey += mc.fontRendererObj.FONT_HEIGHT + 2;
             }
         }
+
+        // ── Bounty Tracker HUD ────────────────────────────────────────────────
+        if (bountyTracker.getValue() && !btTargets.isEmpty()) {
+            float bx = (float) btX.getValue();
+            float by = (float) btY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("§6§lBounties", bx, by, 0xFFFFAA00);
+            by += mc.fontRendererObj.FONT_HEIGHT + 2;
+            for (java.util.Map.Entry<String, String> entry : btTargets.entrySet()) {
+                String line = "§e" + entry.getKey() + " §6" + entry.getValue();
+                mc.fontRendererObj.drawStringWithShadow(line, bx, by, 0xFFFFFFFF);
+                by += mc.fontRendererObj.FONT_HEIGHT + 1;
+            }
+        }
     }
 
     @EventTarget
@@ -578,6 +631,16 @@ public class Pit extends Module {
             GL11.glDisable(GL11.GL_BLEND);
             GL11.glPopMatrix();
         }
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        btTargets.clear();
+        // Also reset streak, gold req, events on lobby swap
+        stKills = 0; stAssists = 0; stXP = 0; stGold = 0;
+        stPaused = true;
+        grGained = 0; grNeeded = 0;
+        evList.clear(); evResponse = null; evPassIndex = 0;
     }
 
     @EventTarget
