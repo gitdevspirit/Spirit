@@ -9,6 +9,7 @@ import net.minecraftforge.common.MinecraftForge;
 import myau.command.commands.BindCommand;
 import myau.command.commands.HideCommand;
 import myau.command.commands.KosCommand;
+import myau.command.commands.NameProtectCommand;
 import myau.command.commands.SpammerCommand;
 import myau.command.commands.ConfigCommand;
 import myau.config.Config;
@@ -64,6 +65,7 @@ public class Myau {
         commandManager.register(new HideCommand(true));   // .hide
         commandManager.register(new HideCommand(false));  // .show
         commandManager.register(new KosCommand());
+        commandManager.register(new NameProtectCommand());
         commandManager.register(new SpammerCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
