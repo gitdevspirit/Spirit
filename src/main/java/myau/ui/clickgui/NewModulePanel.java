@@ -82,6 +82,13 @@ public class NewModulePanel {
         int bg = en ? blend(0x44E991B8, 0x77E991B8, ta) : (hov ? 0x22FFFFFF : 0x14FFFFFF);
         RoundedUtils.drawRoundedRect(x, y, CARD_W, CARD_H, CARD_H / 2, bg);
 
+        // Pill border — animated pink when on, dim grey when off
+        int borderAlpha = en ? (int)(0x88 + 0x77 * ta) : (hov ? 0x44 : 0x22);
+        int borderColor = en
+            ? ((borderAlpha << 24) | (GuiColors.ACCENT & 0x00FFFFFF))
+            : ((borderAlpha << 24) | 0x666666);
+        RoundedUtils.drawRoundedOutline(x, y, CARD_W, CARD_H, CARD_H / 2f, 1.2f, borderColor);
+
         // Status dot
         RoundedUtils.drawRoundedRect(x + 7, y + CARD_H / 2 - 3, 6, 6, 3,
                 en ? GuiColors.ACCENT : 0xFF383838);
