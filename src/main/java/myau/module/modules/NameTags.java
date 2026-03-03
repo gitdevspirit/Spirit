@@ -238,15 +238,25 @@ public class NameTags extends Module {
                     if (!renderingItems.isEmpty()) {
                         int offset = renderingItems.size() * -8;
                         for (int i = 0; i < renderingItems.size(); i++) {
-                            RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
                             if (enchants.getValue()) {
+                                RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
+                            } else {
+                                // Render item without enchant glint overlay
                                 GlStateManager.pushMatrix();
-                                float enchScale = 0.45f;
-                                GlStateManager.scale(enchScale, enchScale, 1f);
-                                RenderUtil.renderEnchantmentText(renderingItems.get(i),
-                                        (offset + i * 16) * enchScale,
-                                        (-height - 16 - 8) * enchScale,
-                                        enchScale);
+                                GlStateManager.depthMask(true);
+                                GlStateManager.clear(256);
+                                net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
+                                net.minecraft.client.renderer.GlStateManager.disableLighting();
+                                GlStateManager.pushMatrix();
+                                GlStateManager.scale(1f, 1f, -0.01f);
+                                mc.getRenderItem().zLevel = -150f;
+                                mc.getRenderItem().renderItemAndEffectIntoGUI(renderingItems.get(i), offset + i * 16, -height - 16);
+                                mc.getRenderItem().zLevel = 0f;
+                                GlStateManager.popMatrix();
+                                net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
+                                GlStateManager.enableAlpha();
+                                GlStateManager.disableBlend();
+                                GlStateManager.enableTexture2D();
                                 GlStateManager.popMatrix();
                             }
                         }
