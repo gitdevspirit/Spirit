@@ -57,6 +57,8 @@ public class Pit extends Module {
 
     // ── Submodule toggles ────────────────────────────────────────────────────
 
+    public final BooleanSetting hudPreview  = register(new BooleanSetting("HUD Preview", false));
+
     public final BooleanSetting aimAssist = register(new BooleanSetting("Aim Assist", false));
 
     // ── Aim Assist settings — only visible when aimAssist is on ──────────────
@@ -474,7 +476,7 @@ public class Pit extends Module {
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (!isEnabled()) return;
-        if (mc.currentScreen instanceof Rise6ClickGui) return;
+        if (mc.currentScreen instanceof Rise6ClickGui && !hudPreview.getValue()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
         // ── Gold Req HUD ──────────────────────────────────────────────────────
