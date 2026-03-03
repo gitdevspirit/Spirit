@@ -60,7 +60,7 @@ repositories {
     maven("https://repo.spongepowered.org/maven/")
     // If you don't want to log in with your real minecraft account, remove this line
     maven("https://pkgs.dev.azure.com/djtheredstoner/DevAuth/_packaging/public/maven/v1")
-    maven("https://jitpack.io")
+    maven("https://repo.spring.io/libs-milestone")
 }
 val shadowImpl: Configuration by configurations.creating {
     configurations.implementation.get().extendsFrom(this)
