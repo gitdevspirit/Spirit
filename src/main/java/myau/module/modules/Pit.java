@@ -102,6 +102,7 @@ public class Pit extends Module {
     public final SliderSetting  stX      = register(new SliderSetting("  Streak X",       5,  0, 500, 1, () -> streak.getValue()));
     public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
     public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
+    public final SliderSetting  stSpacing = register(new SliderSetting("  Line Spacing",  15,  8,  20, 1, () -> streak.getValue()));
 
     // ── Events submodule ──────────────────────────────────────────────────────
 
@@ -565,20 +566,22 @@ public class Pit extends Module {
         if (streak.getValue()) {
             int sx = (int) stX.getValue();
             int sy = (int) stY.getValue();
+            int sp = (int) stSpacing.getValue();
             int alpha = (int)(stOpacity.getValue() / 100.0 * 255.0);
-            // Background box
-            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + 98, (alpha << 24));
+            int boxH = 10 + sp * 6; // header + 5 data rows + padding
+            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
 
             String statusCol = stPaused ? "§c" : "§a";
             String status    = stPaused ? "Last" : "Active";
             long   elapsed   = stTimer.getElapsedTime() / 1000L;
 
-            mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, sy + 5,  0xFFFFFFFF);
-            mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"  + stKills,                              sx + 5, sy + 20, 0xFFFFFFFF);
-            mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, sy + 35, 0xFFFFFFFF);
-            mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"     + String.format("%.1f", stXP),          sx + 5, sy + 50, 0xFFFFFFFF);
-            mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"   + String.format("%.1f", stGold),        sx + 5, sy + 65, 0xFFFFFFFF);
-            mc.fontRendererObj.drawStringWithShadow("Time: "         + formatStreakTime(elapsed),             sx + 5, sy + 80, 0xFFFFFFFF);
+            int ly = sy + 4;
+            mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"   + stKills,                             sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF);
         }
 
 
@@ -680,15 +683,15 @@ public class Pit extends Module {
         if (k == 0) return;
 
         // Submodule keybinds
-        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     aimAssist.toggle();
-        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       goldReq.toggle();
-        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        streak.toggle();
-        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     pitEvents.toggle();
-        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      autoMath.toggle();
-        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   autoGrinder.toggle();
-        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        gamble.toggle();
-        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) bountyTracker.toggle();
-        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  prestigeList.toggle();
+        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     { aimAssist.toggle();     Myau.moduleManager.playSound(); }
+        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       { goldReq.toggle();       Myau.moduleManager.playSound(); }
+        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        { streak.toggle();        Myau.moduleManager.playSound(); }
+        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     { pitEvents.toggle();     Myau.moduleManager.playSound(); }
+        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      { autoMath.toggle();      Myau.moduleManager.playSound(); }
+        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   { autoGrinder.toggle();   Myau.moduleManager.playSound(); }
+        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        { gamble.toggle();        Myau.moduleManager.playSound(); }
+        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) { bountyTracker.toggle(); Myau.moduleManager.playSound(); }
+        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); }
 
         // AimAssist attack timer
         if (aimAssist.getValue()
