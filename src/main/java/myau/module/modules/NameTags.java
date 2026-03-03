@@ -238,10 +238,16 @@ public class NameTags extends Module {
                     if (!renderingItems.isEmpty()) {
                         int offset = renderingItems.size() * -8;
                         for (int i = 0; i < renderingItems.size(); i++) {
+                            RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
                             if (enchants.getValue()) {
-                                RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
-                            } else {
-                                RenderUtil.renderItemInGUINoEnchant(renderingItems.get(i), offset + i * 16, -height - 16);
+                                GlStateManager.pushMatrix();
+                                float enchScale = 0.45f;
+                                GlStateManager.scale(enchScale, enchScale, 1f);
+                                RenderUtil.renderEnchantmentText(renderingItems.get(i),
+                                        (offset + i * 16) * enchScale,
+                                        (-height - 16 - 8) * enchScale,
+                                        enchScale);
+                                GlStateManager.popMatrix();
                             }
                         }
                         height += 16;
