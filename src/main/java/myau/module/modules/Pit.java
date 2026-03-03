@@ -1,312 +1,935 @@
 package myau.module.modules;
 
 import myau.Myau;
-import myau.enums.ChatColors;
-import myau.event.EventTarget;
-import myau.events.Render3DEvent;
+import myau.util.ChatUtil;
+import myau.mixin.IAccessorKeyBinding;
+import myau.ui.clickgui.Rise6ClickGui;
 import myau.mixin.IAccessorRenderManager;
+import myau.event.EventTarget;
+import myau.event.types.EventType;
+import myau.events.KeyEvent;
+import myau.events.PacketEvent;
+import myau.events.Render2DEvent;
+import myau.events.Render3DEvent;
+import myau.events.LoadWorldEvent;
+import myau.events.TickEvent;
 import myau.module.BooleanSetting;
+import myau.module.KeybindSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
-import myau.module.modules.Pit;
 import myau.module.SliderSetting;
-import myau.util.ColorUtil;
-import myau.util.RenderUtil;
-import myau.util.TeamUtil;
+import myau.util.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.boss.EntityDragon;
-import net.minecraft.entity.boss.EntityWither;
-import net.minecraft.entity.monster.*;
-import net.minecraft.entity.passive.EntityAnimal;
-import net.minecraft.entity.passive.EntityBat;
-import net.minecraft.entity.passive.EntitySquid;
-import net.minecraft.entity.passive.EntityVillager;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.item.ItemStack;
-import net.minecraft.potion.Potion;
-import net.minecraft.potion.PotionEffect;
-import net.minecraft.scoreboard.Score;
-import net.minecraft.scoreboard.ScoreObjective;
-import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.network.play.client.C01PacketChatMessage;
+import net.minecraft.network.play.server.S02PacketChat;
+import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.EnumChatFormatting;
-import org.apache.commons.lang3.StringUtils;
+import org.lwjgl.opengl.GL11;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.util.Vec3;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.ItemArmor;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 
-import java.awt.*;
-import java.text.DecimalFormat;
-import java.text.DecimalFormatSymbols;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.text.NumberFormat;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
 import java.util.ArrayList;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.Stack;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.stream.Collectors;
 
-public class NameTags extends Module {
+public class Pit extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private static final DecimalFormat healthFormatter = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
 
-    // Display
-    public final SliderSetting   scale            = new SliderSetting("Scale",             1.0, 0.5, 2.0, 0.05);
-    public final BooleanSetting  autoScale        = new BooleanSetting("Auto Scale",       true);
-    public final SliderSetting   backgroundOpacity= new SliderSetting("Background",        25,  0, 100, 1);
-    public final BooleanSetting  shadow           = new BooleanSetting("Shadow",           true);
+    // ── Submodule toggles ────────────────────────────────────────────────────
 
-    // Modes
-    public final DropdownSetting distanceMode     = new DropdownSetting("Distance",        0, "NONE", "DEFAULT", "VAPE");
-    public final DropdownSetting healthMode       = new DropdownSetting("Health",          2, "NONE", "HP", "HEARTS", "TAB");
+    public final BooleanSetting hudPreview  = register(new BooleanSetting("HUD Preview", false));
 
-    // Info layers
-    public final BooleanSetting  armor            = new BooleanSetting("Armor",            true);
-    public final BooleanSetting  enchants         = new BooleanSetting("Enchants",         true);
-    public final BooleanSetting  effects          = new BooleanSetting("Effects",          true);
+    public final BooleanSetting aimAssist = register(new BooleanSetting("Aim Assist", false));
+    public final KeybindSetting kb_aimAssist = register(new KeybindSetting("  Aim Assist Key", 0));
 
-    // Target filters
-    public final BooleanSetting  players          = new BooleanSetting("Players",          true);
-    public final BooleanSetting  friends          = new BooleanSetting("Friends",          true);
-    public final BooleanSetting  enemies          = new BooleanSetting("Enemies",          true);
-    public final BooleanSetting  bosses           = new BooleanSetting("Bosses",           false);
-    public final BooleanSetting  mobs             = new BooleanSetting("Mobs",             false);
-    public final BooleanSetting  creepers         = new BooleanSetting("Creepers",         false);
-    public final BooleanSetting  endermans        = new BooleanSetting("Endermen",         false);
-    public final BooleanSetting  blazes           = new BooleanSetting("Blazes",           false);
-    public final BooleanSetting  animals          = new BooleanSetting("Animals",          false);
-    public final BooleanSetting  self             = new BooleanSetting("Self",             false);
-    public final BooleanSetting  bots             = new BooleanSetting("Bots",             false);
+    // ── Aim Assist settings — only visible when aimAssist is on ──────────────
 
-    public NameTags() {
-        super("NameTags", false);
-        register(scale);
-        register(autoScale);
-        register(backgroundOpacity);
-        register(shadow);
-        register(distanceMode);
-        register(healthMode);
-        register(armor);
-        register(enchants);
-        register(effects);
-        register(players);
-        register(friends);
-        register(enemies);
-        register(bosses);
-        register(mobs);
-        register(creepers);
-        register(endermans);
-        register(blazes);
-        register(animals);
-        register(self);
-        register(bots);
+    public final SliderSetting  aaHSpeed    = register(new SliderSetting("  H-Speed",    3.0, 0.0, 10.0, 0.1,  () -> aimAssist.getValue()));
+    public final SliderSetting  aaVSpeed    = register(new SliderSetting("  V-Speed",    0.0, 0.0, 10.0, 0.1,  () -> aimAssist.getValue()));
+    public final SliderSetting  aaSmoothing = register(new SliderSetting("  Smoothing",  50,  0,   100,   1,   () -> aimAssist.getValue()));
+    public final SliderSetting  aaRange     = register(new SliderSetting("  Range",      4.5, 3.0, 8.0,  0.1,  () -> aimAssist.getValue()));
+    public final SliderSetting  aaFov       = register(new SliderSetting("  FOV",        90,  30,  360,   1,   () -> aimAssist.getValue()));
+    public final BooleanSetting aaWeapon    = register(new BooleanSetting("  Weapons Only",  true,  () -> aimAssist.getValue()));
+    public final BooleanSetting aaTools     = register(new BooleanSetting("  Allow Tools",   false, () -> aimAssist.getValue()));
+    public final BooleanSetting aaBotCheck  = register(new BooleanSetting("  Bot Check",     true,  () -> aimAssist.getValue()));
+    public final BooleanSetting aaTeam      = register(new BooleanSetting("  Teams",          true,  () -> aimAssist.getValue()));
+
+    // Requirements — filter who gets targeted
+    public final BooleanSetting aaReqArmor     = register(new BooleanSetting("  Req: Armor",        false, () -> aimAssist.getValue()));
+    public final DropdownSetting aaArmorTier   = register(new DropdownSetting("  Armor Tier",   0, () -> aimAssist.getValue() && aaReqArmor.getValue(), "Any", "Leather", "Chain", "Iron", "Gold", "Diamond"));
+    public final BooleanSetting aaReqHealth    = register(new BooleanSetting("  Req: Health",       false, () -> aimAssist.getValue()));
+    public final SliderSetting  aaMaxHealth    = register(new SliderSetting("  Max Health",   10,  1, 20, 1,   () -> aimAssist.getValue() && aaReqHealth.getValue()));
+
+    private final TimerUtil aaTimer = new TimerUtil();
+
+    // ── Gold Requirement submodule ────────────────────────────────────────────
+
+    public final BooleanSetting goldReq = register(new BooleanSetting("Gold Req", false));
+    public final KeybindSetting kb_goldReq = register(new KeybindSetting("  Gold Req Key", 0));
+    public final SliderSetting  grX     = register(new SliderSetting("  HUD X", 10, 0, 500, 1, () -> goldReq.getValue()));
+    public final SliderSetting  grY     = register(new SliderSetting("  HUD Y", 10, 0, 300, 1, () -> goldReq.getValue()));
+
+    private double grGained = 0, grNeeded = 0;
+    private int    grTick   = 0;
+
+    // ── Streak submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting streak   = register(new BooleanSetting("Streak", false));
+    public final KeybindSetting kb_streak = register(new KeybindSetting("  Streak Key", 0));
+    public final SliderSetting  stX      = register(new SliderSetting("  Streak X",       5,  0, 500, 1, () -> streak.getValue()));
+    public final SliderSetting  stY      = register(new SliderSetting("  Streak Y",      50,  0, 300, 1, () -> streak.getValue()));
+    public final SliderSetting  stOpacity = register(new SliderSetting("  Box Opacity",  33,  0, 100, 1, () -> streak.getValue()));
+    public final SliderSetting  stSpacing  = register(new SliderSetting("  Line Spacing",  15,  8,  20, 1, () -> streak.getValue()));
+    public final BooleanSetting stShowKills   = register(new BooleanSetting("  Show Kills",    true,  () -> streak.getValue()));
+    public final BooleanSetting stShowAssists = register(new BooleanSetting("  Show Assists",  true,  () -> streak.getValue()));
+    public final BooleanSetting stShowXP      = register(new BooleanSetting("  Show XP",       true,  () -> streak.getValue()));
+    public final BooleanSetting stShowGold    = register(new BooleanSetting("  Show Gold",     true,  () -> streak.getValue()));
+    public final BooleanSetting stShowTime    = register(new BooleanSetting("  Show Time",     true,  () -> streak.getValue()));
+
+    // ── Events submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
+    public final KeybindSetting kb_pitEvents = register(new KeybindSetting("  Events Key", 0));
+    public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
+    public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
+
+    private final List<String> evList       = new ArrayList<>();
+    private String             evResponse   = null;
+    private long               evLastFetch  = 0L;
+    private int                evPassIndex  = 0;
+    private int                evTick       = 0;
+
+    private int   stKills   = 0;
+    private int   stAssists = 0;
+    private float stXP      = 0f;
+    private float stGold    = 0f;
+    private boolean stPaused = true;
+    private final TimerUtil stTimer = new TimerUtil();
+
+    // ── AutoMath submodule ────────────────────────────────────────────────────
+
+    public final BooleanSetting autoMath       = register(new BooleanSetting("AutoMath", false));
+    public final KeybindSetting kb_autoMath = register(new KeybindSetting("  AutoMath Key", 0));
+    public final SliderSetting  amDelay        = register(new SliderSetting("  Delay", 1000, 0, 5000, 100, () -> autoMath.getValue()));
+    public final BooleanSetting amAutoSubmit   = register(new BooleanSetting("  Auto Submit", true, () -> autoMath.getValue()));
+
+    private String amPendingSolution = null;
+    private static final ScheduledExecutorService amScheduler = Executors.newScheduledThreadPool(1);
+
+    // ── Bounty Tracker submodule ─────────────────────────────────────────────
+
+    public final BooleanSetting bountyTracker = register(new BooleanSetting("Bounty Tracker", false));
+    public final KeybindSetting kb_bountyTracker = register(new KeybindSetting("  Bounty Key", 0));
+    public final SliderSetting  btX           = register(new SliderSetting("  BT X",   5,  0, 500, 1, () -> bountyTracker.getValue()));
+    public final SliderSetting  btY           = register(new SliderSetting("  BT Y",  50,  0, 300, 1, () -> bountyTracker.getValue()));
+
+    // name -> bounty amount string
+    private final LinkedHashMap<String, String> btTargets = new LinkedHashMap<>();
+
+    // ── AutoGrinder submodule ─────────────────────────────────────────────────
+
+    public final BooleanSetting autoGrinder  = register(new BooleanSetting("AutoGrinder", false));
+    public final KeybindSetting kb_autoGrinder = register(new KeybindSetting("  AutoGrinder Key", 0));
+    public final DropdownSetting agSorting   = register(new DropdownSetting("  Sorting",    0, () -> autoGrinder.getValue(), "Distance", "Health"));
+    public final DropdownSetting agMode      = register(new DropdownSetting("  Mode",       0, () -> autoGrinder.getValue(), "Legit", "Blatant"));
+    public final SliderSetting   agRange     = register(new SliderSetting("  Attack Range", 4.0, 3.0, 6.0, 0.1, () -> autoGrinder.getValue()));
+    public final SliderSetting   agFov       = register(new SliderSetting("  FOV",         30,  1,  360,   1,   () -> autoGrinder.getValue()));
+
+    private int agTicks = 0;
+
+    // ── Gamble submodule ──────────────────────────────────────────────────────
+
+    public final BooleanSetting gamble          = register(new BooleanSetting("Gamble", false));
+    public final KeybindSetting kb_gamble = register(new KeybindSetting("  Gamble Key", 0));
+    public final BooleanSetting gambleGiantStop = register(new BooleanSetting("  Giant Ticket Stop", true, () -> gamble.getValue()));
+
+    private final List<Vec3> gambleWaypoints = new ArrayList<>();
+    private boolean gambleTracking = false;
+
+    // ── KOS submodule ─────────────────────────────────────────────────────────
+
+    public final BooleanSetting kosList     = register(new BooleanSetting("KOS List", false));
+    public final SliderSetting  kosX        = register(new SliderSetting("  KOS X",  5,  0, 500, 1, () -> kosList.getValue()));
+    public final SliderSetting  kosY        = register(new SliderSetting("  KOS Y", 50,  0, 300, 1, () -> kosList.getValue()));
+    public final KeybindSetting kb_kosList  = register(new KeybindSetting("  KOS Key", 0));
+
+    // Static so NameTags can read it
+    public static final Set<String> kosNames = new HashSet<>();
+
+    // ── Prestige List submodule ───────────────────────────────────────────────
+
+    public final BooleanSetting prestigeList   = register(new BooleanSetting("Prestige List",     false));
+    public final KeybindSetting kb_prestigeList = register(new KeybindSetting("  Prestige Key", 0));
+    public final SliderSetting  plX            = register(new SliderSetting("  PL X",    5,   0, 500, 1,  () -> prestigeList.getValue()));
+    public final SliderSetting  plY            = register(new SliderSetting("  PL Y",   50,   0, 300, 1,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP0           = register(new BooleanSetting("  Prestige 0",     true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP1_4         = register(new BooleanSetting("  Prestige 1-4",   true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP5_9         = register(new BooleanSetting("  Prestige 5-9",   true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP10_14       = register(new BooleanSetting("  Prestige 10-14", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP15_19       = register(new BooleanSetting("  Prestige 15-19", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP20_24       = register(new BooleanSetting("  Prestige 20-24", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP25_29       = register(new BooleanSetting("  Prestige 25-29", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP30_34       = register(new BooleanSetting("  Prestige 30-34", true,  () -> prestigeList.getValue()));
+    public final BooleanSetting plP35_39       = register(new BooleanSetting("  Prestige 35-39", true,  () -> prestigeList.getValue()));
+
+    public Pit() {
+        super("Pit", false);
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    @Override
+    public void onDisabled() {
+        if (mc.thePlayer != null) agSetKeys(false);
+    }
 
-    public boolean shouldRenderTags(EntityLivingBase entity) {
-        if (entity.deathTime > 0) return false;
-        if (mc.getRenderViewEntity().getDistanceToEntity(entity) > 512.0F) return false;
+    // ── Aim Assist logic ──────────────────────────────────────────────────────
 
-        if (entity instanceof EntityPlayer) {
-            if (entity != mc.thePlayer && entity != mc.getRenderViewEntity()) {
-                if (TeamUtil.isBot((EntityPlayer) entity))    return bots.getValue();
-                if (TeamUtil.isFriend((EntityPlayer) entity)) return friends.getValue();
-                return TeamUtil.isTarget((EntityPlayer) entity) ? enemies.getValue() : players.getValue();
-            } else {
-                return self.getValue() && mc.gameSettings.thirdPersonView != 0;
-            }
+    private boolean passesRequirements(EntityPlayer p) {
+        // Health requirement
+        if (aaReqHealth.getValue() && p.getHealth() > aaMaxHealth.getValue()) return false;
+
+        // Armor tier requirement
+        if (aaReqArmor.getValue()) {
+            String tier = aaArmorTier.getValue();
+            if (!tier.equals("Any") && !playerHasArmorTier(p, tier)) return false;
         }
 
-        if (entity instanceof EntityDragon || entity instanceof EntityWither)
-            return !entity.isInvisible() && bosses.getValue();
-
-        if (!(entity instanceof EntityMob) && !(entity instanceof EntitySlime))
-            return (entity instanceof EntityAnimal
-                    || entity instanceof EntityBat
-                    || entity instanceof EntitySquid
-                    || entity instanceof EntityVillager) && animals.getValue();
-
-        if (entity instanceof EntityCreeper)  return creepers.getValue();
-        if (entity instanceof EntityEnderman) return endermans.getValue();
-        if (entity instanceof EntityBlaze)    return blazes.getValue();
-        return mobs.getValue();
+        return true;
     }
 
-    // ── Events ────────────────────────────────────────────────────────────────
+    private int countArmorPieces(EntityPlayer p, String tier) {
+        int count = 0;
+        for (int i = 0; i < 4; i++) {
+            ItemStack armor = p.getCurrentArmor(i);
+            if (armor == null || !(armor.getItem() instanceof ItemArmor)) continue;
+            ItemArmor.ArmorMaterial mat = ((ItemArmor) armor.getItem()).getArmorMaterial();
+            String matName = mat.name().toLowerCase();
+            boolean matches =
+                (tier.equalsIgnoreCase("Leather") && matName.equals("cloth"))   ||
+                (tier.equalsIgnoreCase("Chain")   && matName.equals("chain"))   ||
+                (tier.equalsIgnoreCase("Iron")    && matName.equals("iron"))    ||
+                (tier.equalsIgnoreCase("Gold")    && matName.equals("gold"))    ||
+                (tier.equalsIgnoreCase("Diamond") && matName.equals("diamond"));
+            if (matches) count++;
+        }
+        return count;
+    }
+
+    private boolean playerHasArmorTier(EntityPlayer p, String tier) {
+        if (tier.equals("Any")) return true;
+        // Target must have at least 2 pieces of the specified tier
+        if (countArmorPieces(p, tier) < 2) return false;
+        // And must NOT have 2 or more diamond pieces (to avoid locking onto diamond players)
+        if (!tier.equalsIgnoreCase("Diamond") && countArmorPieces(p, "Diamond") >= 2) return false;
+        return true;
+    }
+
+    private boolean isValidAaTarget(EntityPlayer p) {
+        if (p == mc.thePlayer || p == mc.thePlayer.ridingEntity) return false;
+        if (p == mc.getRenderViewEntity() || p == mc.getRenderViewEntity().ridingEntity) return false;
+        if (p.deathTime > 0) return false;
+        if (RotationUtil.distanceToEntity(p) > aaRange.getValue()) return false;
+        if (RotationUtil.angleToEntity(p) > (float) aaFov.getValue()) return false;
+        if (RotationUtil.rayTrace(p) != null) return false;
+        if (TeamUtil.isFriend(p)) return false;
+        if (aaBotCheck.getValue() && TeamUtil.isBot(p)) return false;
+        if (aaTeam.getValue() && TeamUtil.isSameTeam(p)) return false;
+        if (!passesRequirements(p)) return false;
+        return true;
+    }
+
+    private boolean isInReach(EntityPlayer p) {
+        Reach reach = (Reach) Myau.moduleManager.modules.get(Reach.class);
+        double distance = reach.isEnabled() ? reach.range.getValue() : 3.0;
+        return RotationUtil.distanceToEntity(p) <= distance;
+    }
+
+    private boolean isLookingAtBlock() {
+        return mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK;
+    }
 
     @EventTarget
-    public void onRender(Render3DEvent event) {
-        if (!isEnabled()) return;
+    public void onTick(TickEvent event) {
+        if (!isEnabled() || event.getType() != EventType.POST || mc.currentScreen != null) return;
 
-        for (Entity entity : TeamUtil.getLoadedEntitiesSorted()) {
-            if (!(entity instanceof EntityLivingBase)) continue;
-            if (!shouldRenderTags((EntityLivingBase) entity)) continue;
-            if (!entity.ignoreFrustumCheck && !RenderUtil.isInViewFrustum(entity.getEntityBoundingBox(), 10.0)) continue;
-
-            String teamName = TeamUtil.stripName(entity);
-            if (StringUtils.isBlank(EnumChatFormatting.getTextWithoutFormattingCodes(teamName))) continue;
-            // KOS override: prepend [KOS] and force red
-            boolean isKos = entity instanceof net.minecraft.entity.player.EntityPlayer
-                && Pit.kosNames.stream().anyMatch(n -> n.equalsIgnoreCase(entity.getName()));
-            if (isKos) teamName = "&c[KOS] &c" + EnumChatFormatting.getTextWithoutFormattingCodes(teamName);
-
-            IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
-            double x = RenderUtil.lerpDouble(entity.posX, entity.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
-            double y = RenderUtil.lerpDouble(entity.posY, entity.lastTickPosY, event.getPartialTicks()) - rm.getRenderPosY() + (double) entity.getEyeHeight();
-            double z = RenderUtil.lerpDouble(entity.posZ, entity.lastTickPosZ, event.getPartialTicks()) - rm.getRenderPosZ();
-            double distance = mc.getRenderViewEntity().getDistanceToEntity(entity);
-
-            GlStateManager.pushMatrix();
-            GlStateManager.translate(x, y + (entity.isSneaking() ? 0.225 : 0.4), z);
-            GlStateManager.rotate(mc.getRenderManager().playerViewY * -1.0F, 0.0F, 1.0F, 0.0F);
-            float view = mc.gameSettings.thirdPersonView == 2 ? -1.0F : 1.0F;
-            GlStateManager.rotate(mc.getRenderManager().playerViewX, view, 0.0F, 0.0F);
-
-            double tagScale = Math.pow(Math.min(Math.max(autoScale.getValue() ? distance : 0.0, 6.0), 128.0), 0.75)
-                    * 0.0075 * scale.getValue();
-            GlStateManager.scale(-tagScale, -tagScale, 1.0);
-
-            // Distance text
-            String distanceText = "";
-            switch (distanceMode.getIndex()) {
-                case 1: distanceText = String.format("&7%dm&r ", (int) distance); break;
-                case 2: distanceText = String.format("&a[&f%d&a]&r ", (int) distance); break;
-            }
-
-            // Health text
-            float health    = ((EntityLivingBase) entity).getHealth();
-            float absorption= ((EntityLivingBase) entity).getAbsorptionAmount();
-            float max       = ((EntityLivingBase) entity).getMaxHealth();
-            float percent   = Math.min(Math.max((health + absorption) / max, 0.0F), 1.0F);
-            String healText = "";
-            switch (healthMode.getIndex()) {
-                case 1:
-                    healText = String.format(" %d%s", (int) health,
-                            absorption > 0.0F ? String.format(" &6%d&r", (int) absorption) : "&r");
-                    break;
-                case 2:
-                    healText = String.format(" %s%s",
-                            healthFormatter.format((double) health / 2.0),
-                            absorption > 0.0F ? String.format(" &6%s&r", healthFormatter.format((double) absorption / 2.0)) : "&r");
-                    break;
-                case 3:
-                    if (entity instanceof EntityPlayer) {
-                        Scoreboard sb = mc.theWorld.getScoreboard();
-                        if (sb != null) {
-                            ScoreObjective obj = sb.getObjectiveInDisplaySlot(2);
-                            if (obj != null) {
-                                Score score = sb.getValueFromObjective(entity.getName(), obj);
-                                if (score != null) healText = String.format(" &e%d&r", score.getScorePoints());
-                            }
-                        }
-                    }
-                    break;
-            }
-
-            String color = ChatColors.formatColor(String.format("%s&f%s&r%s", distanceText, teamName, healText));
-            int width = mc.fontRendererObj.getStringWidth(color);
-
-            // Background
-            if (backgroundOpacity.getValue() > 0) {
-                Color bgColor = !entity.isSneaking() && !entity.isInvisible()
-                        ? new Color(0.0F, 0.0F, 0.0F, (float) backgroundOpacity.getValue() / 100.0F)
-                        : new Color(0.33F, 0.0F, 0.33F, (float) backgroundOpacity.getValue() / 100.0F);
-                RenderUtil.enableRenderState();
-                RenderUtil.drawRect(
-                        (float)(-width) / 2.0F - 1.0F,
-                        (float)(-mc.fontRendererObj.FONT_HEIGHT) - 1.0F,
-                        (float) width / 2.0F + (shadow.getValue() ? 1.0F : 0.0F),
-                        shadow.getValue() ? 0.0F : -1.0F,
-                        bgColor.getRGB());
-                RenderUtil.disableRenderState();
-            }
-
-            // Name text
-            GlStateManager.disableDepth();
-            int tagColor = isKos ? 0xFFFF5555 : ColorUtil.getHealthBlend(percent).getRGB();
-            mc.fontRendererObj.drawString(
-                    color,
-                    (float)(-width) / 2.0F,
-                    (float)(-mc.fontRendererObj.FONT_HEIGHT),
-                    tagColor,
-                    shadow.getValue());
-            GlStateManager.enableDepth();
-
-            // Player-specific: armor, effects, friend/enemy outline
-            if (entity instanceof EntityPlayer) {
-                int height = mc.fontRendererObj.FONT_HEIGHT + 2;
-
-                if (armor.getValue()) {
-                    ArrayList<ItemStack> renderingItems = new ArrayList<>();
-                    for (int i = 4; i >= 0; i--) {
-                        ItemStack itemStack = (i == 0)
-                                ? ((EntityPlayer) entity).getHeldItem()
-                                : ((EntityPlayer) entity).inventory.armorInventory[i - 1];
-                        if (itemStack != null) renderingItems.add(itemStack);
-                    }
-                    if (!renderingItems.isEmpty()) {
-                        int offset = renderingItems.size() * -8;
-                        for (int i = 0; i < renderingItems.size(); i++) {
-                            if (enchants.getValue()) {
-                                RenderUtil.renderItemInGUI(renderingItems.get(i), offset + i * 16, -height - 16);
-                            } else {
-                                // Render item without enchant glint overlay
-                                GlStateManager.pushMatrix();
-                                GlStateManager.depthMask(true);
-                                GlStateManager.clear(256);
-                                net.minecraft.client.renderer.RenderHelper.enableGUIStandardItemLighting();
-                                net.minecraft.client.renderer.GlStateManager.disableLighting();
-                                GlStateManager.pushMatrix();
-                                GlStateManager.scale(1f, 1f, -0.01f);
-                                mc.getRenderItem().zLevel = -150f;
-                                mc.getRenderItem().renderItemAndEffectIntoGUI(renderingItems.get(i), offset + i * 16, -height - 16);
-                                mc.getRenderItem().zLevel = 0f;
-                                GlStateManager.popMatrix();
-                                net.minecraft.client.renderer.RenderHelper.disableStandardItemLighting();
-                                GlStateManager.enableAlpha();
-                                GlStateManager.disableBlend();
-                                GlStateManager.enableTexture2D();
-                                GlStateManager.popMatrix();
-                            }
-                        }
-                        height += 16;
-                    }
-                }
-
-                if (effects.getValue()) {
-                    List<PotionEffect> activeEffects = ((EntityPlayer) entity)
-                            .getActivePotionEffects()
-                            .stream()
-                            .filter(e -> Potion.potionTypes[e.getPotionID()].hasStatusIcon())
-                            .collect(Collectors.toList());
-                    if (!activeEffects.isEmpty()) {
-                        GlStateManager.pushMatrix();
-                        GlStateManager.scale(0.5F, 0.5F, 1.0F);
-                        int offset = activeEffects.size() * -9;
-                        for (int i = 0; i < activeEffects.size(); i++) {
-                            RenderUtil.renderPotionEffect(activeEffects.get(i), offset + i * 18, -(height * 2) - 18);
-                        }
-                        GlStateManager.popMatrix();
-                    }
-                }
-
-                if (TeamUtil.isFriend((EntityPlayer) entity)) {
-                    RenderUtil.enableRenderState();
-                    float x1     = (float)(-width) / 2.0F - 1.0F;
-                    float y1     = (float)(-mc.fontRendererObj.FONT_HEIGHT) - 1.0F;
-                    float x2     = (float) width / 2.0F + 1.0F;
-                    float y2     = shadow.getValue() ? 0.0F : -1.0F;
-                    RenderUtil.drawOutlineRect(x1, y1, x2, y2, 1.5F, 0, Myau.friendManager.getColor().getRGB());
-                    RenderUtil.disableRenderState();
-                } else if (TeamUtil.isTarget((EntityPlayer) entity)) {
-                    RenderUtil.enableRenderState();
-                    float x1     = (float)(-width) / 2.0F - 1.0F;
-                    float y1     = (float)(-mc.fontRendererObj.FONT_HEIGHT) - 1.0F;
-                    float x2     = (float) width / 2.0F + 1.0F;
-                    float y2     = shadow.getValue() ? 0.0F : -1.0F;
-                    RenderUtil.drawOutlineRect(x1, y1, x2, y2, 1.5F, 0, Myau.targetManager.getColor().getRGB());
-                    RenderUtil.disableRenderState();
+        // ── Events fetch ─────────────────────────────────────────────────────
+        if (pitEvents.getValue()) {
+            evTick++;
+            // Fetch every ~20 ticks (1s) off main thread
+            if (evTick % 20 == 0) {
+                long now = System.currentTimeMillis();
+                if (now - evLastFetch > 1000L) {
+                    evLastFetch = now;
+                    new Thread(() -> {
+                        try {
+                            StringBuilder sb = new StringBuilder();
+                            URL url = new URL("https://raw.githubusercontent.com/BrookeAFK/brookeafk-api/main/events.js");
+                            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                            conn.setRequestProperty("accept", "application/json");
+                            InputStream is = conn.getInputStream();
+                            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+                            String line;
+                            while ((line = br.readLine()) != null) sb.append(line);
+                            br.close();
+                            evResponse = sb.toString();
+                        } catch (Exception ignored) {}
+                    }).start();
                 }
             }
-
-            GlStateManager.popMatrix();
+            // Parse response on tick
+            if (evResponse != null) {
+                try {
+                    JsonArray arr = new JsonParser().parse(evResponse).getAsJsonArray();
+                    evList.clear();
+                    int count = (int) evCount.getValue();
+                    for (int i = evPassIndex; i < evPassIndex + count; i++) {
+                        try {
+                            String name = arr.get(i).getAsJsonObject().get("event").getAsString();
+                            long ts     = arr.get(i).getAsJsonObject().get("timestamp").getAsLong();
+                            long ms     = ts - Instant.now().toEpochMilli();
+                            if (ms < 0) { evPassIndex++; continue; }
+                            long mins = TimeUnit.MILLISECONDS.toMinutes(ms);
+                            long secs = TimeUnit.MILLISECONDS.toSeconds(ms) % 60;
+                            evList.add(name + " [" + String.format("%02d:%02d", mins, secs) + "]");
+                        } catch (Exception ignored) {}
+                    }
+                } catch (Exception ignored) {}
+                evResponse = null;
+            }
         }
+
+        // ── Gold Requirement ──────────────────────────────────────────────────
+        if (goldReq.getValue() && mc.thePlayer != null && mc.theWorld != null) {
+            grTick++;
+            if (grTick % 100 == 0) {
+                PacketUtil.sendPacket(new C01PacketChatMessage("/goldreq " + mc.thePlayer.getName()));
+            }
+        }
+
+        // ── Aim Assist ────────────────────────────────────────────────────────
+        if (aimAssist.getValue()) {
+            if (!aaWeapon.getValue() || ItemUtil.hasRawUnbreakingEnchant()
+                    || (aaTools.getValue() && ItemUtil.isHoldingTool())) {
+
+                boolean attacking = PlayerUtil.isAttacking();
+                if (!attacking || !isLookingAtBlock()) {
+                    if (attacking || !aaTimer.hasTimeElapsed(350L)) {
+
+                        List<EntityPlayer> inRange = mc.theWorld.loadedEntityList.stream()
+                                .filter(e -> e instanceof EntityPlayer)
+                                .map(e -> (EntityPlayer) e)
+                                .filter(this::isValidAaTarget)
+                                .sorted(Comparator.comparingDouble(RotationUtil::distanceToEntity))
+                                .collect(Collectors.toList());
+
+                        if (inRange.isEmpty()) return;
+
+                        if (inRange.stream().anyMatch(this::isInReach))
+                            inRange.removeIf(p -> !isInReach(p));
+
+                        EntityPlayer target = inRange.get(0);
+                        if (RotationUtil.distanceToEntity(target) <= 0.0) return;
+
+                        AxisAlignedBB bb     = target.getEntityBoundingBox();
+                        double        border = target.getCollisionBorderSize();
+                        float[] rotation = RotationUtil.getRotationsToBox(
+                                bb.expand(border, border, border),
+                                mc.thePlayer.rotationYaw,
+                                mc.thePlayer.rotationPitch,
+                                180.0F,
+                                (float) aaSmoothing.getValue() / 100.0F
+                        );
+
+                        float yaw   = (float) Math.min(Math.abs(aaHSpeed.getValue()), 10.0);
+                        float pitch = (float) Math.min(Math.abs(aaVSpeed.getValue()), 10.0);
+
+                        Myau.rotationManager.setRotation(
+                                mc.thePlayer.rotationYaw   + (rotation[0] - mc.thePlayer.rotationYaw)   * 0.1F * yaw,
+                                mc.thePlayer.rotationPitch + (rotation[1] - mc.thePlayer.rotationPitch) * 0.1F * pitch,
+                                0,
+                                false
+                        );
+                    }
+                }
+            }
+        }
+
+        // ── AutoGrinder ───────────────────────────────────────────────────────
+        if (autoGrinder.getValue()) {
+            agTicks++;
+            EntityLivingBase agTarget = agGetTarget();
+            if (agTarget == null) {
+                agSetKeys(false);
+            } else {
+                // Rotations
+                double[] yawPitch = agGetYawPitch(agTarget);
+                float targetYaw   = (float) yawPitch[0];
+                float targetPitch = (float) yawPitch[1];
+                if (agMode.getValue().equals("Legit")) {
+                    float smoothYaw   = mc.thePlayer.rotationYaw   + 0.1f * (targetYaw   - mc.thePlayer.rotationYaw);
+                    float smoothPitch = mc.thePlayer.rotationPitch + 0.1f * (targetPitch - mc.thePlayer.rotationPitch);
+                    Myau.rotationManager.setRotation(smoothYaw, smoothPitch, 1, false);
+                } else {
+                    Myau.rotationManager.setRotation(targetYaw, targetPitch, 1, true);
+                }
+                agSetKeys(true);
+                // Attack every 2 ticks within range
+                if (agTicks % 2 == 0 && mc.thePlayer.getDistanceToEntity(agTarget) <= agRange.getValue()) {
+                    double yawDiff   = Math.abs(mc.thePlayer.rotationYaw   - targetYaw);
+                    double pitchDiff = Math.abs(mc.thePlayer.rotationPitch - targetPitch);
+                    if (agMode.getValue().equals("Blatant") || (yawDiff <= agFov.getValue() && pitchDiff <= agFov.getValue())) {
+                        PlayerUtil.attackEntity(agTarget);
+                        mc.thePlayer.swingItem();
+                    }
+                }
+            }
+        }
+    }
+
+    @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || !goldReq.getValue()) return;
+        if (event.getType() != EventType.PRE) return;
+        if (!(event.getPacket() instanceof S02PacketChat)) return;
+
+        String msg = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+        String name = mc.thePlayer != null ? mc.thePlayer.getName() : "";
+        if (!msg.contains(name + ":")) return;
+
+        try {
+            String part = msg.split(name + ":")[1].trim();
+            String[] parts = part.split("/");
+            if (parts.length == 2) {
+                grGained = Double.parseDouble(parts[0].replaceAll("[^0-9.]", ""));
+                grNeeded = Double.parseDouble(parts[1].replaceAll("[^0-9.]", ""));
+                event.setCancelled(true); // hide from chat
+            }
+        } catch (Exception ignored) {}
+
+        // ── Streak chat parsing ───────────────────────────────────────────────
+        if (streak.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            if (raw.contains("DEATH!")) {
+                stPaused = true;
+                stKills = 0; stAssists = 0; stXP = 0f; stGold = 0f;
+                stTimer.reset();
+            } else if (raw.contains("KILL!")) {
+                stKills++;
+                stPaused = false;
+            } else if (raw.contains("ASSIST!")) {
+                stAssists++;
+            } else {
+                try {
+                    if (raw.contains("XP") && raw.contains("+")) {
+                        String xpPart = raw.split("\\+")[1].split("XP")[0].trim();
+                        stXP += Float.parseFloat(xpPart);
+                    }
+                    if (raw.contains("g") && raw.split("\\+").length > 2) {
+                        String goldPart = raw.split("\\+")[2].split("g")[0].trim();
+                        stGold += Float.parseFloat(goldPart);
+                    }
+                } catch (Exception ignored2) {}
+            }
+        }
+
+        // ── KOS command parsing ───────────────────────────────────────────────
+        if (event.getType() == myau.event.types.EventType.SEND
+                && event.getPacket() instanceof net.minecraft.network.play.client.C01PacketChatMessage) {
+            String msg = ((net.minecraft.network.play.client.C01PacketChatMessage) event.getPacket()).getMessage();
+            String[] parts = msg.trim().split(" ");
+            if (parts.length >= 3 && parts[0].equalsIgnoreCase(".kos")) {
+                event.setCancelled(true);
+                String action = parts[1].toLowerCase();
+                String name   = parts[2];
+                if (action.equals("add")) {
+                    kosNames.add(name);
+                    ChatUtil.sendFormatted("&c[KOS] &fAdded &c" + name + " &fto KOS list.");
+                } else if (action.equals("remove")) {
+                    kosNames.remove(name);
+                    ChatUtil.sendFormatted("&c[KOS] &fRemoved &c" + name + " &ffrom KOS list.");
+                } else if (action.equals("list")) {
+                    event.setCancelled(true);
+                    if (kosNames.isEmpty()) {
+                        ChatUtil.sendFormatted("&c[KOS] &fList is empty.");
+                    } else {
+                        ChatUtil.sendFormatted("&c[KOS] &fTargets: &c" + String.join(", ", kosNames));
+                    }
+                }
+                return;
+            }
+        }
+
+        // ── AutoMath chat parsing ─────────────────────────────────────────────
+        if (autoMath.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            String prefix = "QUICK MATHS! Solve: ";
+            if (raw.startsWith(prefix)) {
+                String equation = raw.substring(prefix.length()).replace("x", "*");
+                try {
+                    double result = amEvaluate(equation.replaceAll("\\s+", ""));
+                    long rounded = Math.round(result);
+                    amPendingSolution = Long.toString(rounded);
+                    mc.thePlayer.addChatMessage(new ChatComponentText(
+                        EnumChatFormatting.LIGHT_PURPLE + "" + EnumChatFormatting.BOLD + "QUICK MATHS! "
+                        + EnumChatFormatting.GRAY + "Result: " + EnumChatFormatting.YELLOW + rounded));
+                    if (amAutoSubmit.getValue()) {
+                        amScheduler.schedule(() -> {
+                            if (amPendingSolution != null && mc.thePlayer != null) {
+                                mc.thePlayer.sendChatMessage("/ac " + amPendingSolution);
+                                amPendingSolution = null;
+                            }
+                        }, (long) amDelay.getValue(), TimeUnit.MILLISECONDS);
+                    }
+                } catch (Exception e) {
+                    mc.thePlayer.addChatMessage(new ChatComponentText(
+                        EnumChatFormatting.RED + "AutoMath error: " + e.getMessage()));
+                }
+            }
+        }
+
+        // ── KOS lobby join alert ──────────────────────────────────────────────
+        if (kosList.getValue() && event.getPacket() instanceof S02PacketChat) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            // Hypixel lobby join: "NAME joined the lobby!"
+            java.util.regex.Matcher mJoin = java.util.regex.Pattern
+                .compile("^(\\S+) joined the lobby!")
+                .matcher(raw);
+            if (mJoin.find()) {
+                String joined = mJoin.group(1);
+                for (String kos : kosNames) {
+                    if (kos.equalsIgnoreCase(joined)) {
+                        ChatUtil.sendFormatted("&c[KOS] ☠ &c&l" + joined + " &r&chas joined your lobby!");
+                        myau.util.SoundUtil.playSound("random.orb");
+                        break;
+                    }
+                }
+            }
+        }
+
+        // ── Bounty Tracker chat parsing ───────────────────────────────────────
+        if (bountyTracker.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+
+            // New/updated bounty: "☆ PlayerName now has a bounty of 1,234g!"
+            java.util.regex.Matcher mSet = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\\s*(\\S+) now has a bounty of ([\\d,]+)g")
+                .matcher(raw);
+            if (mSet.find()) {
+                btTargets.put(mSet.group(1), mSet.group(2) + "g");
+            }
+
+            // Bounty claimed: "☆ PlayerName's bounty of 1,234g was claimed by KillerName!"
+            java.util.regex.Matcher mClaim = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\\s*(\\S+)'s bounty of [\\d,]+g was claimed by (\\S+)")
+                .matcher(raw);
+            if (mClaim.find()) {
+                btTargets.remove(mClaim.group(1));
+            }
+
+            // Bounty reset: "☆ PlayerName's bounty has been reset"
+            java.util.regex.Matcher mReset = java.util.regex.Pattern
+                .compile("^[\u2606\u2605]?\\s*(\\S+)'s bounty has been reset")
+                .matcher(raw);
+            if (mReset.find()) {
+                btTargets.remove(mReset.group(1));
+            }
+        }
+
+        // ── Gamble chat parsing ───────────────────────────────────────────────
+        if (gamble.getValue()) {
+            String raw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            if (raw.contains("MAJOR EVENT! GAMBLE starting now")) {
+                gambleTracking = true;
+            } else if (raw.contains("PIT EVENT ENDED: GAMBLE!")) {
+                gambleTracking = false;
+                gambleWaypoints.clear();
+            } else if (gambleTracking) {
+                Matcher m = Pattern.compile("-?\\d+\\s-?\\d+\\s-?\\d+").matcher(raw);
+                while (m.find()) {
+                    String[] c = m.group().split(" ");
+                    try {
+                        gambleWaypoints.add(new Vec3(
+                            Integer.parseInt(c[0]),
+                            Integer.parseInt(c[1]),
+                            Integer.parseInt(c[2])));
+                    } catch (Exception ignored) {}
+                }
+            }
+            if (gambleGiantStop.getValue() && raw.contains("GIANT TICKET! Claimed By")) {
+                gambleTracking = false;
+                gambleWaypoints.clear();
+            }
+        }
+    }
+
+    @EventTarget
+    public void onRender2D(Render2DEvent event) {
+        if (!isEnabled()) return;
+        if (mc.currentScreen instanceof Rise6ClickGui && !hudPreview.getValue()) return;
+
+        // ── Bounty Tracker HUD (renders even in singleplayer) ─────────────────
+        if (bountyTracker.getValue()) {
+            float bx = (float) btX.getValue();
+            float by = (float) btY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a76\u00a7l\u2756 BOUNTY TRACKER", bx, by, 0xFFFFAA00);
+            by += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (btTargets.isEmpty()) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77No active bounties", bx, by, 0xFF777777);
+            } else {
+                for (java.util.Map.Entry<String, String> entry : btTargets.entrySet()) {
+                    String line = "\u00a7e" + entry.getKey() + " \u00a76" + entry.getValue();
+                    mc.fontRendererObj.drawStringWithShadow(line, bx, by, 0xFFFFFFFF);
+                    by += mc.fontRendererObj.FONT_HEIGHT + 1;
+                }
+            }
+        }
+
+
+        // ── Gold Req HUD ──────────────────────────────────────────────────────
+        if (goldReq.getValue()) {
+            float gx = (float) grX.getValue();
+            float gy = (float) grY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a76\u00a7lGOLD REQ", gx, gy, 0xFFFFAA00);
+            gy += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (grGained == 0 && grNeeded == 0) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77Waiting...", gx, gy, 0xFF777777);
+            } else {
+                NumberFormat nf = NumberFormat.getNumberInstance();
+                String text = "\u00a7a" + nf.format(grGained) + "\u00a77/\u00a76" + nf.format(grNeeded) + "g";
+                mc.fontRendererObj.drawStringWithShadow(text, gx, gy, 0xFFFFFFFF);
+            }
+        }
+
+        // ── Streak HUD ────────────────────────────────────────────────────────
+        if (streak.getValue()) {
+            int sx = (int) stX.getValue();
+            int sy = (int) stY.getValue();
+            int sp = (int) stSpacing.getValue();
+            int alpha = (int)(stOpacity.getValue() / 100.0 * 255.0);
+            String statusCol = stPaused ? "§c" : "§a";
+            String status    = stPaused ? "Last" : "Active";
+            long   elapsed   = stTimer.getElapsedTime() / 1000L;
+
+            // Count visible rows for dynamic box height
+            int rows = 1; // header always shown
+            if (stShowKills.getValue())   rows++;
+            if (stShowAssists.getValue()) rows++;
+            if (stShowXP.getValue())      rows++;
+            if (stShowGold.getValue())    rows++;
+            if (stShowTime.getValue())    rows++;
+            int boxH = 8 + rows * sp;
+            net.minecraft.client.gui.Gui.drawRect(sx, sy, sx + 90, sy + boxH, (alpha << 24));
+
+            int ly = sy + 4;
+            mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, ly, 0xFFFFFFFF); ly += sp;
+            if (stShowKills.getValue())   { mc.fontRendererObj.drawStringWithShadow("§aKills§f: §a"   + stKills,                             sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowAssists.getValue()) { mc.fontRendererObj.drawStringWithShadow("§cAssists§f: §c" + stAssists,                           sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowXP.getValue())      { mc.fontRendererObj.drawStringWithShadow("§bXP§f: §f"      + String.format("%.1f", stXP),         sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowGold.getValue())    { mc.fontRendererObj.drawStringWithShadow("§6Gold§f: §6"    + String.format("%.1f", stGold),       sx + 5, ly, 0xFFFFFFFF); ly += sp; }
+            if (stShowTime.getValue())    { mc.fontRendererObj.drawStringWithShadow("Time: "          + formatStreakTime(elapsed),            sx + 5, ly, 0xFFFFFFFF); }
+        }
+
+
+        // ── Events HUD ────────────────────────────────────────────────────────
+        if (pitEvents.getValue()) {
+            float ex = (float) evX.getValue();
+            float ey = (float) evY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a7e\u00a7lPIT EVENTS", ex, ey, 0xFFFFFF55);
+            ey += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (evList.isEmpty()) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77Fetching...", ex, ey, 0xFF777777);
+            } else {
+                int maxW = 0;
+                for (String info : evList)
+                    maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \\[")[0]));
+                for (String info : evList) {
+                    String[] parts = info.split(" \\[");
+                    String evName  = parts[0];
+                    String evTime  = parts[1].replace("]", "");
+                    int color = evGetColor(evName);
+                    mc.fontRendererObj.drawStringWithShadow(evName, ex, ey, color);
+                    float tx = ex + maxW + 2;
+                    mc.fontRendererObj.drawStringWithShadow("[", tx, ey, 0xFFAAAAAA);
+                    tx += mc.fontRendererObj.getStringWidth("[");
+                    mc.fontRendererObj.drawStringWithShadow(evTime, tx, ey, 0xFF00FF00);
+                    tx += mc.fontRendererObj.getStringWidth(evTime);
+                    mc.fontRendererObj.drawStringWithShadow("]", tx, ey, 0xFFAAAAAA);
+                    ey += mc.fontRendererObj.FONT_HEIGHT + 2;
+                }
+            }
+        }
+
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        // ── Prestige List HUD ─────────────────────────────────────────────────
+        if (prestigeList.getValue() && mc.theWorld != null) {
+            float px = (float) plX.getValue();
+            float py = (float) plY.getValue();
+            int oy = 0;
+            for (EntityPlayer player : mc.theWorld.playerEntities) {
+                if (player == mc.thePlayer) continue;
+                if (!plIsMatch(player)) continue;
+                String name     = player.getDisplayName().getUnformattedText();
+                String armor    = plGetArmor(player);
+                String location = player.posY >= 85.0 ? "§aIn Spawn" : "§cDown";
+                int color = armor.equals("Chain") ? 0xFFAAAAAA : armor.equals("Diamond") ? 0xFF5555FF : 0xFFFFFFFF;
+                String line = name + " - " + armor + " " + location;
+                mc.fontRendererObj.drawStringWithShadow(line, px, py + oy, color);
+                oy += mc.fontRendererObj.FONT_HEIGHT + 1;
+            }
+        }
+    }
+
+    @EventTarget
+    public void onRender3D(Render3DEvent event) {
+        if (!isEnabled() || !gamble.getValue() || !gambleTracking || gambleWaypoints.isEmpty()) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+
+        for (Vec3 wp : gambleWaypoints) {
+            double rx = wp.xCoord - rm.getRenderPosX();
+            double ry = wp.yCoord - rm.getRenderPosY();
+            double rz = wp.zCoord - rm.getRenderPosZ();
+
+            GL11.glPushMatrix();
+            GL11.glTranslated(rx, ry + 0.5, rz);
+            GL11.glRotatef(-mc.getRenderManager().playerViewY, 0f, 1f, 0f);
+            GL11.glRotatef(mc.getRenderManager().playerViewX, 1f, 0f, 0f);
+            float scale = 0.02666667f;
+            GL11.glScalef(-scale, -scale, scale);
+            GL11.glDisable(GL11.GL_DEPTH_TEST);
+            GL11.glEnable(GL11.GL_BLEND);
+            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GL11.glDisable(GL11.GL_TEXTURE_2D);
+            GL11.glEnable(GL11.GL_TEXTURE_2D);
+            String label = "Gamble " + (int)wp.xCoord + " " + (int)wp.yCoord + " " + (int)wp.zCoord;
+            int w = mc.fontRendererObj.getStringWidth(label) / 2;
+            mc.fontRendererObj.drawStringWithShadow(label, -w, 0, 0xFFFFFF);
+            GL11.glEnable(GL11.GL_DEPTH_TEST);
+            GL11.glDisable(GL11.GL_BLEND);
+            GL11.glPopMatrix();
+        }
+    }
+
+    @EventTarget
+    public void onLoadWorld(LoadWorldEvent event) {
+        btTargets.clear();
+        // Also reset streak, gold req, events on lobby swap
+        stKills = 0; stAssists = 0; stXP = 0; stGold = 0;
+        stPaused = true;
+        grGained = 0; grNeeded = 0;
+        evList.clear(); evResponse = null; evPassIndex = 0;
+    }
+
+    @EventTarget
+    public void onPress(KeyEvent event) {
+        if (!isEnabled()) return;
+        int k = event.getKey();
+        if (k == 0) return;
+
+        // Submodule keybinds
+        if (kb_aimAssist.getKeyCode()     != 0 && k == kb_aimAssist.getKeyCode())     { aimAssist.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Aim Assist",     aimAssist.getValue()); }
+        if (kb_goldReq.getKeyCode()       != 0 && k == kb_goldReq.getKeyCode())       { goldReq.toggle();       Myau.moduleManager.playSound(); notifySubmodule("Gold Req",        goldReq.getValue()); }
+        if (kb_streak.getKeyCode()        != 0 && k == kb_streak.getKeyCode())        { streak.toggle();        Myau.moduleManager.playSound(); notifySubmodule("Streak",          streak.getValue()); }
+        if (kb_pitEvents.getKeyCode()     != 0 && k == kb_pitEvents.getKeyCode())     { pitEvents.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Events",          pitEvents.getValue()); }
+        if (kb_autoMath.getKeyCode()      != 0 && k == kb_autoMath.getKeyCode())      { autoMath.toggle();      Myau.moduleManager.playSound(); notifySubmodule("AutoMath",        autoMath.getValue()); }
+        if (kb_autoGrinder.getKeyCode()   != 0 && k == kb_autoGrinder.getKeyCode())   { autoGrinder.toggle();   Myau.moduleManager.playSound(); notifySubmodule("AutoGrinder",     autoGrinder.getValue()); }
+        if (kb_gamble.getKeyCode()        != 0 && k == kb_gamble.getKeyCode())        { gamble.toggle();        Myau.moduleManager.playSound(); notifySubmodule("Gamble",          gamble.getValue()); }
+        if (kb_bountyTracker.getKeyCode() != 0 && k == kb_bountyTracker.getKeyCode()) { bountyTracker.toggle(); Myau.moduleManager.playSound(); notifySubmodule("Bounty Tracker",  bountyTracker.getValue()); }
+        if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); notifySubmodule("Prestige List",   prestigeList.getValue()); }
+        if (kb_kosList.getKeyCode()        != 0 && k == kb_kosList.getKeyCode())        { kosList.toggle();        Myau.moduleManager.playSound(); notifySubmodule("KOS List",        kosList.getValue()); }
+
+        // AimAssist attack timer
+        if (aimAssist.getValue()
+                && k == mc.gameSettings.keyBindAttack.getKeyCode()
+                && !Myau.moduleManager.modules.get(AutoClicker.class).isEnabled()) {
+            aaTimer.reset();
+        }
+    }
+
+    private void notifySubmodule(String name, boolean on) {
+        myau.module.modules.HUD hud = (myau.module.modules.HUD) Myau.moduleManager.getModule(myau.module.modules.HUD.class);
+        if (hud == null || !hud.toggleAlerts.getValue()) return;
+        String status = on ? "&a&lON" : "&c&lOFF";
+        ChatUtil.sendFormatted(String.format("%s%s: %s&r", Myau.clientName, name, status));
+    }
+
+    // ── Events helpers ────────────────────────────────────────────────────────
+
+    private int evGetColor(String name) {
+        if (name.contains("Blockhead"))        return 0xFFFFAA00;
+        if (name.contains("Pizza"))            return 0xFFFF6655;
+        if (name.contains("Beast"))            return 0xFF558855;
+        if (name.contains("Robbery"))          return 0xFFFFAA00;
+        if (name.contains("Spire"))            return 0xFFAA55AA;
+        if (name.contains("Squads"))           return 0xFF5555FF;
+        if (name.contains("Team Deathmatch"))  return 0xFFAA55AA;
+        if (name.contains("Raffle"))           return 0xFFFFAA00;
+        if (name.contains("Rage Pit"))         return 0xFFFF6655;
+        if (name.contains("2x Rewards"))       return 0xFF00AA00;
+        if (name.contains("Giant Cake"))       return 0xFFFFAAFF;
+        if (name.contains("KOTL"))             return 0xFF558855;
+        if (name.contains("Dragon Egg"))       return 0xFFAA55AA;
+        if (name.contains("Auction"))          return 0xFFFFFF55;
+        if (name.contains("Quick Maths"))      return 0xFFAA55AA;
+        if (name.contains("KOTH"))             return 0xFF5555FF;
+        if (name.contains("Care Package"))     return 0xFFFFAA00;
+        if (name.contains("All bounty"))       return 0xFFFFAA00;
+        if (name.contains("Gamble"))           return 0xFFFFAA00;
+        return 0xFFFFFFFF;
+    }
+
+    // ── Prestige List helpers ─────────────────────────────────────────────────
+
+    private boolean plIsMatch(EntityPlayer player) {
+        String name = player.getDisplayName().getFormattedText();
+        return (plP0.getValue()     && name.contains("§7["))
+            || (plP1_4.getValue()   && name.contains("§9["))
+            || (plP5_9.getValue()   && name.contains("§e["))
+            || (plP10_14.getValue() && name.contains("§6["))
+            || (plP15_19.getValue() && name.contains("§c["))
+            || (plP20_24.getValue() && name.contains("§5["))
+            || (plP25_29.getValue() && name.contains("§d["))
+            || (plP30_34.getValue() && name.contains("§f["))
+            || (plP35_39.getValue() && name.contains("§b["));
+    }
+
+    private String plGetArmor(EntityPlayer player) {
+        for (int i = 0; i < 4; i++) {
+            ItemStack s = player.getCurrentArmor(i);
+            if (s == null || !(s.getItem() instanceof ItemArmor)) continue;
+            ItemArmor.ArmorMaterial mat = ((ItemArmor) s.getItem()).getArmorMaterial();
+            if (mat == ItemArmor.ArmorMaterial.CHAIN)   return "Chain";
+            if (mat == ItemArmor.ArmorMaterial.DIAMOND) return "Diamond";
+        }
+        return "None";
+    }
+
+    // ── AutoGrinder helpers ───────────────────────────────────────────────────
+
+    private EntityLivingBase agGetTarget() {
+        if (mc.theWorld == null || mc.thePlayer == null) return null;
+        List<EntityLivingBase> targets = mc.theWorld.loadedEntityList.stream()
+            .filter(e -> e instanceof EntityLivingBase && e != mc.thePlayer)
+            .map(e -> (EntityLivingBase) e)
+            .filter(e -> !e.isDead && e.getHealth() > 0)
+            .collect(Collectors.toList());
+
+        if (agSorting.getValue().equals("Health")) {
+            return targets.stream()
+                .min(Comparator.comparing(EntityLivingBase::getHealth))
+                .orElse(null);
+        } else {
+            return targets.stream()
+                .min(Comparator.comparingDouble(e -> mc.thePlayer.getDistanceToEntity(e)))
+                .orElse(null);
+        }
+    }
+
+    private double[] agGetYawPitch(EntityLivingBase target) {
+        double dx = target.posX - mc.thePlayer.posX;
+        double dy = target.posY + target.getEyeHeight() - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
+        double dz = target.posZ - mc.thePlayer.posZ;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        double pitch = -Math.asin(dy / dist) * (180.0 / Math.PI);
+        double yaw   =  Math.atan2(dz, dx)   * (180.0 / Math.PI) - 90.0;
+        return new double[]{yaw, pitch};
+    }
+
+    private void agSetKeys(boolean on) {
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindForward).setPressed(on);
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindAttack).setPressed(on);
+        ((IAccessorKeyBinding) mc.gameSettings.keyBindJump).setPressed(on);
+        if (!on) {
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindBack).setPressed(false);
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindLeft).setPressed(false);
+            ((IAccessorKeyBinding) mc.gameSettings.keyBindRight).setPressed(false);
+        }
+    }
+
+    // ── Math solver ───────────────────────────────────────────────────────────
+
+    private double amEvaluate(String eq) throws Exception {
+        Stack<Double> vals = new Stack<>();
+        Stack<Character> ops = new Stack<>();
+        for (int i = 0; i < eq.length(); i++) {
+            char ch = eq.charAt(i);
+            if (Character.isDigit(ch) || ch == '.') {
+                StringBuilder sb = new StringBuilder();
+                while (i < eq.length() && (Character.isDigit(eq.charAt(i)) || eq.charAt(i) == '.'))
+                    sb.append(eq.charAt(i++));
+                vals.push(Double.parseDouble(sb.toString()));
+                i--;
+            } else if (ch == '(') {
+                ops.push(ch);
+            } else if (ch == ')') {
+                while (ops.peek() != '(')
+                    vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+                ops.pop();
+            } else if (amIsOp(ch)) {
+                while (!ops.isEmpty() && amPrec(ch) <= amPrec(ops.peek()))
+                    vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+                ops.push(ch);
+            }
+        }
+        while (!ops.isEmpty()) vals.push(amApply(ops.pop(), vals.pop(), vals.pop()));
+        return vals.pop();
+    }
+
+    private boolean amIsOp(char c) { return c == '+' || c == '-' || c == '*' || c == '/'; }
+
+    private int amPrec(char c) {
+        if (c == '*' || c == '/') return 2;
+        if (c == '+' || c == '-') return 1;
+        return -1;
+    }
+
+    private double amApply(char op, double b, double a) throws Exception {
+        switch (op) {
+            case '+': return a + b;
+            case '-': return a - b;
+            case '*': return a * b;
+            case '/':
+                if (b == 0) throw new Exception("Division by zero");
+                return a / b;
+            default: throw new Exception("Unknown operator: " + op);
+        }
+    }
+
+    private String formatStreakTime(long seconds) {
+        long hrs  = seconds / 3600;
+        long mins = (seconds % 3600) / 60;
+        long secs = seconds % 60;
+        StringBuilder sb = new StringBuilder();
+        if (hrs  > 0) sb.append(hrs).append("hr ");
+        if (mins > 0) sb.append(mins).append("m ");
+        sb.append(secs).append("s");
+        return sb.toString().trim();
     }
 }
