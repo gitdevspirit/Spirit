@@ -8,6 +8,7 @@ import myau.mixin.IAccessorRenderManager;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
+import myau.module.modules.Pit;
 import myau.module.SliderSetting;
 import myau.util.ColorUtil;
 import myau.util.RenderUtil;
@@ -141,6 +142,10 @@ public class NameTags extends Module {
 
             String teamName = TeamUtil.stripName(entity);
             if (StringUtils.isBlank(EnumChatFormatting.getTextWithoutFormattingCodes(teamName))) continue;
+            // KOS override: prepend [KOS] and force red
+            boolean isKos = entity instanceof net.minecraft.entity.player.EntityPlayer
+                && Pit.kosNames.stream().anyMatch(n -> n.equalsIgnoreCase(entity.getName()));
+            if (isKos) teamName = "&c[KOS] &c" + EnumChatFormatting.getTextWithoutFormattingCodes(teamName);
 
             IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
             double x = RenderUtil.lerpDouble(entity.posX, entity.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
@@ -215,11 +220,12 @@ public class NameTags extends Module {
 
             // Name text
             GlStateManager.disableDepth();
+            int tagColor = isKos ? 0xFFFF5555 : ColorUtil.getHealthBlend(percent).getRGB();
             mc.fontRendererObj.drawString(
                     color,
                     (float)(-width) / 2.0F,
                     (float)(-mc.fontRendererObj.FONT_HEIGHT),
-                    ColorUtil.getHealthBlend(percent).getRGB(),
+                    tagColor,
                     shadow.getValue());
             GlStateManager.enableDepth();
 
