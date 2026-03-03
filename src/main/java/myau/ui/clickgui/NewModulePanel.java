@@ -1,5 +1,6 @@
 package myau.ui.clickgui;
 
+import myau.Myau;
 import myau.module.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
@@ -154,8 +155,12 @@ public class NewModulePanel {
                 BooleanSetting bs = (BooleanSetting) s;
                 boolean hdr = !s.getName().startsWith(" ");
                 boolean col = collapsedHeaders.contains(s);
-                int nameColor = hdr ? (bs.getValue() ? GuiColors.ACCENT : 0xFFFFFFFF) : 0xFF777777;
-                mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, nameColor);
+                int nameColor = hdr ? (bs.getValue() ? GuiColors.ACCENT : 0xFFDDDDDD) : 0xFF666666;
+                if (hdr) {
+                    mc.fontRendererObj.drawStringWithShadow(s.getName(), x + 8, oy + 2, nameColor);
+                } else {
+                    mc.fontRendererObj.drawString(s.getName(), x + 8, oy + 2, nameColor);
+                }
                 if (hdr) {
                     // Show collapse arrow on right
                     String arrow = col ? ">" : "v";
@@ -255,11 +260,13 @@ public class NewModulePanel {
                         // Right-click header: toggle collapse
                         if (collapsedHeaders.contains(s)) collapsedHeaders.remove(s);
                         else collapsedHeaders.add(s);
+                        Myau.moduleManager.playSound();
                         return;
                     } else if (button == 0 && !hdr) {
                         ((BooleanSetting)s).toggle();
                     } else if (button == 0 && hdr) {
                         ((BooleanSetting)s).toggle();
+                        Myau.moduleManager.playSound();
                     }
                 }
                 // Skip collapsed children in click handling too
