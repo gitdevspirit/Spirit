@@ -191,7 +191,7 @@ public class Pit extends Module {
     public final KeybindSetting kb_kosList  = register(new KeybindSetting("  KOS Key", 0));
 
     // Static so NameTags can read it
-    public static final Set<String> kosNames = new HashSet<>();
+    public static final List<String> kosNames = new LinkedList<>();
 
     // ── Death Recap submodule ─────────────────────────────────────────────────
     public final BooleanSetting deathRecap   = register(new BooleanSetting("Death Recap", false));
@@ -484,22 +484,56 @@ public class Pit extends Module {
                 && event.getPacket() instanceof net.minecraft.network.play.client.C01PacketChatMessage) {
             String kosMsg = ((net.minecraft.network.play.client.C01PacketChatMessage) event.getPacket()).getMessage();
             String[] kosParts = kosMsg.trim().split(" ");
-            if (kosParts.length >= 2 && kosParts[0].equalsIgnoreCase(".kos")) {
+            if (kosParts.length >= 1 && kosParts[0].equalsIgnoreCase(".kos")) {
                 event.setCancelled(true);
-                String kosAction = kosParts.length > 1 ? kosParts[1].toLowerCase() : "";
+                String kosAction = kosParts.length > 1 ? kosParts[1].toLowerCase() : "help";
                 String kosTarget = kosParts.length > 2 ? kosParts[2] : "";
                 if (kosAction.equals("add") && !kosTarget.isEmpty()) {
-                    kosNames.add(kosTarget);
-                    ChatUtil.sendFormatted("&c[KOS] &fAdded &c" + kosTarget + " &fto KOS list.");
+                    if (!kosNames.contains(kosTarget)) {
+                        kosNames.add(kosTarget);
+                        ChatUtil.sendFormatted("&c[KOS] &fYou have added &c" + kosTarget + " &fto your KOS list.");
+                    } else {
+                        ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fis already on your KOS list.");
+                    }
                 } else if (kosAction.equals("remove") && !kosTarget.isEmpty()) {
-                    kosNames.remove(kosTarget);
-                    ChatUtil.sendFormatted("&c[KOS] &fRemoved &c" + kosTarget + " &ffrom KOS list.");
+                    boolean removed = false;
+                    java.util.Iterator<String> it = kosNames.iterator();
+                    while (it.hasNext()) {
+                        if (it.next().equalsIgnoreCase(kosTarget)) { it.remove(); removed = true; break; }
+                    }
+                    if (removed) ChatUtil.sendFormatted("&c[KOS] &fYou have removed &c" + kosTarget + " &ffrom your KOS list.");
+                    else         ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fwas not found on your KOS list.");
                 } else if (kosAction.equals("list")) {
                     if (kosNames.isEmpty()) {
-                        ChatUtil.sendFormatted("&c[KOS] &fList is empty.");
+                        ChatUtil.sendFormatted("&c[KOS] &fYour KOS list is empty.");
                     } else {
-                        ChatUtil.sendFormatted("&c[KOS] &fTargets: &c" + String.join(", ", kosNames));
+                        ChatUtil.sendFormatted("&c[KOS] &fKOS List &7(" + kosNames.size() + " players)&f:");
+                        int idx = 1;
+                        for (String n : kosNames) {
+                            ChatUtil.sendFormatted("  &7" + idx++ + ". &c" + n);
+                        }
                     }
+                } else if ((kosAction.equals("up") || kosAction.equals("down")) && !kosTarget.isEmpty()) {
+                    int foundIdx = -1;
+                    for (int i = 0; i < kosNames.size(); i++) {
+                        if (((java.util.LinkedList<String>)kosNames).get(i).equalsIgnoreCase(kosTarget)) { foundIdx = i; break; }
+                    }
+                    if (foundIdx == -1) {
+                        ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fnot found.");
+                    } else {
+                        java.util.LinkedList<String> ll = (java.util.LinkedList<String>) kosNames;
+                        if (kosAction.equals("up") && foundIdx > 0) {
+                            String s = ll.remove(foundIdx); ll.add(foundIdx - 1, s);
+                            ChatUtil.sendFormatted("&c[KOS] &fMoved &c" + kosTarget + " &fup.");
+                        } else if (kosAction.equals("down") && foundIdx < ll.size() - 1) {
+                            String s = ll.remove(foundIdx); ll.add(foundIdx + 1, s);
+                            ChatUtil.sendFormatted("&c[KOS] &fMoved &c" + kosTarget + " &fdown.");
+                        } else {
+                            ChatUtil.sendFormatted("&c[KOS] &c" + kosTarget + " &fis already at the " + (kosAction.equals("up") ? "top" : "bottom") + ".");
+                        }
+                    }
+                } else {
+                    ChatUtil.sendFormatted("&c[KOS] &fCommands: &c.kos add/remove/list/up/down <name>");
                 }
                 return;
             }
