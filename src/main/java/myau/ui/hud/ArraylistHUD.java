@@ -21,76 +21,75 @@ public class ArraylistHUD {
         HUD hud = (HUD) Myau.moduleManager.getModule(HUD.class);
         if (hud == null || !hud.isEnabled()) return;
 
-        Color accentColor = hud.getColor(System.currentTimeMillis());
-        Color nameColor   = hud.getListColor();
-
-        // Build sorted list of enabled non-hidden modules
-        List<Module> enabled = new ArrayList<>();
-        for (Module m : Myau.moduleManager.modules.values()) {
-            if (m.isEnabled() && !m.isHidden()) enabled.add(m);
-        }
-
-        // Collect active Pit submodules as fake entries
-        List<String[]> pitEntries = new ArrayList<>(); // [name, suffix]
-        Pit pit = (Pit) Myau.moduleManager.getModule(Pit.class);
-        if (pit != null && pit.isEnabled()) {
-            for (myau.module.Setting s : pit.getSettings()) {
-                if (s instanceof BooleanSetting && !s.getName().startsWith(" ")) {
-                    BooleanSetting bs = (BooleanSetting) s;
-                    if (bs.getValue()) {
-                        pitEntries.add(new String[]{ s.getName().toLowerCase(), "" });
-                    }
-                }
-            }
-        }
-
-        // Sort by display width descending so longest is at top
-        enabled.sort(Comparator.comparingInt((Module m) -> {
-            String[] suffix = m.getSuffix();
-            String suffixStr = suffix.length > 0 ? " " + suffix[0] : "";
-            return mc.fontRendererObj.getStringWidth(
-                    m.getName().toLowerCase() + suffixStr.toLowerCase());
-        }).reversed());
-
-        // 1px gap between lines — as tight as possible while staying readable
+        int accentRGB  = hud.getColor(System.currentTimeMillis()).getRGB() | 0xFF000000;
+        int nameRGB    = hud.getListColor().getRGB() | 0xFF000000;
         int lineHeight = mc.fontRendererObj.FONT_HEIGHT + 1;
         boolean shadow = hud.shadow.getValue();
 
-        // Combine: module entries + pit submodule entries, all sorted by width
-        List<String[]> allEntries = new ArrayList<>();
-        for (Module m : enabled) {
+        // ── Build rows ────────────────────────────────────────────────────────
+        // Each row: [displayName, suffix, isPit, isSubmodule]
+        List<String[]> rows = new ArrayList<>();
+
+        // Pit block first — "pit" header + indented submodules
+        Pit pit = (Pit) Myau.moduleManager.getModule(Pit.class);
+        if (pit != null && pit.isEnabled()) {
+            // Collect active submodules
+            List<String> activeSubs = new ArrayList<>();
+            for (myau.module.Setting s : pit.getSettings()) {
+                if (s instanceof BooleanSetting && !s.getName().startsWith(" ")) {
+                    BooleanSetting bs = (BooleanSetting) s;
+                    if (bs.getValue()) activeSubs.add(s.getName().toLowerCase());
+                }
+            }
+            if (!activeSubs.isEmpty()) {
+                // "pit" header row
+                rows.add(new String[]{ "pit", "", "module", "false" });
+                // submodule rows indented with a space prefix for width calculation
+                for (String sub : activeSubs) {
+                    rows.add(new String[]{ sub, "", "pit", "true" });
+                }
+            } else {
+                rows.add(new String[]{ "pit", "", "module", "false" });
+            }
+        }
+
+        // All other enabled non-hidden modules (excluding Pit itself)
+        List<Module> others = new ArrayList<>();
+        for (Module m : Myau.moduleManager.modules.values()) {
+            if (m.isEnabled() && !m.isHidden() && !(m instanceof Pit)) others.add(m);
+        }
+        // Sort by display width descending
+        others.sort(Comparator.comparingInt((Module m) -> {
+            String[] s = m.getSuffix();
+            String suf = s.length > 0 ? " " + s[0].toLowerCase() : "";
+            return mc.fontRendererObj.getStringWidth(m.getName().toLowerCase() + suf);
+        }).reversed());
+
+        for (Module m : others) {
             String[] suffArr = m.getSuffix();
-            String suffix = suffArr.length > 0 ? " " + suffArr[0].toLowerCase() : "";
-            allEntries.add(new String[]{ m.getName().toLowerCase(), suffix, "module" });
-        }
-        for (String[] pe : pitEntries) {
-            allEntries.add(new String[]{ pe[0], pe[1], "pit" });
+            String suf = suffArr.length > 0 ? " " + suffArr[0].toLowerCase() : "";
+            rows.add(new String[]{ m.getName().toLowerCase(), suf, "module", "false" });
         }
 
-        // Sort by total display width descending
-        allEntries.sort(java.util.Comparator.comparingInt(
-            (String[] e) -> mc.fontRendererObj.getStringWidth(e[0] + e[1])
-        ).reversed());
+        // ── Render ────────────────────────────────────────────────────────────
+        for (int i = 0; i < rows.size(); i++) {
+            String name      = rows.get(i)[0];
+            String suffix    = rows.get(i)[1];
+            boolean isPit    = rows.get(i)[2].equals("pit");
+            boolean isSub    = rows.get(i)[3].equals("true");
 
-        for (int i = 0; i < allEntries.size(); i++) {
-            String[] entry  = allEntries.get(i);
-            String name     = entry[0];
-            String suffix   = entry[1];
-            boolean isPit   = entry[2].equals("pit");
-
-            int nameW  = mc.fontRendererObj.getStringWidth(name);
+            // Submodules get a small indent visually
+            String display = isSub ? "  " + name : name;
+            int nameW  = mc.fontRendererObj.getStringWidth(display);
             int totalW = nameW + mc.fontRendererObj.getStringWidth(suffix);
+            int textX  = sr.getScaledWidth() - totalW - 2;
+            int textY  = 4 + i * lineHeight;
 
-            int textX = sr.getScaledWidth() - totalW - 2;
-            int textY = 4 + i * lineHeight;
-
-            // Pit submodules use accent color, normal modules use list color
-            int nColor = isPit ? (accentColor.getRGB() | 0xFF000000) : (nameColor.getRGB() | 0xFF000000);
-            mc.fontRendererObj.drawString(name, textX, textY, nColor, shadow);
+            int color = isPit ? accentRGB : nameRGB;
+            mc.fontRendererObj.drawString(display, textX, textY, color, shadow);
 
             if (!suffix.isEmpty()) {
-                mc.fontRendererObj.drawString(suffix, textX + nameW, textY,
-                        accentColor.getRGB() | 0xFF000000, shadow);
+                mc.fontRendererObj.drawString(suffix, textX + nameW, textY, accentRGB, shadow);
             }
         }
     }
