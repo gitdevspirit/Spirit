@@ -120,12 +120,14 @@ public class Pit extends Module {
     public final BooleanSetting stShowGold    = register(new BooleanSetting("  Show Gold",     true,  () -> streak.getValue()));
     public final BooleanSetting stShowTime    = register(new BooleanSetting("  Show Time",     true,  () -> streak.getValue()));
     public final BooleanSetting stShowKD      = register(new BooleanSetting("  Show K/D",      true,  () -> streak.getValue()));
-    public final SliderSetting  stOrdKills   = register(new SliderSetting("  Kills Order",   1, 1, 6, 1, () -> streak.getValue()));
-    public final SliderSetting  stOrdAssists = register(new SliderSetting("  Assists Order", 2, 1, 6, 1, () -> streak.getValue()));
-    public final SliderSetting  stOrdXP      = register(new SliderSetting("  XP Order",      3, 1, 6, 1, () -> streak.getValue()));
-    public final SliderSetting  stOrdGold    = register(new SliderSetting("  Gold Order",    4, 1, 6, 1, () -> streak.getValue()));
-    public final SliderSetting  stOrdTime    = register(new SliderSetting("  Time Order",    5, 1, 6, 1, () -> streak.getValue()));
-    public final SliderSetting  stOrdKD      = register(new SliderSetting("  K/D Order",     6, 1, 6, 1, () -> streak.getValue()));
+    public final BooleanSetting stShowGPM     = register(new BooleanSetting("  Show GPM",      true,  () -> streak.getValue()));
+    public final SliderSetting  stOrdKills   = register(new SliderSetting("  Kills Order",   1, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdAssists = register(new SliderSetting("  Assists Order", 2, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdXP      = register(new SliderSetting("  XP Order",      3, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdGold    = register(new SliderSetting("  Gold Order",    4, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdTime    = register(new SliderSetting("  Time Order",    5, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdKD      = register(new SliderSetting("  K/D Order",     6, 1, 7, 1, () -> streak.getValue()));
+    public final SliderSetting  stOrdGPM     = register(new SliderSetting("  GPM Order",     7, 1, 7, 1, () -> streak.getValue()));
 
     // ── Events submodule ──────────────────────────────────────────────────────
 
@@ -143,6 +145,8 @@ public class Pit extends Module {
 
     public  int   stKills   = 0;
     public  int   stDeaths  = 0;
+    private long  stStartMs = 0; // session start time for GPM
+    private float stTotalGold = 0f; // total gold earned this session for GPM
     public  int   stAssists = 0;
     private float stXP      = 0f;
     private float stGold    = 0f;
@@ -189,6 +193,14 @@ public class Pit extends Module {
     private final List<Vec3> gambleWaypoints = new ArrayList<>();
     private boolean gambleTracking = false;
 
+    // ── Killstreak Announcer submodule ───────────────────────────────────────
+    public final BooleanSetting ksAnnouncer  = register(new BooleanSetting("KS Announcer", false));
+    public final KeybindSetting kb_ksAnnouncer = register(new KeybindSetting("  KS Key", 0));
+    // Milestone kill counts (comma-separated idea: use sliders for 3 milestones)
+    public final SliderSetting  ksMilestone1 = register(new SliderSetting("  Milestone 1",  5, 1, 100, 1, () -> ksAnnouncer.getValue()));
+    public final SliderSetting  ksMilestone2 = register(new SliderSetting("  Milestone 2", 10, 1, 100, 1, () -> ksAnnouncer.getValue()));
+    public final SliderSetting  ksMilestone3 = register(new SliderSetting("  Milestone 3", 25, 1, 100, 1, () -> ksAnnouncer.getValue()));
+
     // ── KOS submodule ─────────────────────────────────────────────────────────
 
     public final BooleanSetting kosList     = register(new BooleanSetting("KOS List", false));
@@ -198,6 +210,42 @@ public class Pit extends Module {
 
     // Static so NameTags can read it
     public static final List<String> kosNames = new LinkedList<>();
+    private static final java.io.File KOS_FILE = new java.io.File("./config/Myau/kos_list.txt");
+
+    public static void saveKosList() {
+        try {
+            if (!KOS_FILE.getParentFile().exists()) KOS_FILE.getParentFile().mkdirs();
+            java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(KOS_FILE));
+            for (String name : kosNames) pw.println(name);
+            pw.close();
+        } catch (Exception ignored) {}
+    }
+
+    public static void loadKosList() {
+        kosNames.clear();
+        try {
+            if (!KOS_FILE.exists()) return;
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(KOS_FILE));
+            String line;
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) kosNames.add(line);
+            }
+            br.close();
+        } catch (Exception ignored) {}
+    }
+
+    // ── Contract Tracker submodule ───────────────────────────────────────────
+    public final BooleanSetting contractTracker = register(new BooleanSetting("Contract", false));
+    public final KeybindSetting kb_contract     = register(new KeybindSetting("  Contract Key", 0));
+    public final SliderSetting  ctX             = register(new SliderSetting("  Contract X", 5,   0, 500, 1, () -> contractTracker.getValue()));
+    public final SliderSetting  ctY             = register(new SliderSetting("  Contract Y", 200, 0, 300, 1, () -> contractTracker.getValue()));
+
+    // Contract state
+    private String ctName     = "";
+    private int    ctProgress = 0;
+    private int    ctGoal     = 0;
+    private String ctReward   = "";
 
     // ── Death Recap submodule ─────────────────────────────────────────────────
     public final BooleanSetting deathRecap   = register(new BooleanSetting("Death Recap", false));
@@ -469,6 +517,22 @@ public class Pit extends Module {
             } else if (raw.contains("KILL!")) {
                 stKills++;
                 stPaused = false;
+                // Killstreak Announcer
+                if (ksAnnouncer.getValue()) {
+                    int k = stKills;
+                    int m1 = (int)ksMilestone1.getValue(), m2 = (int)ksMilestone2.getValue(), m3 = (int)ksMilestone3.getValue();
+                    String ksMsg = null;
+                    if (k == m1) ksMsg = k + " kill streak!";
+                    else if (k == m2) ksMsg = k + " kill streak! gg";
+                    else if (k == m3) ksMsg = k + " kill streak! gg ez";
+                    if (ksMsg != null) {
+                        final String toSend = ksMsg;
+                        new Thread(() -> {
+                            try { Thread.sleep(500); } catch (Exception ignored) {}
+                            myau.util.PacketUtil.sendPacket(new net.minecraft.network.play.client.C01PacketChatMessage(toSend));
+                        }).start();
+                    }
+                }
             } else if (raw.contains("ASSIST!")) {
                 stAssists++;
             } else {
@@ -529,6 +593,37 @@ public class Pit extends Module {
                         break;
                     }
                 }
+            }
+        }
+
+        // ── Contract Tracker chat parsing ─────────────────────────────────────
+        if (contractTracker.getValue()) {
+            String ctRaw = ((S02PacketChat) event.getPacket()).getChatComponent().getUnformattedText();
+            // Contract accepted: "Contract accepted: Kill 15 players for 500g"
+            java.util.regex.Matcher ctAccept = java.util.regex.Pattern
+                .compile("Contract accepted: (.+?) (\\d+) .+ for (\\S+)")
+                .matcher(ctRaw);
+            if (ctAccept.find()) {
+                ctName = ctAccept.group(1) + " " + ctAccept.group(2);
+                ctGoal = Integer.parseInt(ctAccept.group(2));
+                ctProgress = 0;
+                ctReward = ctAccept.group(3);
+            }
+            // Progress update: "Contract: 7/15"
+            java.util.regex.Matcher ctProg = java.util.regex.Pattern
+                .compile("Contract: (\\d+)/(\\d+)")
+                .matcher(ctRaw);
+            if (ctProg.find()) {
+                ctProgress = Integer.parseInt(ctProg.group(1));
+                ctGoal     = Integer.parseInt(ctProg.group(2));
+            }
+            // Complete
+            if (ctRaw.contains("Contract complete") || ctRaw.contains("contract complete")) {
+                ctProgress = ctGoal;
+                ChatUtil.sendFormatted("&a[Contract] &fComplete! Earned &6" + ctReward);
+                new java.util.Timer().schedule(new java.util.TimerTask() {
+                    public void run() { ctName = ""; ctProgress = 0; ctGoal = 0; ctReward = ""; }
+                }, 3000);
             }
         }
 
@@ -658,6 +753,11 @@ public class Pit extends Module {
             if (stShowGold.getValue())    stRows.put((int)stOrdGold.getValue(),    new String[]{"§6Gold§f: §6"    + String.format("%.1f", stGold)});
             if (stShowTime.getValue())    stRows.put((int)stOrdTime.getValue(),    new String[]{"§fTime§f: §f"    + formatStreakTime(elapsed)});
             if (stShowKD.getValue())      stRows.put((int)stOrdKD.getValue(),      new String[]{"§eK/D§f: §e"     + kdStr});
+            if (stShowGPM.getValue()) {
+                long minElapsed = Math.max(1, elapsed / 60);
+                String gpmStr = String.format("%.1f", stTotalGold / Math.max(1f, elapsed / 60f));
+                stRows.put((int)stOrdGPM.getValue(), new String[]{"§6GPM§f: §6" + gpmStr});
+            }
 
             int ly = sy + 4;
             mc.fontRendererObj.drawStringWithShadow("§cS§at§dr§9e§6a§e§3k §7[" + statusCol + status + "§7]", sx + 5, ly, 0xFFFFFFFF); ly += sp;
@@ -753,7 +853,7 @@ public class Pit extends Module {
     public void onLoadWorld(LoadWorldEvent event) {
         btTargets.clear();
         // Also reset streak, gold req, events on lobby swap
-        stKills = 0; stAssists = 0; stXP = 0; stGold = 0; stDeaths = 0;
+        stKills = 0; stAssists = 0; stXP = 0; stGold = 0; stDeaths = 0; stTotalGold = 0; stStartMs = System.currentTimeMillis();
         stPaused = true;
         grGained = 0; grNeeded = 0;
         evList.clear(); evResponse = null; evPassIndex = 0;
@@ -797,6 +897,8 @@ public class Pit extends Module {
         if (kb_prestigeList.getKeyCode()  != 0 && k == kb_prestigeList.getKeyCode())  { prestigeList.toggle();  Myau.moduleManager.playSound(); notifySubmodule("Prestige List",   prestigeList.getValue()); }
         if (kb_kosList.getKeyCode()        != 0 && k == kb_kosList.getKeyCode())        { kosList.toggle();        Myau.moduleManager.playSound(); notifySubmodule("KOS List",        kosList.getValue()); }
         if (kb_deathRecap.getKeyCode()     != 0 && k == kb_deathRecap.getKeyCode())     { deathRecap.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Death Recap",     deathRecap.getValue()); }
+        if (kb_ksAnnouncer.getKeyCode()    != 0 && k == kb_ksAnnouncer.getKeyCode())    { ksAnnouncer.toggle();    Myau.moduleManager.playSound(); notifySubmodule("KS Announcer",    ksAnnouncer.getValue()); }
+        if (kb_contract.getKeyCode()       != 0 && k == kb_contract.getKeyCode())       { contractTracker.toggle(); Myau.moduleManager.playSound(); notifySubmodule("Contract",        contractTracker.getValue()); }
 
         // AimAssist attack timer
         if (aimAssist.getValue()
@@ -865,6 +967,14 @@ public class Pit extends Module {
         drKillerName   = "";
         drKillerWeapon = null;
         drMyHP         = 0f;
+    }
+
+    private String buildProgressBar(float pct, int len) {
+        int filled = (int)(pct * len);
+        StringBuilder bar = new StringBuilder("\u00a7a[");
+        for (int i = 0; i < len; i++) bar.append(i < filled ? "\u00a7a|" : "\u00a78|");
+        bar.append("\u00a7a]");
+        return bar.toString();
     }
 
     private void notifySubmodule(String name, boolean on) {
