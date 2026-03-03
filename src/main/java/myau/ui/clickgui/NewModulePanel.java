@@ -2,6 +2,7 @@ package myau.ui.clickgui;
 
 import myau.Myau;
 import myau.module.*;
+import myau.module.modules.Pit;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Keyboard;
@@ -35,12 +36,23 @@ public class NewModulePanel {
     private int            sliderBarX, sliderBarW;
     private KeybindSetting listeningKeybind;
 
-    public NewModulePanel(List<Module> modules) { this.modules = modules; }
+    public NewModulePanel(List<Module> modules) { this.modules = modules; collapseDefaults(); }
 
-    public void setModules(List<Module> m) { modules = m; expandedModule = null; scrollOffset = 0; }
+    public void setModules(List<Module> m) { modules = m; expandedModule = null; scrollOffset = 0; collapseDefaults(); }
     public void setVisibleArea(int x, int y, int w, int h) { areaX=x; areaY=y; areaW=w; areaH=h; }
 
     private int cols() { return Math.max(1, areaW / (CARD_W + CARD_GAP)); }
+
+    // ── Default collapse: collapse all Pit submodule headers by default ─────
+    private void collapseDefaults() {
+        Pit pit = (Pit) Myau.moduleManager.getModule(Pit.class);
+        if (pit == null) return;
+        for (Setting s : pit.getSettings()) {
+            if (s instanceof BooleanSetting && !s.getName().startsWith(" ")) {
+                collapsedHeaders.add(s);
+            }
+        }
+    }
 
     // ── Render ────────────────────────────────────────────────────────────────
     public void render(int mx, int my, String search) {
