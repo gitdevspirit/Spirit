@@ -517,13 +517,38 @@ public class Pit extends Module {
     public void onRender2D(Render2DEvent event) {
         if (!isEnabled()) return;
         if (mc.currentScreen instanceof Rise6ClickGui && !hudPreview.getValue()) return;
-        if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        // ── Bounty Tracker HUD (renders even in singleplayer) ─────────────────
+        if (bountyTracker.getValue()) {
+            float bx = (float) btX.getValue();
+            float by = (float) btY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a76\u00a7l\u2756 BOUNTY TRACKER", bx, by, 0xFFFFAA00);
+            by += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (btTargets.isEmpty()) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77No active bounties", bx, by, 0xFF777777);
+            } else {
+                for (java.util.Map.Entry<String, String> entry : btTargets.entrySet()) {
+                    String line = "\u00a7e" + entry.getKey() + " \u00a76" + entry.getValue();
+                    mc.fontRendererObj.drawStringWithShadow(line, bx, by, 0xFFFFFFFF);
+                    by += mc.fontRendererObj.FONT_HEIGHT + 1;
+                }
+            }
+        }
+
 
         // ── Gold Req HUD ──────────────────────────────────────────────────────
         if (goldReq.getValue()) {
-            NumberFormat nf = NumberFormat.getNumberInstance();
-            String text = "§aGold Req: §6" + nf.format(grGained) + "§7/§6" + nf.format(grNeeded) + "g";
-            mc.fontRendererObj.drawStringWithShadow(text, (float) grX.getValue(), (float) grY.getValue(), 0xFFFFFFFF);
+            float gx = (float) grX.getValue();
+            float gy = (float) grY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a76\u00a7lGOLD REQ", gx, gy, 0xFFFFAA00);
+            gy += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (grGained == 0 && grNeeded == 0) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77Waiting...", gx, gy, 0xFF777777);
+            } else {
+                NumberFormat nf = NumberFormat.getNumberInstance();
+                String text = "\u00a7a" + nf.format(grGained) + "\u00a77/\u00a76" + nf.format(grNeeded) + "g";
+                mc.fontRendererObj.drawStringWithShadow(text, gx, gy, 0xFFFFFFFF);
+            }
         }
 
         // ── Streak HUD ────────────────────────────────────────────────────────
@@ -546,6 +571,37 @@ public class Pit extends Module {
             mc.fontRendererObj.drawStringWithShadow("Time: "         + formatStreakTime(elapsed),             sx + 5, sy + 80, 0xFFFFFFFF);
         }
 
+
+        // ── Events HUD ────────────────────────────────────────────────────────
+        if (pitEvents.getValue()) {
+            float ex = (float) evX.getValue();
+            float ey = (float) evY.getValue();
+            mc.fontRendererObj.drawStringWithShadow("\u00a7e\u00a7lPIT EVENTS", ex, ey, 0xFFFFFF55);
+            ey += mc.fontRendererObj.FONT_HEIGHT + 3;
+            if (evList.isEmpty()) {
+                mc.fontRendererObj.drawStringWithShadow("\u00a77Fetching...", ex, ey, 0xFF777777);
+            } else {
+                int maxW = 0;
+                for (String info : evList)
+                    maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \\[")[0]));
+                for (String info : evList) {
+                    String[] parts = info.split(" \\[");
+                    String evName  = parts[0];
+                    String evTime  = parts[1].replace("]", "");
+                    int color = evGetColor(evName);
+                    mc.fontRendererObj.drawStringWithShadow(evName, ex, ey, color);
+                    float tx = ex + maxW + 2;
+                    mc.fontRendererObj.drawStringWithShadow("[", tx, ey, 0xFFAAAAAA);
+                    tx += mc.fontRendererObj.getStringWidth("[");
+                    mc.fontRendererObj.drawStringWithShadow(evTime, tx, ey, 0xFF00FF00);
+                    tx += mc.fontRendererObj.getStringWidth(evTime);
+                    mc.fontRendererObj.drawStringWithShadow("]", tx, ey, 0xFFAAAAAA);
+                    ey += mc.fontRendererObj.FONT_HEIGHT + 2;
+                }
+            }
+        }
+
+        if (mc.thePlayer == null || mc.theWorld == null) return;
         // ── Prestige List HUD ─────────────────────────────────────────────────
         if (prestigeList.getValue() && mc.theWorld != null) {
             float px = (float) plX.getValue();
@@ -561,42 +617,6 @@ public class Pit extends Module {
                 String line = name + " - " + armor + " " + location;
                 mc.fontRendererObj.drawStringWithShadow(line, px, py + oy, color);
                 oy += mc.fontRendererObj.FONT_HEIGHT + 1;
-            }
-        }
-
-        // ── Events HUD ────────────────────────────────────────────────────────
-        if (pitEvents.getValue() && !evList.isEmpty()) {
-            float ex = (float) evX.getValue();
-            float ey = (float) evY.getValue();
-            int maxW = 0;
-            for (String info : evList)
-                maxW = Math.max(maxW, mc.fontRendererObj.getStringWidth(info.split(" \\[")[0]));
-            for (String info : evList) {
-                String[] parts = info.split(" \\[");
-                String evName  = parts[0];
-                String evTime  = parts[1].replace("]", "");
-                int color = evGetColor(evName);
-                mc.fontRendererObj.drawStringWithShadow(evName, ex, ey, color);
-                float tx = ex + maxW + 2;
-                mc.fontRendererObj.drawStringWithShadow("[", tx, ey, 0xFFAAAAAA);
-                tx += mc.fontRendererObj.getStringWidth("[");
-                mc.fontRendererObj.drawStringWithShadow(evTime, tx, ey, 0xFF00FF00);
-                tx += mc.fontRendererObj.getStringWidth(evTime);
-                mc.fontRendererObj.drawStringWithShadow("]", tx, ey, 0xFFAAAAAA);
-                ey += mc.fontRendererObj.FONT_HEIGHT + 2;
-            }
-        }
-
-        // ── Bounty Tracker HUD ────────────────────────────────────────────────
-        if (bountyTracker.getValue() && !btTargets.isEmpty()) {
-            float bx = (float) btX.getValue();
-            float by = (float) btY.getValue();
-            mc.fontRendererObj.drawStringWithShadow("§6§lBounties", bx, by, 0xFFFFAA00);
-            by += mc.fontRendererObj.FONT_HEIGHT + 2;
-            for (java.util.Map.Entry<String, String> entry : btTargets.entrySet()) {
-                String line = "§e" + entry.getKey() + " §6" + entry.getValue();
-                mc.fontRendererObj.drawStringWithShadow(line, bx, by, 0xFFFFFFFF);
-                by += mc.fontRendererObj.FONT_HEIGHT + 1;
             }
         }
     }
