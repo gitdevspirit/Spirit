@@ -140,7 +140,11 @@ public class SilentAura extends Module {
 
         // Find target
         currentTarget = findTarget();
-        if (currentTarget == null) return;
+        if (currentTarget == null) {
+            silentYaw   = mc.thePlayer.rotationYaw;
+            silentPitch = mc.thePlayer.rotationPitch;
+            return;
+        }
 
         // Calculate silent rotation toward target
         float[] rot = calcRotation(currentTarget);
@@ -154,7 +158,7 @@ public class SilentAura extends Module {
             return;
         }
 
-        // Body rotation for rendering (3rd person head tracking)
+        // Body rotation for rendering — always on, no flicker
         RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
         // Actual packet rotation is handled by onUpdateEvent which piggybacks
         // on the game's existing movement packet — no extra packets sent
@@ -171,10 +175,8 @@ public class SilentAura extends Module {
         if (!isEnabled() || currentTarget == null) return;
 
         if (event.getType() == myau.event.types.EventType.PRE) {
-            // Inject rotation on the tick we attack
-            if (pendingAttack) {
-                event.setRotation(silentYaw, silentPitch, 10);
-            }
+            // Always inject rotation while target is locked — no flicker
+            event.setRotation(silentYaw, silentPitch, 10);
         } else if (event.getType() == myau.event.types.EventType.POST) {
             // POST fires after onUpdateWalkingPlayer has sent the position/look packet
             // Send attack here so server receives: [position+look] then [attack]
@@ -316,10 +318,12 @@ public class SilentAura extends Module {
         AxisAlignedBB bb = target.getEntityBoundingBox();
         float smooth = 1.0f - (float) aimSpeed.getValue() / 100.0f;
 
+        // Always smooth FROM the previous silentYaw/silentPitch (server-side rotation)
+        // NOT from client yaw — otherwise it snaps back to client each tick and flickers
         if (targetArea.getIndex() == 1) {
             // Closest point on hitbox
             return RotationUtil.getRotationsToBox(bb,
-                    mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch,
+                    silentYaw, silentPitch,
                     180.0f, smooth);
         } else {
             // Center
@@ -329,7 +333,7 @@ public class SilentAura extends Module {
             net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
             return RotationUtil.getRotations(
                     cx - eyes.xCoord, cy - eyes.yCoord, cz - eyes.zCoord,
-                    mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch,
+                    silentYaw, silentPitch,
                     180.0f, smooth);
         }
     }
