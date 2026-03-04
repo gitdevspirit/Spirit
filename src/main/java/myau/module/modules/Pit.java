@@ -1,6 +1,7 @@
 package myau.module.modules;
 
 import myau.Myau;
+import net.minecraft.client.network.NetworkPlayerInfo;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.input.Keyboard;
 import net.minecraft.nbt.NBTTagCompound;
@@ -307,6 +308,10 @@ public class Pit extends Module {
     public final SliderSetting  asInterval    = register(new SliderSetting("  Retry Interval (s)", 3, 1, 10, 1, () -> autoSpawn.getValue()));
 
     private long asLastSent = 0;
+
+    // KOS tab list scanning
+    private final java.util.Set<String> kosSeenInTab = new java.util.HashSet<>();
+    private long kosLastTabScan = 0;
 
     // ── Contract Tracker submodule ───────────────────────────────────────────────
     public final BooleanSetting contractTracker = register(new BooleanSetting("Contract", false));
@@ -1007,6 +1012,7 @@ public class Pit extends Module {
         btTargets.clear();
         // Also reset streak, gold req, events on lobby swap
         stKills = 0; stAssists = 0; stXP = 0; stGold = 0; stDeaths = 0; stTotalGold = 0; stStartMs = System.currentTimeMillis();
+        kosSeenInTab.clear();
         stPaused = true;
         grGained = 0; grNeeded = 0;
         evList.clear(); evResponse = null; evPassIndex = 0;
@@ -1016,6 +1022,34 @@ public class Pit extends Module {
     public void onUpdate(myau.events.UpdateEvent event) {
         if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        // ── KOS Tab List Scan ─────────────────────────────────────────────────
+        if (kosList.getValue() && event.getType() == EventType.PRE) {
+            long now = System.currentTimeMillis();
+            if (now - kosLastTabScan >= 2000) { // scan every 2s
+                kosLastTabScan = now;
+                if (mc.getNetHandler() != null) {
+                    java.util.Set<String> currentTab = new java.util.HashSet<>();
+                    for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
+                        String tabName = info.getGameProfile().getName();
+                        currentTab.add(tabName);
+                        // Check if this is a KOS player we haven't seen yet
+                        if (!kosSeenInTab.contains(tabName)) {
+                            for (String kos : kosNames) {
+                                if (kos.equalsIgnoreCase(tabName) && !tabName.equals(mc.thePlayer.getName())) {
+                                    ChatUtil.sendFormatted("&c[KOS] ☠ &c&l" + tabName + " &r&cis in your lobby!");
+                                    playCustomSound(kosSound);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    // Update seen set — remove players who left
+                    kosSeenInTab.retainAll(currentTab);
+                    kosSeenInTab.addAll(currentTab);
+                }
+            }
+        }
 
         // ── Auto Spawn ────────────────────────────────────────────────────────
         if (autoSpawn.getValue() && event.getType() == EventType.PRE) {
