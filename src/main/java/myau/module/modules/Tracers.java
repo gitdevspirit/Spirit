@@ -51,7 +51,7 @@ public class Tracers extends Module {
     public final BooleanSetting  showDistance      = new BooleanSetting("Show Distance",     true);
 
     // Arrow style
-    public final DropdownSetting arrowMode         = new DropdownSetting("Arrow Style",      3, "Caret", "Greater Than", "Triangle", "Slinky");
+    public final DropdownSetting arrowMode         = new DropdownSetting("Arrow Style",      0, "Spirit");
 
     // BedWars team colors
     private static final Map<String, Color> BEDWARS_TEAM_COLORS = new HashMap<>();
@@ -274,38 +274,48 @@ public class Tracers extends Module {
             GlStateManager.rotate(rotation, 0.0F, 0.0F, 1.0F);
             GlStateManager.scale(sizeScale, sizeScale, 1.0F);
 
-            if (arrowMode.getIndex() == 3) { // Slinky
-                final float halfWidth = 16.0F;
-                final float height    = 22.0F;
-                final float midOffset = 6.0F;
+            // Spirit arrow — solid filled chevron like >
+            {
+                // Shape: tip at top (0, -h), back-top at (-w, tw), back-bottom at (w, tw)
+                // with an inward notch at the back center (0, notch) giving the > shape
+                final float h      = 18.0F; // tip to back distance
+                final float w      = 12.0F; // half-width at the back
+                final float notch  =  6.0F; // how deep the back notch goes in
 
                 GL11.glEnable(GL11.GL_BLEND);
                 GL11.glDisable(GL11.GL_TEXTURE_2D);
                 GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GL11.glEnable(GL11.GL_POLYGON_SMOOTH);
+                GL11.glHint(GL11.GL_POLYGON_SMOOTH_HINT, GL11.GL_NICEST);
 
+                // Filled body — two triangles forming the chevron
                 GL11.glColor4f(red, green, blue, alpha);
                 GL11.glBegin(GL11.GL_TRIANGLES);
-                GL11.glVertex2f(0.0F, -height);
-                GL11.glVertex2f(-halfWidth, 0.0F);
-                GL11.glVertex2f(halfWidth, 0.0F);
+                // Left half: tip -> back-left -> notch
+                GL11.glVertex2f( 0.0F,  -h);
+                GL11.glVertex2f(-w,      0.0F);
+                GL11.glVertex2f( 0.0F,  -notch);
+                // Right half: tip -> notch -> back-right
+                GL11.glVertex2f( 0.0F,  -h);
+                GL11.glVertex2f( 0.0F,  -notch);
+                GL11.glVertex2f( w,      0.0F);
                 GL11.glEnd();
 
-                GL11.glColor4f(Math.min(1.0f, red + 0.15f), Math.min(1.0f, green + 0.15f), Math.min(1.0f, blue + 0.15f), alpha * 0.6f);
-                GL11.glBegin(GL11.GL_TRIANGLES);
-                GL11.glVertex2f(0.0F, -height + 4.0F);
-                GL11.glVertex2f(-halfWidth + midOffset, midOffset);
-                GL11.glVertex2f(halfWidth - midOffset, midOffset);
-                GL11.glEnd();
-
-                float darken = 0.40f;
+                // Outline for crispness
+                float darken = 0.55f;
                 GL11.glColor4f(red * darken, green * darken, blue * darken, alpha);
-                GL11.glLineWidth(1.2F);
+                GL11.glLineWidth(1.0F);
+                GL11.glEnable(GL11.GL_LINE_SMOOTH);
+                GL11.glHint(GL11.GL_LINE_SMOOTH_HINT, GL11.GL_NICEST);
                 GL11.glBegin(GL11.GL_LINE_LOOP);
-                GL11.glVertex2f(0.0F, -height);
-                GL11.glVertex2f(-halfWidth, 0.0F);
-                GL11.glVertex2f(halfWidth, 0.0F);
+                GL11.glVertex2f( 0.0F, -h);
+                GL11.glVertex2f(-w,     0.0F);
+                GL11.glVertex2f( 0.0F, -notch);
+                GL11.glVertex2f( w,     0.0F);
                 GL11.glEnd();
+                GL11.glDisable(GL11.GL_LINE_SMOOTH);
 
+                GL11.glDisable(GL11.GL_POLYGON_SMOOTH);
                 GL11.glEnable(GL11.GL_TEXTURE_2D);
                 GL11.glDisable(GL11.GL_BLEND);
             }
