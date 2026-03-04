@@ -165,29 +165,34 @@ public class SilentAura extends Module {
         pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
-    // ── Silent rotation via UpdateEvent ──────────────────────────────────────
+    // ── Silent rotation + attack via UpdateEvent ─────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
 
         if (event.getType() == myau.event.types.EventType.PRE) {
-            // PRE: only inject rotation if we're about to attack this tick
+            // Inject rotation on the tick we attack
             if (pendingAttack) {
                 event.setRotation(silentYaw, silentPitch, 10);
+            }
+        } else if (event.getType() == myau.event.types.EventType.POST) {
+            // POST fires after onUpdateWalkingPlayer has sent the position/look packet
+            // Send attack here so server receives: [position+look] then [attack]
+            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+                mc.thePlayer.swingItem();
+                attackingTarget = currentTarget;
+                scheduleNextAttack();
+                pendingAttack = false;
             }
         }
     }
 
-    // ── Attack in PlayerUpdateEvent (fires just before movement packet sends) ─
+    // ── Movement fix in PlayerUpdateEvent (after physics, before packet) ────
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled()) return;
-
-        // Movement fix (Proper mode) — rotate motion to match silentYaw
-        // Physics already ran using client rotationYaw, so motionX/Z are based on that.
-        // We rotate the velocity vector by the delta between silentYaw and clientYaw
-        // so Grim's simulation (which uses silentYaw) matches our actual velocity.
-        if (movement.getIndex() == 0 && currentTarget != null) {
+        if (!isEnabled() || currentTarget == null) return;
+        if (movement.getIndex() == 0) {
             double speed = MoveUtil.getSpeed();
             if (speed > 0.005) {
                 float clientYaw = mc.thePlayer.rotationYaw;
@@ -198,17 +203,6 @@ public class SilentAura extends Module {
                 mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
             }
         }
-
-        if (!pendingAttack || currentTarget == null || currentTarget.isDead) return;
-        // At this point rotationYaw has been replaced with overrideYaw (silentYaw)
-        // onUpdateWalkingPlayer hasn't run yet — movement packet not sent yet
-        // Send attack now so it queues AFTER the look packet in the same network flush
-        PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-        mc.thePlayer.swingItem();
-        attackingTarget = currentTarget;
-        lastAttackMs = System.currentTimeMillis();
-        scheduleNextAttack();
-        pendingAttack = false;
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
