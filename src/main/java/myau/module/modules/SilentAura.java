@@ -4,6 +4,7 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.management.RotationState;
 import myau.events.MoveInputEvent;
+import myau.events.PlayerUpdateEvent;
 import myau.util.MoveUtil;
 import myau.event.types.EventType;
 import myau.events.Render3DEvent;
@@ -170,32 +171,47 @@ public class SilentAura extends Module {
         if (!isEnabled() || currentTarget == null) return;
 
         if (event.getType() == myau.event.types.EventType.PRE) {
-            // PRE: inject rotation into the outgoing movement packet
-            event.setRotation(silentYaw, silentPitch, 10);
-        } else if (event.getType() == myau.event.types.EventType.POST) {
-            // POST: look packet already sent — now safe to send attack
-            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
-                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-                mc.thePlayer.swingItem();
-                attackingTarget = currentTarget;
-                lastAttackMs = System.currentTimeMillis();
-                scheduleNextAttack();
-                pendingAttack = false;
+            // PRE: only inject rotation if we're about to attack this tick
+            if (pendingAttack) {
+                event.setRotation(silentYaw, silentPitch, 10);
             }
         }
+    }
+
+    // ── Attack in PlayerUpdateEvent (fires just before movement packet sends) ─
+    @EventTarget
+    public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (!isEnabled() || !pendingAttack || currentTarget == null || currentTarget.isDead) return;
+        // At this point rotationYaw has been replaced with overrideYaw (silentYaw)
+        // onUpdateWalkingPlayer hasn't run yet — movement packet not sent yet
+        // Send attack now so it queues AFTER the look packet in the same network flush
+        PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+        mc.thePlayer.swingItem();
+        attackingTarget = currentTarget;
+        lastAttackMs = System.currentTimeMillis();
+        scheduleNextAttack();
+        pendingAttack = false;
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 0 && currentTarget != null) { // Proper
-            MoveUtil.fixStrafe(silentYaw);
-        } else if (movement.getIndex() == 1) { // Slow
-            mc.thePlayer.movementInput.moveForward  *= 0.6f;
-            mc.thePlayer.movementInput.moveStrafe   *= 0.6f;
+        if (movement.getIndex() == 0) {
+            // Proper: remap motion vector to match server-side yaw
+            // so Grim's simulation matches our actual velocity
+            float yawDiff = MathHelper.wrapAngleTo180_float(silentYaw - mc.thePlayer.rotationYaw);
+            double speed = MoveUtil.getSpeed();
+            if (speed > 0.01) {
+                float dirYaw = MoveUtil.getDirectionYaw();
+                float newDirYaw = dirYaw + yawDiff;
+                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
+                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
+            }
+        } else if (movement.getIndex() == 1) {
+            mc.thePlayer.movementInput.moveForward *= 0.6f;
+            mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
-        // None = no correction
     }
 
     // ── ESP rendering ─────────────────────────────────────────────────────────
