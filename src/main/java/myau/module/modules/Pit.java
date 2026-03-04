@@ -133,6 +133,7 @@ public class Pit extends Module {
 
     public final BooleanSetting pitEvents    = register(new BooleanSetting("Events", false));
     public final KeybindSetting kb_pitEvents = register(new KeybindSetting("  Events Key", 0));
+    public final DropdownSetting evSound     = register(new DropdownSetting("  Event Sound", 0, () -> pitEvents.getValue(), "Note Pling", "Note Bass", "Note Harp", "Orb Pickup", "Level Up", "Chest Open", "Anvil Land"));
     public final SliderSetting  evX          = register(new SliderSetting("  Events X",    5,   0, 500, 1, () -> pitEvents.getValue()));
     public final SliderSetting  evY          = register(new SliderSetting("  Events Y",   50,   0, 300, 1, () -> pitEvents.getValue()));
     public final SliderSetting  evCount      = register(new SliderSetting("  Event Count", 5,   1,  10, 1, () -> pitEvents.getValue()));
@@ -207,12 +208,55 @@ public class Pit extends Module {
     public final SliderSetting  kosX        = register(new SliderSetting("  KOS X",  5,  0, 500, 1, () -> kosList.getValue()));
     public final SliderSetting  kosY        = register(new SliderSetting("  KOS Y", 50,  0, 300, 1, () -> kosList.getValue()));
     public final KeybindSetting kb_kosList  = register(new KeybindSetting("  KOS Key", 0));
+    public final DropdownSetting kosSound    = register(new DropdownSetting("  KOS Alert Sound", 3, () -> kosList.getValue(), "Note Pling", "Note Bass", "Note Harp", "Orb Pickup", "Level Up", "Chest Open", "Anvil Land"));
 
     // Static so NameTags can read it
     public static final List<String> kosNames = new LinkedList<>();
     private static final java.io.File KOS_FILE = new java.io.File("./config/Myau/kos_list.txt");
 
-    public static void saveKosList() {
+    // ── HUD Layout persistence ────────────────────────────────────────────────
+    private static final java.io.File HUD_FILE = new java.io.File("./config/Myau/pit_hud_layout.json");
+
+    public void saveHudLayout() {
+        try {
+            if (!HUD_FILE.getParentFile().exists()) HUD_FILE.getParentFile().mkdirs();
+            com.google.gson.JsonObject obj = new com.google.gson.JsonObject();
+            obj.addProperty("stX",  stX.getValue());  obj.addProperty("stY",  stY.getValue());
+            obj.addProperty("grX",  grX.getValue());  obj.addProperty("grY",  grY.getValue());
+            obj.addProperty("btX",  btX.getValue());  obj.addProperty("btY",  btY.getValue());
+            obj.addProperty("evX",  evX.getValue());  obj.addProperty("evY",  evY.getValue());
+            obj.addProperty("kosX", kosX.getValue()); obj.addProperty("kosY", kosY.getValue());
+            obj.addProperty("ctX",  ctX.getValue());  obj.addProperty("ctY",  ctY.getValue());
+            obj.addProperty("plX",  plX.getValue());  obj.addProperty("plY",  plY.getValue());
+            java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(HUD_FILE));
+            pw.println(new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(obj));
+            pw.close();
+        } catch (Exception ignored) {}
+    }
+
+    public void loadHudLayout() {
+        try {
+            if (!HUD_FILE.exists()) return;
+            String raw = new String(java.nio.file.Files.readAllBytes(HUD_FILE.toPath()));
+            com.google.gson.JsonObject obj = new com.google.gson.JsonParser().parse(raw).getAsJsonObject();
+            if (obj.has("stX"))  stX.setValue(obj.get("stX").getAsDouble());
+            if (obj.has("stY"))  stY.setValue(obj.get("stY").getAsDouble());
+            if (obj.has("grX"))  grX.setValue(obj.get("grX").getAsDouble());
+            if (obj.has("grY"))  grY.setValue(obj.get("grY").getAsDouble());
+            if (obj.has("btX"))  btX.setValue(obj.get("btX").getAsDouble());
+            if (obj.has("btY"))  btY.setValue(obj.get("btY").getAsDouble());
+            if (obj.has("evX"))  evX.setValue(obj.get("evX").getAsDouble());
+            if (obj.has("evY"))  evY.setValue(obj.get("evY").getAsDouble());
+            if (obj.has("kosX")) kosX.setValue(obj.get("kosX").getAsDouble());
+            if (obj.has("kosY")) kosY.setValue(obj.get("kosY").getAsDouble());
+            if (obj.has("ctX"))  ctX.setValue(obj.get("ctX").getAsDouble());
+            if (obj.has("ctY"))  ctY.setValue(obj.get("ctY").getAsDouble());
+            if (obj.has("plX"))  plX.setValue(obj.get("plX").getAsDouble());
+            if (obj.has("plY"))  plY.setValue(obj.get("plY").getAsDouble());
+        } catch (Exception ignored) {}
+    }
+
+    public void saveKosList() {
         try {
             if (!KOS_FILE.getParentFile().exists()) KOS_FILE.getParentFile().mkdirs();
             java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(KOS_FILE));
@@ -235,9 +279,18 @@ public class Pit extends Module {
         } catch (Exception ignored) {}
     }
 
-    // ── Contract Tracker submodule ───────────────────────────────────────────
+    // ── Auto Spawn submodule ─────────────────────────────────────────────────
+    public final BooleanSetting autoSpawn     = register(new BooleanSetting("Auto Spawn", false));
+    public final KeybindSetting kb_autoSpawn  = register(new KeybindSetting("  Auto Spawn Key", 0));
+    public final SliderSetting  asHealth      = register(new SliderSetting("  Health Threshold", 6, 1, 20, 1, () -> autoSpawn.getValue()));
+    public final SliderSetting  asInterval    = register(new SliderSetting("  Retry Interval (s)", 3, 1, 10, 1, () -> autoSpawn.getValue()));
+
+    private long asLastSent = 0;
+
+    // ── Contract Tracker submodule ───────────────────────────────────────────────
     public final BooleanSetting contractTracker = register(new BooleanSetting("Contract", false));
     public final KeybindSetting kb_contract     = register(new KeybindSetting("  Contract Key", 0));
+    public final DropdownSetting ctSound     = register(new DropdownSetting("  Complete Sound", 1, () -> contractTracker.getValue(), "Note Pling", "Note Bass", "Note Harp", "Orb Pickup", "Level Up", "Chest Open", "Anvil Land"));
     public final SliderSetting  ctX             = register(new SliderSetting("  Contract X", 5,   0, 500, 1, () -> contractTracker.getValue()));
     public final SliderSetting  ctY             = register(new SliderSetting("  Contract Y", 200, 0, 300, 1, () -> contractTracker.getValue()));
 
@@ -278,6 +331,8 @@ public class Pit extends Module {
 
     @Override
     public void onDisabled() {
+        saveHudLayout();
+        saveKosList();
         if (mc.thePlayer != null) agSetKeys(false);
     }
 
@@ -589,7 +644,7 @@ public class Pit extends Module {
                 for (String kos : kosNames) {
                     if (kos.equalsIgnoreCase(joined)) {
                         ChatUtil.sendFormatted("&c[KOS] ☠ &c&l" + joined + " &r&chas joined your lobby!");
-                        myau.util.SoundUtil.playSound("random.orb");
+                        playCustomSound(kosSound);
                         break;
                     }
                 }
@@ -620,6 +675,7 @@ public class Pit extends Module {
             // Complete
             if (ctRaw.contains("Contract complete") || ctRaw.contains("contract complete")) {
                 ctProgress = ctGoal;
+                playCustomSound(ctSound);
                 ChatUtil.sendFormatted("&a[Contract] &fComplete! Earned &6" + ctReward);
                 new java.util.Timer().schedule(new java.util.TimerTask() {
                     public void run() { ctName = ""; ctProgress = 0; ctGoal = 0; ctReward = ""; }
@@ -861,8 +917,21 @@ public class Pit extends Module {
 
     @EventTarget
     public void onUpdate(myau.events.UpdateEvent event) {
-        if (!isEnabled() || !deathRecap.getValue()) return;
+        if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        // ── Auto Spawn ────────────────────────────────────────────────────────
+        if (autoSpawn.getValue() && event.getType() == EventType.PRE) {
+            float hp = mc.thePlayer.getHealth();
+            long now = System.currentTimeMillis();
+            long intervalMs = (long)(asInterval.getValue() * 1000);
+            if (hp > 0 && hp <= asHealth.getValue() && (now - asLastSent) >= intervalMs) {
+                mc.thePlayer.sendChatMessage("/spawn");
+                asLastSent = now;
+            }
+        }
+
+        if (!deathRecap.getValue()) return;
         // Track closest recently-attacking player as likely killer
         float myHP = mc.thePlayer.getHealth();
         for (Object obj : mc.theWorld.playerEntities) {
@@ -899,6 +968,7 @@ public class Pit extends Module {
         if (kb_deathRecap.getKeyCode()     != 0 && k == kb_deathRecap.getKeyCode())     { deathRecap.toggle();     Myau.moduleManager.playSound(); notifySubmodule("Death Recap",     deathRecap.getValue()); }
         if (kb_ksAnnouncer.getKeyCode()    != 0 && k == kb_ksAnnouncer.getKeyCode())    { ksAnnouncer.toggle();    Myau.moduleManager.playSound(); notifySubmodule("KS Announcer",    ksAnnouncer.getValue()); }
         if (kb_contract.getKeyCode()       != 0 && k == kb_contract.getKeyCode())       { contractTracker.toggle(); Myau.moduleManager.playSound(); notifySubmodule("Contract",        contractTracker.getValue()); }
+        if (kb_autoSpawn.getKeyCode()      != 0 && k == kb_autoSpawn.getKeyCode())      { autoSpawn.toggle();      Myau.moduleManager.playSound(); notifySubmodule("Auto Spawn",      autoSpawn.getValue()); }
 
         // AimAssist attack timer
         if (aimAssist.getValue()
@@ -967,6 +1037,12 @@ public class Pit extends Module {
         drKillerName   = "";
         drKillerWeapon = null;
         drMyHP         = 0f;
+    }
+
+    private static final String[] SOUND_MAP = {"note.pling","note.bass","note.harp","random.orb","random.levelup","random.chestopen","random.anvil_land"};
+    private void playCustomSound(DropdownSetting setting) {
+        String snd = SOUND_MAP[Math.min(setting.getIndex(), SOUND_MAP.length - 1)];
+        myau.util.SoundUtil.playSound(snd);
     }
 
     private String buildProgressBar(float pct, int len) {
