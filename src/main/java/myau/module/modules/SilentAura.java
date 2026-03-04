@@ -18,8 +18,8 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
-import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook;
-import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook;
+import net.minecraft.network.play.client.C03PacketPlayer.C05PacketPlayerLook;
+import net.minecraft.network.play.client.C03PacketPlayer.C05PacketPlayerLook;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
@@ -156,11 +156,8 @@ public class SilentAura extends Module {
         // Apply body rotation via RotationState — body turns, camera stays locked
         RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
 
-        // Send silent look packet so server registers the rotation
-        PacketUtil.sendPacketNoEvent(new C06PacketPlayerPosLook(
-                mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ,
-                silentYaw, silentPitch, mc.thePlayer.onGround
-        ));
+        // Send silent look packet (look only — no position, avoids BadPacketsV/Timer flags)
+        PacketUtil.sendPacketNoEvent(new C05PacketPlayerLook(silentYaw, silentPitch, mc.thePlayer.onGround));
 
         // Attack if cooldown elapsed and in range
         double dist = RotationUtil.distanceToEntity(currentTarget);
