@@ -1,5 +1,6 @@
 package myau.ui.clickgui;
 
+
 import myau.module.Module;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
@@ -117,6 +118,7 @@ public class Rise6ClickGui extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int keyCode) throws IOException {
+        if (keyCode == 1 && !modulePanel.isListeningForKey()) { mc.displayGuiScreen(null); return; }
         if (searchBar.keyTyped(c, keyCode)) return;
         modulePanel.keyTyped(c, keyCode);
     }
