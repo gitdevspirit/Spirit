@@ -353,6 +353,7 @@ public class Pit extends Module {
 
     public Pit() {
         super("Pit", false);
+        loadKosList();
     }
 
     @Override
