@@ -85,8 +85,9 @@ public class SilentAura extends Module {
     private long lastAttackMs = 0;
     private long nextAttackMs = 0;
     private long breakPauseUntil = 0;
-    private float silentYaw   = 0;
-    private float silentPitch = 0;
+    private float silentYaw    = 0;
+    private float silentPitch  = 0;
+    private boolean pendingAttack = false;
 
     public SilentAura() {
         super("SilentAura", false);
@@ -157,33 +158,38 @@ public class SilentAura extends Module {
         // Actual packet rotation is handled by onUpdateEvent which piggybacks
         // on the game's existing movement packet — no extra packets sent
 
-        // Attack if cooldown elapsed and in range
+        // Flag attack intent — actual packet sent in POST update after look packet
         double dist = RotationUtil.distanceToEntity(currentTarget);
         double attackRange = range.getValue() + extraSwing.getValue();
-        if (dist <= attackRange && System.currentTimeMillis() >= nextAttackMs) {
-            // Send attack packet silently
-            PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-            mc.thePlayer.swingItem(); // client-side swing animation
-            attackingTarget = currentTarget;
-            lastAttackMs = System.currentTimeMillis();
-            scheduleNextAttack();
-        }
+        pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
-    // ── Silent rotation via UpdateEvent (modifies existing packet, no extra packets) ─
+    // ── Silent rotation via UpdateEvent ──────────────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-        if (event.getType() != myau.event.types.EventType.PRE) return;
-        // Priority 10 — high enough to override AimAssist but not BackTrack
-        event.setRotation(silentYaw, silentPitch, 10);
+
+        if (event.getType() == myau.event.types.EventType.PRE) {
+            // PRE: inject rotation into the outgoing movement packet
+            event.setRotation(silentYaw, silentPitch, 10);
+        } else if (event.getType() == myau.event.types.EventType.POST) {
+            // POST: look packet already sent — now safe to send attack
+            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+                mc.thePlayer.swingItem();
+                attackingTarget = currentTarget;
+                lastAttackMs = System.currentTimeMillis();
+                scheduleNextAttack();
+                pendingAttack = false;
+            }
+        }
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 0) { // Proper
+        if (movement.getIndex() == 0 && currentTarget != null) { // Proper
             MoveUtil.fixStrafe(silentYaw);
         } else if (movement.getIndex() == 1) { // Slow
             mc.thePlayer.movementInput.moveForward  *= 0.6f;
