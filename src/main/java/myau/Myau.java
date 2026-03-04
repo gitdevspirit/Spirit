@@ -155,6 +155,7 @@ public class Myau {
         moduleManager.modules.put(Scaffold.class,        new Scaffold());
         moduleManager.modules.put(AutoBlockIn.class,     new AutoBlockIn());
         moduleManager.modules.put(Spammer.class,         new Spammer());
+        moduleManager.modules.put(SilentAura.class,      new SilentAura());
         moduleManager.modules.put(Pit.class,             new Pit());
         moduleManager.modules.put(Speed.class,           new Speed());
         moduleManager.modules.put(SpeedMine.class,       new SpeedMine());
