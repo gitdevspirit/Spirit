@@ -1,6 +1,5 @@
 package myau.ui.clickgui;
 
-
 import myau.module.Module;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
