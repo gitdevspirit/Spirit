@@ -181,7 +181,25 @@ public class SilentAura extends Module {
     // ── Attack in PlayerUpdateEvent (fires just before movement packet sends) ─
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled() || !pendingAttack || currentTarget == null || currentTarget.isDead) return;
+        if (!isEnabled()) return;
+
+        // Movement fix (Proper mode) — rotate motion to match silentYaw
+        // Physics already ran using client rotationYaw, so motionX/Z are based on that.
+        // We rotate the velocity vector by the delta between silentYaw and clientYaw
+        // so Grim's simulation (which uses silentYaw) matches our actual velocity.
+        if (movement.getIndex() == 0 && currentTarget != null) {
+            double speed = MoveUtil.getSpeed();
+            if (speed > 0.005) {
+                float clientYaw = mc.thePlayer.rotationYaw;
+                float yawDiff   = MathHelper.wrapAngleTo180_float(silentYaw - clientYaw);
+                float dirYaw    = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
+                float newDirYaw = dirYaw + yawDiff;
+                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
+                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
+            }
+        }
+
+        if (!pendingAttack || currentTarget == null || currentTarget.isDead) return;
         // At this point rotationYaw has been replaced with overrideYaw (silentYaw)
         // onUpdateWalkingPlayer hasn't run yet — movement packet not sent yet
         // Send attack now so it queues AFTER the look packet in the same network flush
@@ -197,21 +215,11 @@ public class SilentAura extends Module {
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 0) {
-            // Proper: remap motion vector to match server-side yaw
-            // so Grim's simulation matches our actual velocity
-            float yawDiff = MathHelper.wrapAngleTo180_float(silentYaw - mc.thePlayer.rotationYaw);
-            double speed = MoveUtil.getSpeed();
-            if (speed > 0.01) {
-                float dirYaw = MoveUtil.getDirectionYaw();
-                float newDirYaw = dirYaw + yawDiff;
-                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
-                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
-            }
-        } else if (movement.getIndex() == 1) {
+        if (movement.getIndex() == 1) {
             mc.thePlayer.movementInput.moveForward *= 0.6f;
             mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
+        // Proper fix happens in PlayerUpdateEvent after physics runs
     }
 
     // ── ESP rendering ─────────────────────────────────────────────────────────
