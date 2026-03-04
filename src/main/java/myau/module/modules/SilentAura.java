@@ -19,14 +19,11 @@ import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
-import net.minecraft.network.play.client.C03PacketPlayer;
-import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.MathHelper;
 import org.lwjgl.opengl.GL11;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
-import org.lwjgl.opengl.GL11;
 
 import java.util.Comparator;
 import java.util.List;
@@ -67,8 +64,6 @@ public class SilentAura extends Module {
 
     // ── Limit to Items ────────────────────────────────────────────────────────
     public final BooleanSetting  limitItems   = register(new BooleanSetting("Limit to Items", false));
-    // Stored as a simple string — parsed at runtime
-    // Format: "swords, axes, slot 1, Diamond Sword" etc.
     public String itemWhitelist = "swords";
 
     // ── Show Target ───────────────────────────────────────────────────────────
@@ -82,7 +77,7 @@ public class SilentAura extends Module {
 
     // ── State ─────────────────────────────────────────────────────────────────
     private EntityPlayer currentTarget  = null;
-    private EntityPlayer attackingTarget = null; // set for one tick when attacking
+    private EntityPlayer attackingTarget = null;
     private long lastAttackMs = 0;
     private long nextAttackMs = 0;
     private long breakPauseUntil = 0;
@@ -108,19 +103,16 @@ public class SilentAura extends Module {
 
         attackingTarget = null;
 
-        // Disable on death
         if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) {
             setEnabled(false);
             return;
         }
 
-        // Require mouse down
         if (requireMouse.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) {
             currentTarget = null;
             return;
         }
 
-        // Break blocks pause
         if (breakBlocks.getValue()) {
             if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK
                     && mc.thePlayer.isUsingItem()) {
@@ -132,77 +124,102 @@ public class SilentAura extends Module {
             }
         }
 
-        // Item whitelist
         if (limitItems.getValue() && !isAllowedItem()) {
             currentTarget = null;
             return;
         }
 
-        // Find target
         currentTarget = findTarget();
         if (currentTarget == null) return;
 
-        // Calculate silent rotation toward target
         float[] rot = calcRotation(currentTarget);
         silentYaw   = rot[0];
         silentPitch = rot[1];
 
-        // Check angle constraint
         float angleDiff = getAngleDiff(silentYaw, silentPitch);
         if (angleDiff > maxAngle.getValue()) {
             currentTarget = null;
             return;
         }
 
-        // Body rotation for rendering (3rd person head tracking)
         RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
-        // Actual packet rotation is handled by onUpdateEvent which piggybacks
-        // on the game's existing movement packet — no extra packets sent
 
-        // Flag attack intent — actual packet sent in POST update after look packet
         double dist = RotationUtil.distanceToEntity(currentTarget);
         double attackRange = range.getValue() + extraSwing.getValue();
         pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
-    // ── Silent rotation via UpdateEvent ──────────────────────────────────────
+    // ── Silent rotation injection ─────────────────────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
 
-        if (event.getType() == myau.event.types.EventType.PRE) {
-            // PRE: only inject rotation if we're about to attack this tick
+        if (event.getType() == EventType.PRE) {
             if (pendingAttack) {
                 event.setRotation(silentYaw, silentPitch, 10);
             }
         }
     }
 
-    // ── Attack in PlayerUpdateEvent (fires just before movement packet sends) ─
+    // ── Player update (movement + attack) ─────────────────────────────────────
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
         if (!isEnabled()) return;
 
-        // Movement fix (Proper mode) — rotate motion to match silentYaw
-        // Physics already ran using client rotationYaw, so motionX/Z are based on that.
-        // We rotate the velocity vector by the delta between silentYaw and clientYaw
-        // so Grim's simulation (which uses silentYaw) matches our actual velocity.
+        // ───────────────────────────────────────────────────────────────
+        //  PROPER MOVEMENT FIX (Grim-safe)
+        // ───────────────────────────────────────────────────────────────
         if (movement.getIndex() == 0 && currentTarget != null) {
-            double speed = MoveUtil.getSpeed();
-            if (speed > 0.005) {
-                float clientYaw = mc.thePlayer.rotationYaw;
-                float yawDiff   = MathHelper.wrapAngleTo180_float(silentYaw - clientYaw);
-                float dirYaw    = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
-                float newDirYaw = dirYaw + yawDiff;
-                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
-                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
+
+            float serverYaw = silentYaw;
+            float clientYaw = mc.thePlayer.rotationYaw;
+
+            float diff = MathHelper.wrapAngleTo180_float(serverYaw - clientYaw);
+            if (Math.abs(diff) > 0.1f) {
+
+                // 1. Rotate movement input BEFORE physics
+                float forward = mc.thePlayer.movementInput.moveForward;
+                float strafe  = mc.thePlayer.movementInput.moveStrafe;
+
+                float rad = (float) Math.toRadians(diff);
+                float cos = MathHelper.cos(rad);
+                float sin = MathHelper.sin(rad);
+
+                float newForward = forward * cos - strafe * sin;
+                float newStrafe  = forward * sin + strafe * cos;
+
+                mc.thePlayer.movementInput.moveForward = newForward;
+                mc.thePlayer.movementInput.moveStrafe  = newStrafe;
+
+                // 2. Rotate velocity AFTER physics
+                double speed = MoveUtil.getSpeed();
+                if (speed > 0.001) {
+                    float dir = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
+                    float newDir = dir + diff;
+
+                    mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDir)) * speed;
+                    mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDir)) * speed;
+                }
+
+                // 3. Fix jump direction
+                if (mc.thePlayer.isAirBorne && mc.thePlayer.motionY > 0) {
+                    float jumpDir = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
+                    float newJumpDir = jumpDir + diff;
+
+                    double jumpSpeed = Math.sqrt(mc.thePlayer.motionX * mc.thePlayer.motionX +
+                                                 mc.thePlayer.motionZ * mc.thePlayer.motionZ);
+
+                    mc.thePlayer.motionX = -Math.sin(Math.toRadians(newJumpDir)) * jumpSpeed;
+                    mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newJumpDir)) * jumpSpeed;
+                }
             }
         }
 
+        // ───────────────────────────────────────────────────────────────
+        //  ATTACK
+        // ───────────────────────────────────────────────────────────────
         if (!pendingAttack || currentTarget == null || currentTarget.isDead) return;
-        // At this point rotationYaw has been replaced with overrideYaw (silentYaw)
-        // onUpdateWalkingPlayer hasn't run yet — movement packet not sent yet
-        // Send attack now so it queues AFTER the look packet in the same network flush
+
         PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
         mc.thePlayer.swingItem();
         attackingTarget = currentTarget;
@@ -211,7 +228,7 @@ public class SilentAura extends Module {
         pendingAttack = false;
     }
 
-    // ── Movement correction ───────────────────────────────────────────────────
+    // ── Slow movement mode ────────────────────────────────────────────────────
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
@@ -219,7 +236,6 @@ public class SilentAura extends Module {
             mc.thePlayer.movementInput.moveForward *= 0.6f;
             mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
-        // Proper fix happens in PlayerUpdateEvent after physics runs
     }
 
     // ── ESP rendering ─────────────────────────────────────────────────────────
@@ -227,7 +243,6 @@ public class SilentAura extends Module {
     public void onRender3D(Render3DEvent event) {
         if (!isEnabled()) return;
 
-        // Aim indicator — line from crosshair to target
         if (aimIndicator.getValue() && currentTarget != null) {
             IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
             float pt = event.getPartialTicks();
@@ -236,7 +251,6 @@ public class SilentAura extends Module {
                     + currentTarget.height * 0.5;
             double tz = currentTarget.lastTickPosZ + (currentTarget.posZ - currentTarget.lastTickPosZ) * pt - rm.getRenderPosZ();
 
-            // Origin: player eye position in render space
             net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(pt);
             double ox = eyes.xCoord - rm.getRenderPosX();
             double oy = eyes.yCoord - rm.getRenderPosY();
@@ -286,19 +300,19 @@ public class SilentAura extends Module {
         if (targets.isEmpty()) return null;
 
         switch (targetMode.getIndex()) {
-            case 0: // Distance
+            case 0:
                 targets.sort(Comparator.comparingDouble(RotationUtil::distanceToEntity));
                 break;
-            case 1: // Yaw
+            case 1:
                 targets.sort(Comparator.comparingDouble(p -> getAngleDiff(calcRotation(p)[0], calcRotation(p)[1])));
                 break;
-            case 2: // Armor (weakest first)
+            case 2:
                 targets.sort(Comparator.comparingInt(p -> p.getTotalArmorValue()));
                 break;
-            case 3: // Threat (weapon damage, highest first)
+            case 3:
                 targets.sort(Comparator.comparingDouble((EntityPlayer p) -> getThreat(p)).reversed());
                 break;
-            case 4: // Health (lowest first)
+            case 4:
                 targets.sort(Comparator.comparingDouble(EntityLivingBase::getHealth));
                 break;
         }
@@ -323,12 +337,10 @@ public class SilentAura extends Module {
         float smooth = 1.0f - (float) aimSpeed.getValue() / 100.0f;
 
         if (targetArea.getIndex() == 1) {
-            // Closest point on hitbox
             return RotationUtil.getRotationsToBox(bb,
                     mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch,
                     180.0f, smooth);
         } else {
-            // Center
             double cx = (bb.minX + bb.maxX) / 2.0;
             double cy = (bb.minY + bb.maxY) / 2.0;
             double cz = (bb.minZ + bb.maxZ) / 2.0;
@@ -358,111 +370,4 @@ public class SilentAura extends Module {
     // ── Item whitelist ────────────────────────────────────────────────────────
     private boolean isAllowedItem() {
         ItemStack held = mc.thePlayer.getHeldItem();
-        if (held == null) {
-            return itemWhitelist.toLowerCase().contains("hand");
-        }
-        Item item = held.getItem();
-        String wl  = itemWhitelist.toLowerCase();
-        String[] parts = wl.split(",");
-        for (String part : parts) {
-            String p = part.trim();
-            if (p.equals("swords")    && item instanceof ItemSword)   return true;
-            if (p.equals("axes")      && item instanceof ItemAxe)     return true;
-            if (p.equals("pickaxes")  && item instanceof ItemPickaxe) return true;
-            if (p.equals("shovels")   && item instanceof ItemSpade)   return true;
-            if (p.equals("blocks")    && item instanceof ItemBlock)   return true;
-            if (p.equals("food")      && item instanceof ItemFood)    return true;
-            if (p.equals("hand")      && held == null)                return true;
-            // Slot: "slot 1" = hotbar slot 0
-            if (p.startsWith("slot ")) {
-                try {
-                    int slot = Integer.parseInt(p.substring(5).trim()) - 1;
-                    if (mc.thePlayer.inventory.currentItem == slot) return true;
-                } catch (NumberFormatException ignored) {}
-            }
-            // Item display name match
-            if (held.getDisplayName().toLowerCase().contains(p)) return true;
-            // Legacy item ID
-            try {
-                int id = Integer.parseInt(p.contains(":") ? p.split(":")[0] : p);
-                int meta = p.contains(":") ? Integer.parseInt(p.split(":")[1]) : -1;
-                if (Item.getIdFromItem(item) == id && (meta == -1 || held.getMetadata() == meta)) return true;
-            } catch (NumberFormatException ignored) {}
-        }
-        return false;
-    }
-
-    // ── Threat calculation ────────────────────────────────────────────────────
-    private double getThreat(EntityPlayer p) {
-        ItemStack weapon = p.getHeldItem();
-        if (weapon == null) return 0;
-        double dmg = p.getEntityAttribute(SharedMonsterAttributes.attackDamage).getAttributeValue();
-        dmg += EnchantmentHelper.getModifierForCreature(weapon, mc.thePlayer.getCreatureAttribute());
-        return dmg;
-    }
-
-    // ── ESP box drawing ───────────────────────────────────────────────────────
-    private void drawEntityBox(EntityPlayer p, int color, float partialTicks) {
-        IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
-        double rx = p.lastTickPosX + (p.posX - p.lastTickPosX) * partialTicks - rm.getRenderPosX();
-        double ry = p.lastTickPosY + (p.posY - p.lastTickPosY) * partialTicks - rm.getRenderPosY();
-        double rz = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partialTicks - rm.getRenderPosZ();
-
-        float w = p.width / 2.0f + 0.05f;
-        float h = p.height + 0.1f;
-
-        net.minecraft.client.renderer.GlStateManager.pushMatrix();
-        net.minecraft.client.renderer.GlStateManager.disableTexture2D();
-        net.minecraft.client.renderer.GlStateManager.disableDepth();
-        net.minecraft.client.renderer.GlStateManager.enableBlend();
-        net.minecraft.client.renderer.GlStateManager.blendFunc(770, 771);
-
-        float a = ((color >> 24) & 0xFF) / 255.0f;
-        float r = ((color >> 16) & 0xFF) / 255.0f;
-        float g = ((color >>  8) & 0xFF) / 255.0f;
-        float b = ( color        & 0xFF) / 255.0f;
-
-        net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
-        net.minecraft.client.renderer.WorldRenderer wr  = tess.getWorldRenderer();
-
-        // Filled faces
-        net.minecraft.client.renderer.GlStateManager.color(r, g, b, a * 0.25f);
-        wr.begin(7, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
-        // Bottom
-        wr.pos(rx-w, ry,   rz-w).endVertex(); wr.pos(rx+w, ry,   rz-w).endVertex();
-        wr.pos(rx+w, ry,   rz+w).endVertex(); wr.pos(rx-w, ry,   rz+w).endVertex();
-        // Top
-        wr.pos(rx-w, ry+h, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
-        wr.pos(rx+w, ry+h, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
-        tess.draw();
-
-        // Outline
-        net.minecraft.client.renderer.GlStateManager.color(r, g, b, a);
-        GL11.glLineWidth(1.5f);
-        wr.begin(3, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
-        wr.pos(rx-w, ry,   rz-w).endVertex(); wr.pos(rx+w, ry,   rz-w).endVertex();
-        wr.pos(rx+w, ry,   rz+w).endVertex(); wr.pos(rx-w, ry,   rz+w).endVertex();
-        wr.pos(rx-w, ry,   rz-w).endVertex();
-        tess.draw();
-        wr.begin(3, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
-        wr.pos(rx-w, ry+h, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
-        wr.pos(rx+w, ry+h, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
-        wr.pos(rx-w, ry+h, rz-w).endVertex();
-        tess.draw();
-        wr.begin(1, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
-        wr.pos(rx-w, ry, rz-w).endVertex(); wr.pos(rx-w, ry+h, rz-w).endVertex();
-        wr.pos(rx+w, ry, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
-        wr.pos(rx+w, ry, rz+w).endVertex(); wr.pos(rx+w, ry+h, rz+w).endVertex();
-        wr.pos(rx-w, ry, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
-        tess.draw();
-
-        net.minecraft.client.renderer.GlStateManager.enableDepth();
-        net.minecraft.client.renderer.GlStateManager.enableTexture2D();
-        net.minecraft.client.renderer.GlStateManager.disableBlend();
-        net.minecraft.client.renderer.GlStateManager.popMatrix();
-    }
-
-    private int buildColor(int r, int g, int b, int a) {
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-}
+        if (held == null)
