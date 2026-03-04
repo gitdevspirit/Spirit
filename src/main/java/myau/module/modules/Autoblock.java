@@ -5,6 +5,7 @@ import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.*;
+import myau.events.PlayerUpdateEvent;
 import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.Module;
@@ -48,6 +49,7 @@ public class Autoblock extends Module {
     private boolean fakeBlockState = false;
     private boolean isBlocking     = false;
     private long    blockStartMs   = 0L;
+    private boolean pendingBlock    = false;
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
@@ -84,7 +86,7 @@ public class Autoblock extends Module {
     private void cleanup() {
         if (blockingState) stopBlock();
         if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
-        blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L;
+        blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L; pendingBlock = false;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
@@ -119,7 +121,7 @@ public class Autoblock extends Module {
             if (lagElapsed >= lagMaxDuration.getValue()) {
                 Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                 lagging = false;
-                if (blockAgain.getValue()) startBlock();
+                if (blockAgain.getValue()) pendingBlock = true;
                 else { if (blockingState) stopBlock(); isBlocking = false; }
             }
             return;
@@ -129,8 +131,8 @@ public class Autoblock extends Module {
         long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
         boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
 
-        if (shouldBlock && !blockingState) {
-            startBlock();
+        if (shouldBlock && !blockingState && !pendingBlock) {
+            pendingBlock = true; // actual C08 sent in PlayerUpdateEvent before position packet
         } else if (blockingState) {
             long holdElapsed = System.currentTimeMillis() - blockStartMs;
             if (holdElapsed >= maxHoldDuration.getValue()) {
@@ -172,7 +174,7 @@ public class Autoblock extends Module {
                 lastDamagedMs = System.currentTimeMillis();
                 if (lagging && preventDelay.getValue()) {
                     Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-                    lagging = false; startBlock();
+                    lagging = false; pendingBlock = true;
                 }
             }
         }
@@ -207,6 +209,15 @@ public class Autoblock extends Module {
             if (dist <= nearestDist) { nearestDist = dist; nearest = entity; }
         }
         return nearest;
+    }
+
+
+    // ── Send block packet just before position packet (matches Grim's expected order) ─
+    @EventTarget
+    public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (!isEnabled() || !pendingBlock) return;
+        pendingBlock = false;
+        startBlock();
     }
 
     private void startBlock() {
