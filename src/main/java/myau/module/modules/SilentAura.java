@@ -2,6 +2,7 @@ package myau.module.modules;
 
 import myau.Myau;
 import myau.event.EventTarget;
+import myau.management.RotationState;
 import myau.event.types.EventType;
 import myau.events.Render3DEvent;
 import myau.events.TickEvent;
@@ -145,7 +146,10 @@ public class SilentAura extends Module {
             return;
         }
 
-        // Send silent rotation packet (server sees it, client view unchanged)
+        // Apply body rotation via RotationState — body turns, camera stays locked
+        RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
+
+        // Send silent look packet so server registers the rotation
         PacketUtil.sendPacketNoEvent(new C06PacketPlayerPosLook(
                 mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ,
                 silentYaw, silentPitch, mc.thePlayer.onGround
