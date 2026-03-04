@@ -1,6 +1,8 @@
 package myau.module.modules;
 
 import myau.Myau;
+import org.lwjgl.input.Mouse;
+import org.lwjgl.input.Keyboard;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -147,6 +149,25 @@ public class Pit extends Module {
     public  int   stKills   = 0;
     public  int   stDeaths  = 0;
     private long  stStartMs = 0; // session start time for GPM
+
+    // ── HUD Drag state ────────────────────────────────────────────────────────
+    private SliderSetting draggingX = null;
+    private SliderSetting draggingY = null;
+    private double dragOffsetX = 0, dragOffsetY = 0;
+    private boolean wasDragging = false;
+
+    // All HUD elements: label, X setting, Y setting, width estimate, height estimate
+    private Object[][] getHudElements() {
+        return new Object[][] {
+            { "Streak",   stX,  stY,  100, 120 },
+            { "Gold Req", grX,  grY,   90,  30 },
+            { "Bounty",   btX,  btY,  140,  80 },
+            { "Events",   evX,  evY,  160,  80 },
+            { "KOS",      kosX, kosY, 120,  80 },
+            { "Contract", ctX,  ctY,  160,  60 },
+            { "Prestige", plX,  plY,  140,  80 },
+        };
+    }
     private float stTotalGold = 0f; // total gold earned this session for GPM
     public  int   stAssists = 0;
     private float stXP      = 0f;
@@ -741,6 +762,82 @@ public class Pit extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
+        // ── HUD Drag (hold ALT + left-click drag) ─────────────────────────────
+        if (isEnabled() && Keyboard.isKeyDown(Keyboard.KEY_LMENU)) {
+            ScaledResolution sr = new ScaledResolution(mc);
+            double scale = sr.getScaleFactor();
+            double mx = Mouse.getX() / scale;
+            double my = (mc.displayHeight - Mouse.getY()) / scale;
+            boolean mouseDown = Mouse.isButtonDown(0);
+
+            if (mouseDown) {
+                if (!wasDragging) {
+                    // Start drag — find which HUD is under cursor
+                    for (Object[] el : getHudElements()) {
+                        SliderSetting xs = (SliderSetting) el[1];
+                        SliderSetting ys = (SliderSetting) el[2];
+                        double w = (double)(int) el[3];
+                        double h = (double)(int) el[4];
+                        double ex = xs.getValue(), ey = ys.getValue();
+                        if (mx >= ex && mx <= ex + w && my >= ey && my <= ey + h) {
+                            draggingX   = xs;
+                            draggingY   = ys;
+                            dragOffsetX = mx - ex;
+                            dragOffsetY = my - ey;
+                            break;
+                        }
+                    }
+                    wasDragging = true;
+                } else if (draggingX != null) {
+                    // Update position
+                    double nx = mx - dragOffsetX;
+                    double ny = my - dragOffsetY;
+                    nx = Math.max(0, Math.min(sr.getScaledWidth()  - 10, nx));
+                    ny = Math.max(0, Math.min(sr.getScaledHeight() - 10, ny));
+                    draggingX.setValue(nx);
+                    draggingY.setValue(ny);
+                }
+            } else {
+                // Mouse released
+                if (draggingX != null) {
+                    saveHudLayout();
+                    draggingX = null;
+                    draggingY = null;
+                }
+                wasDragging = false;
+            }
+
+            // Draw drag handles — highlight each active HUD with a pink outline
+            net.minecraft.client.renderer.GlStateManager.pushMatrix();
+            for (Object[] el : getHudElements()) {
+                SliderSetting xs = (SliderSetting) el[1];
+                SliderSetting ys = (SliderSetting) el[2];
+                // Only show handle if corresponding submodule is on
+                boolean active = false;
+                String label = (String) el[0];
+                if (label.equals("Streak"))   active = streak.getValue();
+                if (label.equals("Gold Req")) active = goldReq.getValue();
+                if (label.equals("Bounty"))   active = bountyTracker.getValue();
+                if (label.equals("Events"))   active = pitEvents.getValue();
+                if (label.equals("KOS"))      active = kosList.getValue();
+                if (label.equals("Contract")) active = contractTracker.getValue();
+                if (label.equals("Prestige")) active = prestigeList.getValue();
+                if (!active) continue;
+
+                float hx = (float) xs.getValue();
+                float hy = (float) ys.getValue();
+                float hw = (float)(int) el[3];
+                float hh = (float)(int) el[4];
+                boolean hovered = mx >= hx && mx <= hx + hw && my >= hy && my <= hy + hh;
+                int col = (xs == draggingX) ? 0xFFFF77AA : (hovered ? 0xAAFF77AA : 0x55FF77AA);
+                myau.ui.clickgui.RoundedUtils.drawRoundedOutline(hx, hy, hx + hw, hy + hh, 3, 1.5f, col);
+                mc.fontRendererObj.drawStringWithShadow("\u00a7d" + label, hx + 2, hy + 2, 0xFFFF77AA);
+            }
+            net.minecraft.client.renderer.GlStateManager.popMatrix();
+        } else {
+            draggingX = null; draggingY = null; wasDragging = false;
+        }
+
         if (!isEnabled()) return;
         if (mc.currentScreen instanceof Rise6ClickGui && !hudPreview.getValue()) return;
 
