@@ -3,6 +3,8 @@ package myau.module.modules;
 import myau.Myau;
 import myau.event.EventTarget;
 import myau.management.RotationState;
+import myau.events.MoveInputEvent;
+import myau.util.MoveUtil;
 import myau.event.types.EventType;
 import myau.events.Render3DEvent;
 import myau.events.TickEvent;
@@ -46,6 +48,11 @@ public class SilentAura extends Module {
 
     // ── Aim Settings ──────────────────────────────────────────────────────────
     public final SliderSetting  aimSpeed      = register(new SliderSetting("Aim Speed",      50,   1, 100,   1));
+
+    // ── Movement Settings ────────────────────────────────────────────────────
+    public final DropdownSetting movement    = register(new DropdownSetting("Movement", 0, "Proper", "Slow", "None"));
+    public final BooleanSetting  aimIndicator = register(new BooleanSetting("Aim Indicator", true));
+    public final BooleanSetting  thirdPerson  = register(new BooleanSetting("3rd Person Aim", true));
 
     // ── Attack Settings ───────────────────────────────────────────────────────
     public final SliderSetting  minCPS        = register(new SliderSetting("Min CPS",         8,   1,  20,   1));
@@ -168,10 +175,59 @@ public class SilentAura extends Module {
         }
     }
 
+    // ── Movement correction ───────────────────────────────────────────────────
+    @EventTarget
+    public void onMoveInput(MoveInputEvent event) {
+        if (!isEnabled() || currentTarget == null) return;
+        if (movement.getIndex() == 0) { // Proper
+            MoveUtil.fixStrafe(silentYaw);
+        } else if (movement.getIndex() == 1) { // Slow
+            mc.thePlayer.movementInput.moveForward  *= 0.6f;
+            mc.thePlayer.movementInput.moveStrafe   *= 0.6f;
+        }
+        // None = no correction
+    }
+
     // ── ESP rendering ─────────────────────────────────────────────────────────
     @EventTarget
     public void onRender3D(Render3DEvent event) {
-        if (!isEnabled() || !showTarget.getValue()) return;
+        if (!isEnabled()) return;
+
+        // Aim indicator — line from crosshair to target
+        if (aimIndicator.getValue() && currentTarget != null) {
+            IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+            float pt = event.getPartialTicks();
+            double tx = currentTarget.lastTickPosX + (currentTarget.posX - currentTarget.lastTickPosX) * pt - rm.getRenderPosX();
+            double ty = currentTarget.lastTickPosY + (currentTarget.posY - currentTarget.lastTickPosY) * pt - rm.getRenderPosY()
+                    + currentTarget.height * 0.5;
+            double tz = currentTarget.lastTickPosZ + (currentTarget.posZ - currentTarget.lastTickPosZ) * pt - rm.getRenderPosZ();
+
+            // Origin: player eye position in render space
+            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(pt);
+            double ox = eyes.xCoord - rm.getRenderPosX();
+            double oy = eyes.yCoord - rm.getRenderPosY();
+            double oz = eyes.zCoord - rm.getRenderPosZ();
+
+            net.minecraft.client.renderer.GlStateManager.pushMatrix();
+            net.minecraft.client.renderer.GlStateManager.disableTexture2D();
+            net.minecraft.client.renderer.GlStateManager.disableDepth();
+            net.minecraft.client.renderer.GlStateManager.enableBlend();
+            net.minecraft.client.renderer.GlStateManager.blendFunc(770, 771);
+            GL11.glLineWidth(1.5f);
+            net.minecraft.client.renderer.GlStateManager.color(1.0f, 0.47f, 0.67f, 0.8f);
+            net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
+            net.minecraft.client.renderer.WorldRenderer wr = tess.getWorldRenderer();
+            wr.begin(1, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+            wr.pos(ox, oy, oz).endVertex();
+            wr.pos(tx, ty, tz).endVertex();
+            tess.draw();
+            net.minecraft.client.renderer.GlStateManager.enableDepth();
+            net.minecraft.client.renderer.GlStateManager.enableTexture2D();
+            net.minecraft.client.renderer.GlStateManager.disableBlend();
+            net.minecraft.client.renderer.GlStateManager.popMatrix();
+        }
+
+        if (!showTarget.getValue()) return;
 
         if (currentTarget != null && currentTarget != attackingTarget) {
             int col = buildColor((int)targetR.getValue(), (int)targetG.getValue(), (int)targetB.getValue(), 180);
