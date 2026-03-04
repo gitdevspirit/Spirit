@@ -3,6 +3,7 @@ package myau.module.modules;
 import myau.Myau;
 import myau.enums.BlinkModules;
 import myau.event.EventTarget;
+import myau.event.types.Priority;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.events.PlayerUpdateEvent;
@@ -69,7 +70,7 @@ public class Autoblock extends Module {
     }
 
     public boolean isPlayerBlocking() {
-        return (mc.thePlayer.isUsingItem() || blockingState) && ItemUtil.isHoldingSword();
+        return blockingState && ItemUtil.isHoldingSword();
     }
 
     public boolean isInLegitFullHoldPhase() { return false; }
@@ -148,9 +149,7 @@ public class Autoblock extends Module {
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!isEnabled() || event.getType() != EventType.PRE || mc.thePlayer == null) return;
-        if (isPlayerBlocking() && !mc.thePlayer.isBlocking())
-            mc.thePlayer.setItemInUse(mc.thePlayer.getHeldItem(), mc.thePlayer.getHeldItem().getMaxItemUseDuration());
+        // Keep-alive not needed — we don't use setItemInUse
     }
 
     @EventTarget
@@ -213,7 +212,7 @@ public class Autoblock extends Module {
 
 
     // ── Send block packet just before position packet (matches Grim's expected order) ─
-    @EventTarget
+    @EventTarget(Priority.LOW)
     public void onPlayerUpdate(PlayerUpdateEvent event) {
         if (!isEnabled() || !pendingBlock) return;
         pendingBlock = false;
@@ -224,15 +223,17 @@ public class Autoblock extends Module {
         ItemStack held = mc.thePlayer.getHeldItem();
         if (held == null || !(held.getItem() instanceof ItemSword)) return;
         ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
+        // Only send C08 to server — do NOT call setItemInUse on client
+        // setItemInUse triggers Minecraft's 0.2x blocking speed penalty which
+        // Grim doesn't predict (it uses full speed), causing Simulation flags
         PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(held));
-        mc.thePlayer.setItemInUse(held, held.getMaxItemUseDuration());
         blockingState = true; isBlocking = true; blockStartMs = System.currentTimeMillis();
     }
 
     private void stopBlock() {
         PacketUtil.sendPacket(new C07PacketPlayerDigging(
             C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
-        mc.thePlayer.stopUsingItem();
+        // Don't call stopUsingItem — we never called setItemInUse
         blockingState = false;
     }
 
