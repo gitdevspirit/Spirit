@@ -38,6 +38,8 @@ public class NewModulePanel {
     private int            sliderBarX, sliderBarW;
     private KeybindSetting listeningKeybind;
 
+    public boolean isListeningForKey() { return listeningKeybind != null; }
+
     public NewModulePanel(List<Module> modules) { this.modules = modules; collapseDefaults(); }
 
     public void setModules(List<Module> m) { modules = m; expandedModule = null; scrollOffset = 0; collapseDefaults(); }
