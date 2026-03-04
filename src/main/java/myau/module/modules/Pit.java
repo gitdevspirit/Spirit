@@ -256,7 +256,7 @@ public class Pit extends Module {
         } catch (Exception ignored) {}
     }
 
-    public void saveKosList() {
+    public static void saveKosList() {
         try {
             if (!KOS_FILE.getParentFile().exists()) KOS_FILE.getParentFile().mkdirs();
             java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(KOS_FILE));
