@@ -1,407 +1,466 @@
 package myau.module.modules;
 
 import myau.Myau;
-import myau.enums.BlinkModules;
 import myau.event.EventTarget;
+import myau.management.RotationState;
+import myau.events.MoveInputEvent;
+import myau.events.PlayerUpdateEvent;
+import myau.util.MoveUtil;
 import myau.event.types.EventType;
-import myau.event.types.Priority;
-import myau.events.UpdateEvent;
-import net.minecraft.entity.EntityLivingBase;
+import myau.events.Render3DEvent;
 import myau.events.TickEvent;
-import myau.events.PacketEvent;
-import myau.events.AttackEvent;
-import myau.mixin.IAccessorPlayerControllerMP;
-import myau.module.BooleanSetting;
-import myau.module.DropdownSetting;
-import myau.module.Module;
-import myau.module.SliderSetting;
+import myau.events.UpdateEvent;
+import myau.module.*;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.item.ItemStack;
-import net.minecraft.network.play.client.C07PacketPlayerDigging;
-import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
-import net.minecraft.network.play.client.C09PacketHeldItemChange;
-import net.minecraft.util.BlockPos;
-import net.minecraft.util.EnumFacing;
+import net.minecraft.enchantment.EnchantmentHelper;
+import net.minecraft.entity.EntityLivingBase;
+import net.minecraft.entity.SharedMonsterAttributes;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.item.*;
+import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.network.play.client.C03PacketPlayer;
+import myau.mixin.IAccessorRenderManager;
+import net.minecraft.util.AxisAlignedBB;
+import myau.mixin.IAccessorRenderManager;
+import net.minecraft.util.MathHelper;
+import org.lwjgl.opengl.GL11;
+import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import org.lwjgl.opengl.GL11;
 
-public class Autoblock extends Module {
+import java.util.Comparator;
+import java.util.List;
+import java.util.Random;
+import java.util.stream.Collectors;
+
+public class SilentAura extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    private static final Random rand = new Random();
 
-    // SLINKY removed — was index 11
-    public final DropdownSetting mode = register(new DropdownSetting("Mode", 9,
-            "NONE", "VANILLA", "SPOOF", "HYPIXEL", "BLINK",
-            "INTERACT", "SWAP", "LEGIT", "FAKE", "LAGRANGE",
-            "GRIM", "LEGITFULL"
-    ));
+    // ── Target Settings ───────────────────────────────────────────────────────
+    public final SliderSetting  range         = register(new SliderSetting("Range",          4.0, 1.0, 8.0, 0.1));
+    public final SliderSetting  maxAngle      = register(new SliderSetting("Max Angle",      180,  1, 180,   1));
+    public final DropdownSetting targetMode   = register(new DropdownSetting("Target Mode",  0, "Distance", "Yaw", "Armor", "Threat", "Health"));
+    public final DropdownSetting targetArea   = register(new DropdownSetting("Target Area",  0, "Center", "Closest"));
+    public final BooleanSetting  teamCheck    = register(new BooleanSetting("Team Check",    true));
+    public final BooleanSetting  friendCheck  = register(new BooleanSetting("Friend Check",  true));
+    public final BooleanSetting  botCheck     = register(new BooleanSetting("Bot Check",     true));
 
-    public final SliderSetting blockRange   = register(new SliderSetting("Block Range",   6.0,   3.0,   8.0,   0.1));
-    public final SliderSetting minCPS       = register(new SliderSetting("Min APS",       6.0,   1.0,  20.0,   1.0));
-    public final SliderSetting maxCPS       = register(new SliderSetting("Max APS",       9.0,   1.0,  20.0,   1.0));
-    public final SliderSetting releaseDelay = register(new SliderSetting("Release Delay", 2.0,   1.0,   5.0,   0.5));
+    // ── Aim Settings ──────────────────────────────────────────────────────────
+    public final SliderSetting  aimSpeed      = register(new SliderSetting("Aim Speed",      50,   1, 100,   1));
 
-    public final BooleanSetting requirePress  = register(new BooleanSetting("Require Press",  false));
-    public final BooleanSetting requireAttack = register(new BooleanSetting("Require Attack", true));
-    public final BooleanSetting autoRelease   = register(new BooleanSetting("Auto Release",   true));
+    // ── Movement Settings ────────────────────────────────────────────────────
+    public final DropdownSetting movement    = register(new DropdownSetting("Movement", 0, "Proper", "Slow", "None"));
+    public final BooleanSetting  aimIndicator = register(new BooleanSetting("Aim Indicator", true));
+    public final BooleanSetting  thirdPerson  = register(new BooleanSetting("3rd Person Aim", true));
 
-    // LEGITFULL settings — controls how long to hold and how long to wait before reblocking
-    public final SliderSetting  legitfullHoldMin    = register(new SliderSetting("LF Hold Min",    3.0,  1.0, 10.0, 0.5));
-    public final SliderSetting  legitfullHoldMax    = register(new SliderSetting("LF Hold Max",    6.0,  1.0, 10.0, 0.5));
-    public final SliderSetting  legitfullDelayMin   = register(new SliderSetting("LF Delay Min",   2.0,  0.0,  8.0, 0.5));
-    public final SliderSetting  legitfullDelayMax   = register(new SliderSetting("LF Delay Max",   4.0,  0.0,  8.0, 0.5));
-    public final BooleanSetting legitfullBlockDelay = register(new BooleanSetting("Block Delay",   false, () -> mode.getIndex() == 11));
+    // ── Attack Settings ───────────────────────────────────────────────────────
+    public final SliderSetting  minCPS        = register(new SliderSetting("Min CPS",         8,   1,  20,   1));
+    public final SliderSetting  maxCPS        = register(new SliderSetting("Max CPS",        12,   1,  20,   1));
+    public final SliderSetting  extraSwing    = register(new SliderSetting("Extra Swing Dist",0.5, 0.0, 2.0, 0.1));
 
-    // Internal state
-    private boolean blockingState        = false;
-    private boolean fakeBlockState       = false;
-    private boolean isBlocking           = false;
-    private boolean blinkReset           = false;
-    private int     blockTick            = 0;
-    private long    blockDelayMS         = 0L;
-    private int     releaseTick          = 0;
-    private int     releaseCooldownTicks = 0;
+    // ── Behaviour ─────────────────────────────────────────────────────────────
+    public final BooleanSetting  requireMouse = register(new BooleanSetting("Require Mouse Down", false));
+    public final BooleanSetting  breakBlocks  = register(new BooleanSetting("Break Blocks Pause", true));
+    public final SliderSetting   breakDelay   = register(new SliderSetting("  Break Delay (ms)", 200, 0, 1000, 50, () -> breakBlocks.getValue()));
+    public final BooleanSetting  disableOnDeath = register(new BooleanSetting("Disable on Death", true));
 
-    // Hit reg fix state
-    private boolean needsReblock = false;
-    private int     reblockTick  = 0;
+    // ── Limit to Items ────────────────────────────────────────────────────────
+    public final BooleanSetting  limitItems   = register(new BooleanSetting("Limit to Items", false));
+    // Stored as a simple string — parsed at runtime
+    // Format: "swords, axes, slot 1, Diamond Sword" etc.
+    public String itemWhitelist = "swords";
 
-    // LEGITFULL rhythm state
-    private int legitHoldTicks  = 0; // how many ticks to hold the block
-    private int legitDelayTicks = 0; // how many ticks to wait before reblocking
+    // ── Show Target ───────────────────────────────────────────────────────────
+    public final BooleanSetting  showTarget   = register(new BooleanSetting("Show Target", true));
+    public final SliderSetting   targetR      = register(new SliderSetting("  Target R",  255,  0, 255, 1, () -> showTarget.getValue()));
+    public final SliderSetting   targetG      = register(new SliderSetting("  Target G",    0,  0, 255, 1, () -> showTarget.getValue()));
+    public final SliderSetting   targetB      = register(new SliderSetting("  Target B",  255,  0, 255, 1, () -> showTarget.getValue()));
+    public final SliderSetting   attackR      = register(new SliderSetting("  Attack R",  255,  0, 255, 1, () -> showTarget.getValue()));
+    public final SliderSetting   attackG      = register(new SliderSetting("  Attack G",   85,  0, 255, 1, () -> showTarget.getValue()));
+    public final SliderSetting   attackB      = register(new SliderSetting("  Attack B",   85,  0, 255, 1, () -> showTarget.getValue()));
 
-    public Autoblock() {
-        super("Autoblock", false);
-    }
+    // ── State ─────────────────────────────────────────────────────────────────
+    private EntityPlayer currentTarget  = null;
+    private EntityPlayer attackingTarget = null; // set for one tick when attacking
+    private long lastAttackMs = 0;
+    private long nextAttackMs = 0;
+    private long breakPauseUntil = 0;
+    private float silentYaw    = 0;
+    private float silentPitch  = 0;
+    private boolean pendingAttack = false;
 
-    private int   getMode()         { return mode.getIndex(); }
-    private float getBlockRange()   { return (float) blockRange.getValue(); }
-    private float getMinCPS()       { return (float) minCPS.getValue(); }
-    private float getMaxCPS()       { return (float) maxCPS.getValue(); }
-    private float getReleaseDelay() { return (float) releaseDelay.getValue(); }
-
-    private long getBlockDelay() {
-        return (long)(1000.0F / RandomUtil.nextLong((long) getMinCPS(), (long) getMaxCPS()));
-    }
-
-    /** Random int in [min, max] inclusive */
-    private int randRange(double min, double max) {
-        int lo = (int) Math.round(Math.min(min, max));
-        int hi = (int) Math.round(Math.max(min, max));
-        return lo == hi ? lo : lo + (int)(Math.random() * (hi - lo + 1));
-    }
-
-    private boolean canAutoblock() {
-        if (!ItemUtil.isHoldingSword()) return false;
-        if (requirePress.getValue() && !PlayerUtil.isUsingItem()) return false;
-        // KillAura removed — requireAttack setting no longer has effect
-        return true;
-    }
-
-    private boolean hasValidTarget() {
-        return mc.theWorld.loadedEntityList.stream().anyMatch(
-                entity -> entity instanceof net.minecraft.entity.EntityLivingBase
-                        && RotationUtil.distanceToEntity((net.minecraft.entity.EntityLivingBase) entity)
-                        <= getBlockRange()
-        );
-    }
-
-    public void startBlock(ItemStack stack) {
-        if (stack == null) return;
-        PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(stack));
-        mc.thePlayer.setItemInUse(stack, stack.getMaxItemUseDuration());
-        this.blockingState = true;
-        this.releaseTick = (int) getReleaseDelay();
-    }
-
-    public void stopBlock() {
-        stopBlock(false);
-    }
-
-    private void stopBlock(boolean skipCooldown) {
-        PacketUtil.sendPacket(new C07PacketPlayerDigging(
-                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM,
-                BlockPos.ORIGIN,
-                EnumFacing.DOWN
-        ));
-        mc.thePlayer.stopUsingItem();
-        this.blockingState = false;
-        this.releaseTick   = 0;
-        if (!skipCooldown) {
-            this.releaseCooldownTicks = 5;
-        }
-    }
-
-    private int findEmptySlot(int currentSlot) {
-        for (int i = 0; i < 9; i++)
-            if (i != currentSlot && mc.thePlayer.inventory.getStackInSlot(i) == null)
-                return i;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = mc.thePlayer.inventory.getStackInSlot(i);
-            if (i != currentSlot && stack != null && !stack.hasDisplayName())
-                return i;
-        }
-        return Math.floorMod(currentSlot - 1, 9);
-    }
-
-    @EventTarget(Priority.LOWEST)
-    public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled()) {
-            resetState();
-            return;
-        }
-
-        if (event.getType() == EventType.POST && this.blinkReset) {
-            this.blinkReset = false;
-            Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-            Myau.blinkManager.setBlinkState(true,  BlinkModules.AUTO_BLOCK);
-        }
-
-        if (event.getType() != EventType.PRE) return;
-
-        if (this.blockDelayMS > 0L) this.blockDelayMS -= 50L;
-        if (this.releaseCooldownTicks > 0) this.releaseCooldownTicks--;
-
-        if (this.releaseCooldownTicks > 0) {
-            if (this.blockingState) stopBlock();
-            Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-            this.isBlocking     = false;
-            this.fakeBlockState = false;
-            this.blockTick      = 0;
-            return;
-        }
-
-        if (autoRelease.getValue() && this.blockingState && this.releaseTick > 0) {
-            this.releaseTick--;
-            if (this.releaseTick <= 0) stopBlock();
-        }
-
-        boolean canBlock = this.canAutoblock() && this.hasValidTarget();
-        if (!canBlock) {
-            if (this.blockingState) stopBlock();
-            Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-            this.isBlocking     = false;
-            this.fakeBlockState = false;
-            this.blockTick      = 0;
-            return;
-        }
-
-        boolean swap = false;
-
-        switch (getMode()) {
-
-            case 0: // NONE
-                this.isBlocking     = false;
-                this.fakeBlockState = false;
-                break;
-
-            case 1: // VANILLA
-                if (!this.blockingState) swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = false;
-                break;
-
-            case 2: // SPOOF
-                int item2 = ((IAccessorPlayerControllerMP) mc.playerController).getCurrentPlayerItem();
-                int slot2 = this.findEmptySlot(item2);
-                PacketUtil.sendPacket(new C09PacketHeldItemChange(slot2));
-                PacketUtil.sendPacket(new C09PacketHeldItemChange(item2));
-                swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = false;
-                break;
-
-            case 3: // HYPIXEL
-                switch (this.blockTick) {
-                    case 0: swap = true; this.blockTick = 1; break;
-                    case 1: if (this.blockDelayMS <= 50L) this.blockTick = 0; break;
-                }
-                this.isBlocking     = true;
-                this.fakeBlockState = true;
-                break;
-
-            case 4: // BLINK
-                switch (this.blockTick) {
-                    case 0:
-                        swap = true;
-                        this.blinkReset = true;
-                        this.blockTick  = 1;
-                        break;
-                    case 1:
-                        if (this.blockDelayMS <= 50L) this.blockTick = 0;
-                        break;
-                }
-                this.isBlocking     = true;
-                this.fakeBlockState = true;
-                break;
-
-            case 5: // INTERACT
-                int current5 = ((IAccessorPlayerControllerMP) mc.playerController).getCurrentPlayerItem();
-                int empty5   = this.findEmptySlot(current5);
-                PacketUtil.sendPacket(new C09PacketHeldItemChange(empty5));
-                ((IAccessorPlayerControllerMP) mc.playerController).setCurrentPlayerItem(empty5);
-                swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = true;
-                break;
-
-            case 6: // SWAP
-                int cur6       = ((IAccessorPlayerControllerMP) mc.playerController).getCurrentPlayerItem();
-                int emptySlot6 = this.findEmptySlot(cur6);
-                PacketUtil.sendPacket(new C09PacketHeldItemChange(emptySlot6));
-                PacketUtil.sendPacket(new C09PacketHeldItemChange(cur6));
-                swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = true;
-                break;
-
-            case 7: // LEGIT
-                swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = false;
-                break;
-
-            case 8: // FAKE
-                this.isBlocking     = false;
-                this.fakeBlockState = true;
-                break;
-
-            case 9: // LAGRANGE
-                int ping      = PingUtil.getPing();
-                int lagWindow = Math.min(100, Math.max(30, ping));
-                switch (this.blockTick) {
-                    case 0:
-                        swap = true;
-                        this.blockDelayMS = lagWindow;
-                        this.blockTick    = 1;
-                        break;
-                    case 1:
-                        if (this.blockDelayMS <= 0L) this.blockTick = 2;
-                        break;
-                    case 2:
-                        this.blockTick = 0; // KillAura removed — always advance
-                        break;
-                }
-                this.isBlocking     = true;
-                this.fakeBlockState = true;
-                break;
-
-            case 10: // GRIM
-                if (!this.blockingState) swap = true;
-                this.isBlocking     = true;
-                this.fakeBlockState = false;
-                break;
-
-            case 11: { // LEGITFULL — randomised hold→delay rhythm
-                // Phase 0: waiting for optional pre-block delay
-                // Phase 1: blocking (hold for legitHoldTicks)
-                // Phase 2: released, waiting for legitDelayTicks before reblocking
-                if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
-                    switch (this.blockTick) {
-                        case 0: // Start — optionally wait one tick before blocking
-                            if (legitfullBlockDelay.getValue()) {
-                                this.blockTick = 1;
-                                break;
-                            }
-                            // Fall through to case 1
-                        case 1: // Block and pick how long to hold
-                            if (!this.blockingState) swap = true;
-                            this.legitHoldTicks = randRange(
-                                    legitfullHoldMin.getValue(),
-                                    legitfullHoldMax.getValue());
-                            this.blockTick = 2;
-                            break;
-
-                        case 2: // Holding — count down
-                            this.legitHoldTicks--;
-                            if (this.legitHoldTicks <= 0) {
-                                // Release and pick how long to wait
-                                if (this.blockingState) stopBlock(true);
-                                this.legitDelayTicks = randRange(
-                                        legitfullDelayMin.getValue(),
-                                        legitfullDelayMax.getValue());
-                                this.blockTick = 3;
-                            }
-                            break;
-
-                        case 3: // Delay between releases — count down then restart
-                            this.legitDelayTicks--;
-                            if (this.legitDelayTicks <= 0) {
-                                this.blockTick = 0;
-                            }
-                            break;
-
-                        default:
-                            this.blockTick = 0;
-                    }
-                }
-                this.isBlocking     = true;
-                this.fakeBlockState = false;
-                break;
-            }
-        }
-
-        if (swap && this.blockDelayMS <= 0L) {
-            this.blockDelayMS += this.getBlockDelay() + RandomUtil.nextInt(20, 50);
-            this.startBlock(mc.thePlayer.getHeldItem());
-        }
-    }
-
-
-    // ── Hit reg fix — unblock before attack, reblock after ───────────────────
-    @EventTarget
-    public void onAttack(AttackEvent event) {
-        if (!isEnabled() || !this.blockingState) return;
-        // Stop block so attack deals full damage (not halved by isBlocking())
-        stopBlock(true);
-        needsReblock = true;
-        reblockTick  = 2; // reblock after 2 ticks
-    }
-
-    @EventTarget
-    public void onTick(TickEvent event) {
-        if (!isEnabled() || event.getType() != myau.event.types.EventType.PRE) return;
-        if (needsReblock && reblockTick > 0) {
-            reblockTick--;
-            if (reblockTick <= 0 && canAutoblock() && hasValidTarget()) {
-                startBlock(mc.thePlayer.getHeldItem());
-                needsReblock = false;
-            }
-        }
-    }
-
-    private void resetState() {
-        if (this.blockingState) stopBlock();
-        Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-        this.isBlocking          = false;
-        this.fakeBlockState      = false;
-        this.blockTick           = 0;
-        this.blockDelayMS        = 0L;
-        this.releaseTick         = 0;
-        this.releaseCooldownTicks = 0;
-        this.legitHoldTicks      = 0;
-        this.legitDelayTicks     = 0;
-        this.needsReblock        = false;
-        this.reblockTick         = 0;
-    }
-
-    public boolean isBlocking() {
-        return this.fakeBlockState && ItemUtil.isHoldingSword();
-    }
-
-    public boolean isPlayerBlocking() {
-        return (mc.thePlayer.isUsingItem() || this.blockingState) && ItemUtil.isHoldingSword();
-    }
-
-    public boolean isInLegitFullHoldPhase() {
-        return getMode() == 11 && (this.blockTick == 2);
+    public SilentAura() {
+        super("SilentAura", false);
     }
 
     @Override
     public void onDisabled() {
-        resetState();
+        currentTarget   = null;
+        attackingTarget = null;
     }
 
-    @Override
-    public String[] getSuffix() {
-        return isBlocking ? new String[]{mode.getValue()} : new String[0];
+    // ── Main tick ─────────────────────────────────────────────────────────────
+    @EventTarget
+    public void onTick(TickEvent event) {
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        attackingTarget = null;
+
+        // Disable on death
+        if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) {
+            setEnabled(false);
+            return;
+        }
+
+        // Require mouse down
+        if (requireMouse.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) {
+            currentTarget = null;
+            return;
+        }
+
+        // Break blocks pause
+        if (breakBlocks.getValue()) {
+            if (mc.objectMouseOver != null && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK
+                    && mc.thePlayer.isUsingItem()) {
+                breakPauseUntil = System.currentTimeMillis() + (long) breakDelay.getValue();
+            }
+            if (System.currentTimeMillis() < breakPauseUntil) {
+                currentTarget = null;
+                return;
+            }
+        }
+
+        // Item whitelist
+        if (limitItems.getValue() && !isAllowedItem()) {
+            currentTarget = null;
+            return;
+        }
+
+        // Find target
+        currentTarget = findTarget();
+        if (currentTarget == null) {
+            silentYaw   = mc.thePlayer.rotationYaw;
+            silentPitch = mc.thePlayer.rotationPitch;
+            return;
+        }
+
+        // Calculate silent rotation toward target
+        float[] rot = calcRotation(currentTarget);
+        silentYaw   = rot[0];
+        silentPitch = rot[1];
+
+        // Check angle constraint
+        float angleDiff = getAngleDiff(silentYaw, silentPitch);
+        if (angleDiff > maxAngle.getValue()) {
+            currentTarget = null;
+            return;
+        }
+
+        // Body rotation for rendering — always on, no flicker
+        RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
+        // Actual packet rotation is handled by onUpdateEvent which piggybacks
+        // on the game's existing movement packet — no extra packets sent
+
+        // Flag attack intent — actual packet sent in POST update after look packet
+        double dist = RotationUtil.distanceToEntity(currentTarget);
+        double attackRange = range.getValue() + extraSwing.getValue();
+        pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
+    }
+
+    // ── Silent rotation + attack via UpdateEvent ─────────────────────────────
+    @EventTarget
+    public void onUpdateEvent(UpdateEvent event) {
+        if (!isEnabled() || currentTarget == null) return;
+
+        if (event.getType() == myau.event.types.EventType.PRE) {
+            // Always inject rotation while target is locked — no flicker
+            event.setRotation(silentYaw, silentPitch, 10);
+        } else if (event.getType() == myau.event.types.EventType.POST) {
+            // POST fires after onUpdateWalkingPlayer has sent the position/look packet
+            // Send attack here so server receives: [position+look] then [attack]
+            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+                mc.thePlayer.swingItem();
+                attackingTarget = currentTarget;
+                scheduleNextAttack();
+                pendingAttack = false;
+            }
+        }
+    }
+
+    // ── Movement fix in PlayerUpdateEvent (after physics, before packet) ────
+    @EventTarget
+    public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (!isEnabled() || currentTarget == null) return;
+        if (movement.getIndex() == 0) {
+            double speed = MoveUtil.getSpeed();
+            if (speed > 0.005) {
+                float clientYaw = mc.thePlayer.rotationYaw;
+                float yawDiff   = MathHelper.wrapAngleTo180_float(silentYaw - clientYaw);
+                float dirYaw    = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
+                float newDirYaw = dirYaw + yawDiff;
+                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
+                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
+            }
+        }
+    }
+
+    // ── Movement correction ───────────────────────────────────────────────────
+    @EventTarget
+    public void onMoveInput(MoveInputEvent event) {
+        if (!isEnabled() || currentTarget == null) return;
+        if (movement.getIndex() == 1) {
+            mc.thePlayer.movementInput.moveForward *= 0.6f;
+            mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
+        }
+        // Proper fix happens in PlayerUpdateEvent after physics runs
+    }
+
+    // ── ESP rendering ─────────────────────────────────────────────────────────
+    @EventTarget
+    public void onRender3D(Render3DEvent event) {
+        if (!isEnabled()) return;
+
+        // Aim indicator — line from crosshair to target
+        if (aimIndicator.getValue() && currentTarget != null) {
+            IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+            float pt = event.getPartialTicks();
+            double tx = currentTarget.lastTickPosX + (currentTarget.posX - currentTarget.lastTickPosX) * pt - rm.getRenderPosX();
+            double ty = currentTarget.lastTickPosY + (currentTarget.posY - currentTarget.lastTickPosY) * pt - rm.getRenderPosY()
+                    + currentTarget.height * 0.5;
+            double tz = currentTarget.lastTickPosZ + (currentTarget.posZ - currentTarget.lastTickPosZ) * pt - rm.getRenderPosZ();
+
+            // Origin: player eye position in render space
+            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(pt);
+            double ox = eyes.xCoord - rm.getRenderPosX();
+            double oy = eyes.yCoord - rm.getRenderPosY();
+            double oz = eyes.zCoord - rm.getRenderPosZ();
+
+            net.minecraft.client.renderer.GlStateManager.pushMatrix();
+            net.minecraft.client.renderer.GlStateManager.disableTexture2D();
+            net.minecraft.client.renderer.GlStateManager.disableDepth();
+            net.minecraft.client.renderer.GlStateManager.enableBlend();
+            net.minecraft.client.renderer.GlStateManager.blendFunc(770, 771);
+            GL11.glLineWidth(1.5f);
+            net.minecraft.client.renderer.GlStateManager.color(1.0f, 0.47f, 0.67f, 0.8f);
+            net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
+            net.minecraft.client.renderer.WorldRenderer wr = tess.getWorldRenderer();
+            wr.begin(1, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+            wr.pos(ox, oy, oz).endVertex();
+            wr.pos(tx, ty, tz).endVertex();
+            tess.draw();
+            net.minecraft.client.renderer.GlStateManager.enableDepth();
+            net.minecraft.client.renderer.GlStateManager.enableTexture2D();
+            net.minecraft.client.renderer.GlStateManager.disableBlend();
+            net.minecraft.client.renderer.GlStateManager.popMatrix();
+        }
+
+        if (!showTarget.getValue()) return;
+
+        if (currentTarget != null && currentTarget != attackingTarget) {
+            int col = buildColor((int)targetR.getValue(), (int)targetG.getValue(), (int)targetB.getValue(), 180);
+            drawEntityBox(currentTarget, col, event.getPartialTicks());
+        }
+        if (attackingTarget != null) {
+            int col = buildColor((int)attackR.getValue(), (int)attackG.getValue(), (int)attackB.getValue(), 220);
+            drawEntityBox(attackingTarget, col, event.getPartialTicks());
+        }
+    }
+
+    // ── Target selection ──────────────────────────────────────────────────────
+    private EntityPlayer findTarget() {
+        if (mc.theWorld == null) return null;
+
+        List<EntityPlayer> targets = mc.theWorld.loadedEntityList.stream()
+                .filter(e -> e instanceof EntityPlayer)
+                .map(e -> (EntityPlayer) e)
+                .filter(this::isValidTarget)
+                .collect(Collectors.toList());
+
+        if (targets.isEmpty()) return null;
+
+        switch (targetMode.getIndex()) {
+            case 0: // Distance
+                targets.sort(Comparator.comparingDouble(RotationUtil::distanceToEntity));
+                break;
+            case 1: // Yaw
+                targets.sort(Comparator.comparingDouble(p -> getAngleDiff(calcRotation(p)[0], calcRotation(p)[1])));
+                break;
+            case 2: // Armor (weakest first)
+                targets.sort(Comparator.comparingInt(p -> p.getTotalArmorValue()));
+                break;
+            case 3: // Threat (weapon damage, highest first)
+                targets.sort(Comparator.comparingDouble((EntityPlayer p) -> getThreat(p)).reversed());
+                break;
+            case 4: // Health (lowest first)
+                targets.sort(Comparator.comparingDouble(EntityLivingBase::getHealth));
+                break;
+        }
+
+        return targets.get(0);
+    }
+
+    private boolean isValidTarget(EntityPlayer p) {
+        if (p == mc.thePlayer) return false;
+        if (p.deathTime > 0 || p.isDead) return false;
+        if (p.isInvisible()) return false;
+        if (RotationUtil.distanceToEntity(p) > range.getValue() + extraSwing.getValue()) return false;
+        if (friendCheck.getValue() && TeamUtil.isFriend(p)) return false;
+        if (teamCheck.getValue() && TeamUtil.isSameTeam(p)) return false;
+        if (botCheck.getValue() && TeamUtil.isBot(p)) return false;
+        return true;
+    }
+
+    // ── Rotation calculation ──────────────────────────────────────────────────
+    private float[] calcRotation(EntityPlayer target) {
+        AxisAlignedBB bb = target.getEntityBoundingBox();
+        float smooth = 1.0f - (float) aimSpeed.getValue() / 100.0f;
+
+        // Always smooth FROM the previous silentYaw/silentPitch (server-side rotation)
+        // NOT from client yaw — otherwise it snaps back to client each tick and flickers
+        if (targetArea.getIndex() == 1) {
+            // Closest point on hitbox
+            return RotationUtil.getRotationsToBox(bb,
+                    silentYaw, silentPitch,
+                    180.0f, smooth);
+        } else {
+            // Center
+            double cx = (bb.minX + bb.maxX) / 2.0;
+            double cy = (bb.minY + bb.maxY) / 2.0;
+            double cz = (bb.minZ + bb.maxZ) / 2.0;
+            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+            return RotationUtil.getRotations(
+                    cx - eyes.xCoord, cy - eyes.yCoord, cz - eyes.zCoord,
+                    silentYaw, silentPitch,
+                    180.0f, smooth);
+        }
+    }
+
+    private float getAngleDiff(float yaw, float pitch) {
+        float yawDiff   = Math.abs(MathHelper.wrapAngleTo180_float(yaw   - mc.thePlayer.rotationYaw));
+        float pitchDiff = Math.abs(MathHelper.wrapAngleTo180_float(pitch - mc.thePlayer.rotationPitch));
+        return (float) Math.sqrt(yawDiff * yawDiff + pitchDiff * pitchDiff);
+    }
+
+    // ── Attack timing ─────────────────────────────────────────────────────────
+    private void scheduleNextAttack() {
+        double min = Math.min(minCPS.getValue(), maxCPS.getValue());
+        double max = Math.max(minCPS.getValue(), maxCPS.getValue());
+        double cps = min + rand.nextDouble() * (max - min);
+        long delay = (long)(1000.0 / cps);
+        nextAttackMs = System.currentTimeMillis() + delay;
+    }
+
+    // ── Item whitelist ────────────────────────────────────────────────────────
+    private boolean isAllowedItem() {
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (held == null) {
+            return itemWhitelist.toLowerCase().contains("hand");
+        }
+        Item item = held.getItem();
+        String wl  = itemWhitelist.toLowerCase();
+        String[] parts = wl.split(",");
+        for (String part : parts) {
+            String p = part.trim();
+            if (p.equals("swords")    && item instanceof ItemSword)   return true;
+            if (p.equals("axes")      && item instanceof ItemAxe)     return true;
+            if (p.equals("pickaxes")  && item instanceof ItemPickaxe) return true;
+            if (p.equals("shovels")   && item instanceof ItemSpade)   return true;
+            if (p.equals("blocks")    && item instanceof ItemBlock)   return true;
+            if (p.equals("food")      && item instanceof ItemFood)    return true;
+            if (p.equals("hand")      && held == null)                return true;
+            // Slot: "slot 1" = hotbar slot 0
+            if (p.startsWith("slot ")) {
+                try {
+                    int slot = Integer.parseInt(p.substring(5).trim()) - 1;
+                    if (mc.thePlayer.inventory.currentItem == slot) return true;
+                } catch (NumberFormatException ignored) {}
+            }
+            // Item display name match
+            if (held.getDisplayName().toLowerCase().contains(p)) return true;
+            // Legacy item ID
+            try {
+                int id = Integer.parseInt(p.contains(":") ? p.split(":")[0] : p);
+                int meta = p.contains(":") ? Integer.parseInt(p.split(":")[1]) : -1;
+                if (Item.getIdFromItem(item) == id && (meta == -1 || held.getMetadata() == meta)) return true;
+            } catch (NumberFormatException ignored) {}
+        }
+        return false;
+    }
+
+    // ── Threat calculation ────────────────────────────────────────────────────
+    private double getThreat(EntityPlayer p) {
+        ItemStack weapon = p.getHeldItem();
+        if (weapon == null) return 0;
+        double dmg = p.getEntityAttribute(SharedMonsterAttributes.attackDamage).getAttributeValue();
+        dmg += EnchantmentHelper.getModifierForCreature(weapon, mc.thePlayer.getCreatureAttribute());
+        return dmg;
+    }
+
+    // ── ESP box drawing ───────────────────────────────────────────────────────
+    private void drawEntityBox(EntityPlayer p, int color, float partialTicks) {
+        IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+        double rx = p.lastTickPosX + (p.posX - p.lastTickPosX) * partialTicks - rm.getRenderPosX();
+        double ry = p.lastTickPosY + (p.posY - p.lastTickPosY) * partialTicks - rm.getRenderPosY();
+        double rz = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partialTicks - rm.getRenderPosZ();
+
+        float w = p.width / 2.0f + 0.05f;
+        float h = p.height + 0.1f;
+
+        net.minecraft.client.renderer.GlStateManager.pushMatrix();
+        net.minecraft.client.renderer.GlStateManager.disableTexture2D();
+        net.minecraft.client.renderer.GlStateManager.disableDepth();
+        net.minecraft.client.renderer.GlStateManager.enableBlend();
+        net.minecraft.client.renderer.GlStateManager.blendFunc(770, 771);
+
+        float a = ((color >> 24) & 0xFF) / 255.0f;
+        float r = ((color >> 16) & 0xFF) / 255.0f;
+        float g = ((color >>  8) & 0xFF) / 255.0f;
+        float b = ( color        & 0xFF) / 255.0f;
+
+        net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
+        net.minecraft.client.renderer.WorldRenderer wr  = tess.getWorldRenderer();
+
+        // Filled faces
+        net.minecraft.client.renderer.GlStateManager.color(r, g, b, a * 0.25f);
+        wr.begin(7, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+        // Bottom
+        wr.pos(rx-w, ry,   rz-w).endVertex(); wr.pos(rx+w, ry,   rz-w).endVertex();
+        wr.pos(rx+w, ry,   rz+w).endVertex(); wr.pos(rx-w, ry,   rz+w).endVertex();
+        // Top
+        wr.pos(rx-w, ry+h, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
+        wr.pos(rx+w, ry+h, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
+        tess.draw();
+
+        // Outline
+        net.minecraft.client.renderer.GlStateManager.color(r, g, b, a);
+        GL11.glLineWidth(1.5f);
+        wr.begin(3, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+        wr.pos(rx-w, ry,   rz-w).endVertex(); wr.pos(rx+w, ry,   rz-w).endVertex();
+        wr.pos(rx+w, ry,   rz+w).endVertex(); wr.pos(rx-w, ry,   rz+w).endVertex();
+        wr.pos(rx-w, ry,   rz-w).endVertex();
+        tess.draw();
+        wr.begin(3, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+        wr.pos(rx-w, ry+h, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
+        wr.pos(rx+w, ry+h, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
+        wr.pos(rx-w, ry+h, rz-w).endVertex();
+        tess.draw();
+        wr.begin(1, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
+        wr.pos(rx-w, ry, rz-w).endVertex(); wr.pos(rx-w, ry+h, rz-w).endVertex();
+        wr.pos(rx+w, ry, rz-w).endVertex(); wr.pos(rx+w, ry+h, rz-w).endVertex();
+        wr.pos(rx+w, ry, rz+w).endVertex(); wr.pos(rx+w, ry+h, rz+w).endVertex();
+        wr.pos(rx-w, ry, rz+w).endVertex(); wr.pos(rx-w, ry+h, rz+w).endVertex();
+        tess.draw();
+
+        net.minecraft.client.renderer.GlStateManager.enableDepth();
+        net.minecraft.client.renderer.GlStateManager.enableTexture2D();
+        net.minecraft.client.renderer.GlStateManager.disableBlend();
+        net.minecraft.client.renderer.GlStateManager.popMatrix();
+    }
+
+    private int buildColor(int r, int g, int b, int a) {
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 }
