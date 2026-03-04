@@ -118,7 +118,6 @@ public class Rise6ClickGui extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int keyCode) throws IOException {
-        if (keyCode == 1) { mc.displayGuiScreen(null); return; }
         if (searchBar.keyTyped(c, keyCode)) return;
         modulePanel.keyTyped(c, keyCode);
     }
