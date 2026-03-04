@@ -8,6 +8,7 @@ import myau.util.MoveUtil;
 import myau.event.types.EventType;
 import myau.events.Render3DEvent;
 import myau.events.TickEvent;
+import myau.events.UpdateEvent;
 import myau.module.*;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
@@ -18,8 +19,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
-import net.minecraft.network.play.client.C03PacketPlayer.C05PacketPlayerLook;
-import net.minecraft.network.play.client.C03PacketPlayer.C05PacketPlayerLook;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
@@ -153,11 +152,10 @@ public class SilentAura extends Module {
             return;
         }
 
-        // Apply body rotation via RotationState — body turns, camera stays locked
+        // Body rotation for rendering (3rd person head tracking)
         RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
-
-        // Send silent look packet (look only — no position, avoids BadPacketsV/Timer flags)
-        PacketUtil.sendPacketNoEvent(new C05PacketPlayerLook(silentYaw, silentPitch, mc.thePlayer.onGround));
+        // Actual packet rotation is handled by onUpdateEvent which piggybacks
+        // on the game's existing movement packet — no extra packets sent
 
         // Attack if cooldown elapsed and in range
         double dist = RotationUtil.distanceToEntity(currentTarget);
@@ -170,6 +168,15 @@ public class SilentAura extends Module {
             lastAttackMs = System.currentTimeMillis();
             scheduleNextAttack();
         }
+    }
+
+    // ── Silent rotation via UpdateEvent (modifies existing packet, no extra packets) ─
+    @EventTarget
+    public void onUpdateEvent(UpdateEvent event) {
+        if (!isEnabled() || currentTarget == null) return;
+        if (event.getType() != myau.event.types.EventType.PRE) return;
+        // Priority 10 — high enough to override AimAssist but not BackTrack
+        event.setRotation(silentYaw, silentPitch, 10);
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
