@@ -169,49 +169,49 @@ public class SilentAura extends Module {
         pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
-    // ── Silent rotation via UpdateEvent PRE only ─────────────────────────────
+    // ── Silent rotation via UpdateEvent ──────────────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
+
         if (event.getType() == myau.event.types.EventType.PRE) {
+            // setRotation: mixin sends silentYaw in the position packet
             event.setRotation(silentYaw, silentPitch, 10);
+            // setPervRotation: RotationState.smoothYaw = silentYaw so
+            // MixinEntityLivingBase uses silentYaw inside moveFlying —
+            // actual velocity matches Grim's prediction, no Simulation flag
+            event.setPervRotation(silentYaw, 10);
+        } else if (event.getType() == myau.event.types.EventType.POST) {
+            // POST fires at RETURN of onUpdate, AFTER onUpdateWalkingPlayer sent position.
+            // Vanilla order: position → attack. Sending here matches that exactly.
+            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+                mc.thePlayer.swingItem();
+                attackingTarget = currentTarget;
+                scheduleNextAttack();
+                pendingAttack = false;
+            }
         }
     }
 
-    // ── Attack + movement fix in PlayerUpdateEvent ───────────────────────────
-    // PlayerUpdateEvent fires RIGHT BEFORE onUpdateWalkingPlayer sends position.
-    // Vanilla order Grim expects: C02 ATTACK → C03/C06 position (same Netty flush).
-    // Sending attack here queues it into Netty before the position packet queues,
-    // so they flush in the correct order: attack first, position second.
+    // ── PlayerUpdateEvent unused now ──────────────────────────────────────────
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled()) return;
-
-        // Send attack before position packet
-        if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
-            PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-            mc.thePlayer.swingItem();
-            attackingTarget = currentTarget;
-            scheduleNextAttack();
-            pendingAttack = false;
-        }
+        // Attack moved to UpdateEvent POST (after position packet)
+        // Movement handled via setPervRotation in UpdateEvent PRE
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
+    // Note: moveFlying is intercepted by MixinEntityLivingBase which uses
+    // RotationState.getSmoothedYaw() — set via setPervRotation in onUpdateEvent PRE
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-
-        if (movement.getIndex() == 0) {
-            // Proper: swap rotationYaw to silentYaw so moveFlying() computes
-            // motionX/Z using the same yaw we're reporting to the server.
-            // Grim's simulation will then match our actual velocity perfectly.
-            mc.thePlayer.rotationYaw = silentYaw;
-        } else if (movement.getIndex() == 1) {
+        if (movement.getIndex() == 1) {
+            // Slow mode: reduce inputs
             mc.thePlayer.movementInput.moveForward *= 0.6f;
             mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
-        // rotationYaw is restored by the mixin's postUpdate after onUpdateWalkingPlayer
     }
 
     // ── ESP rendering ─────────────────────────────────────────────────────────
