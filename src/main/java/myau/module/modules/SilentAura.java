@@ -169,31 +169,32 @@ public class SilentAura extends Module {
         pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
-    // ── Silent rotation + attack via UpdateEvent ─────────────────────────────
+    // ── Silent rotation via UpdateEvent PRE only ─────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-
         if (event.getType() == myau.event.types.EventType.PRE) {
-            // Always inject rotation while target is locked — no flicker
             event.setRotation(silentYaw, silentPitch, 10);
-        } else if (event.getType() == myau.event.types.EventType.POST) {
-            // POST fires after onUpdateWalkingPlayer has sent the position/look packet
-            // Send attack here so server receives: [position+look] then [attack]
-            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
-                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-                mc.thePlayer.swingItem();
-                attackingTarget = currentTarget;
-                scheduleNextAttack();
-                pendingAttack = false;
-            }
         }
     }
 
-    // ── Movement fix in PlayerUpdateEvent (send attack after look packet) ────
+    // ── Attack + movement fix in PlayerUpdateEvent ───────────────────────────
+    // PlayerUpdateEvent fires RIGHT BEFORE onUpdateWalkingPlayer sends position.
+    // Vanilla order Grim expects: C02 ATTACK → C03/C06 position (same Netty flush).
+    // Sending attack here queues it into Netty before the position packet queues,
+    // so they flush in the correct order: attack first, position second.
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        // Only used for attack timing now — movement fix is in MoveInputEvent
+        if (!isEnabled()) return;
+
+        // Send attack before position packet
+        if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+            PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+            mc.thePlayer.swingItem();
+            attackingTarget = currentTarget;
+            scheduleNextAttack();
+            pendingAttack = false;
+        }
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
