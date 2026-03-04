@@ -190,32 +190,27 @@ public class SilentAura extends Module {
         }
     }
 
-    // ── Movement fix in PlayerUpdateEvent (after physics, before packet) ────
+    // ── Movement fix in PlayerUpdateEvent (send attack after look packet) ────
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 0) {
-            double speed = MoveUtil.getSpeed();
-            if (speed > 0.005) {
-                float clientYaw = mc.thePlayer.rotationYaw;
-                float yawDiff   = MathHelper.wrapAngleTo180_float(silentYaw - clientYaw);
-                float dirYaw    = (float) Math.toDegrees(Math.atan2(-mc.thePlayer.motionX, mc.thePlayer.motionZ));
-                float newDirYaw = dirYaw + yawDiff;
-                mc.thePlayer.motionX = -Math.sin(Math.toRadians(newDirYaw)) * speed;
-                mc.thePlayer.motionZ =  Math.cos(Math.toRadians(newDirYaw)) * speed;
-            }
-        }
+        // Only used for attack timing now — movement fix is in MoveInputEvent
     }
 
     // ── Movement correction ───────────────────────────────────────────────────
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 1) {
+
+        if (movement.getIndex() == 0) {
+            // Proper: swap rotationYaw to silentYaw so moveFlying() computes
+            // motionX/Z using the same yaw we're reporting to the server.
+            // Grim's simulation will then match our actual velocity perfectly.
+            mc.thePlayer.rotationYaw = silentYaw;
+        } else if (movement.getIndex() == 1) {
             mc.thePlayer.movementInput.moveForward *= 0.6f;
             mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
-        // Proper fix happens in PlayerUpdateEvent after physics runs
+        // rotationYaw is restored by the mixin's postUpdate after onUpdateWalkingPlayer
     }
 
     // ── ESP rendering ─────────────────────────────────────────────────────────
