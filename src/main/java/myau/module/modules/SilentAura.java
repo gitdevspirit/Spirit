@@ -15,9 +15,15 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
+import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook;
+import net.minecraft.network.play.client.C03PacketPlayer.C06PacketPlayerPosLook;
+import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
+import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.MathHelper;
+import org.lwjgl.opengl.GL11;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
+import org.lwjgl.opengl.GL11;
 
 import java.util.Comparator;
 import java.util.List;
@@ -140,7 +146,8 @@ public class SilentAura extends Module {
         }
 
         // Send silent rotation packet (server sees it, client view unchanged)
-        PacketUtil.sendPacketNoEvent(new C03PacketPlayer.C03PacketPlayerLook(
+        PacketUtil.sendPacketNoEvent(new C06PacketPlayerPosLook(
+                mc.thePlayer.posX, mc.thePlayer.posY, mc.thePlayer.posZ,
                 silentYaw, silentPitch, mc.thePlayer.onGround
         ));
 
@@ -302,12 +309,10 @@ public class SilentAura extends Module {
 
     // ── ESP box drawing ───────────────────────────────────────────────────────
     private void drawEntityBox(EntityPlayer p, int color, float partialTicks) {
-        double rx = p.lastTickPosX + (p.posX - p.lastTickPosX) * partialTicks
-                - mc.getRenderManager().renderPosX;
-        double ry = p.lastTickPosY + (p.posY - p.lastTickPosY) * partialTicks
-                - mc.getRenderManager().renderPosY;
-        double rz = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partialTicks
-                - mc.getRenderManager().renderPosZ;
+        IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
+        double rx = p.lastTickPosX + (p.posX - p.lastTickPosX) * partialTicks - rm.getRenderPosX();
+        double ry = p.lastTickPosY + (p.posY - p.lastTickPosY) * partialTicks - rm.getRenderPosY();
+        double rz = p.lastTickPosZ + (p.posZ - p.lastTickPosZ) * partialTicks - rm.getRenderPosZ();
 
         float w = p.width / 2.0f + 0.05f;
         float h = p.height + 0.1f;
@@ -339,7 +344,7 @@ public class SilentAura extends Module {
 
         // Outline
         net.minecraft.client.renderer.GlStateManager.color(r, g, b, a);
-        net.minecraft.client.renderer.GlStateManager.glLineWidth(1.5f);
+        GL11.glLineWidth(1.5f);
         wr.begin(3, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
         wr.pos(rx-w, ry,   rz-w).endVertex(); wr.pos(rx+w, ry,   rz-w).endVertex();
         wr.pos(rx+w, ry,   rz+w).endVertex(); wr.pos(rx-w, ry,   rz+w).endVertex();
