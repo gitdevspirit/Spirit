@@ -21,7 +21,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
-import net.minecraft.network.play.client.C05PacketPlayerLook;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
@@ -200,7 +199,7 @@ public class SilentAura extends Module {
                 // send a C05 look packet first so Grim has a position update before the attack.
                 // Sending two position packets when vanilla already sent one causes its own flags.
                 if (!positionSentThisTick) {
-                    PacketUtil.sendPacketNoEvent(new C05PacketPlayerLook(
+                    PacketUtil.sendPacketNoEvent(new C03PacketPlayer.C05PacketPlayerLook(
                         silentYaw, silentPitch, mc.thePlayer.onGround));
                 }
                 PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
