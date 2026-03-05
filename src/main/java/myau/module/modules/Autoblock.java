@@ -40,7 +40,6 @@ public class Autoblock extends Module {
     private boolean fakeBlockState = false;
     private int     blockTick      = 0;
     private int     holdTicks      = 0; // ticks to stay blocked before releasing
-    private long    nextCycleMs    = 0L; // when to start the next block cycle
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
@@ -65,7 +64,6 @@ public class Autoblock extends Module {
     @Override
     public void onEnabled() {
         if (mc.thePlayer != null) lastHurtTime = mc.thePlayer.hurtResistantTime;
-        nextCycleMs = 0L;
     }
 
     @Override
@@ -108,26 +106,28 @@ public class Autoblock extends Module {
 
         switch (blockTick) {
             case 0:
-                // Wait until the APS timer allows a new cycle
-                if (System.currentTimeMillis() < nextCycleMs) break;
+                // Start blocking. holdTicks = how many ticks to stay blocked.
+                // At 20 TPS: 20 APS = 1 tick, 10 APS = 2 ticks, 5 APS = 4 ticks
+                double minAps = Math.min(minAPS.getValue(), maxAPS.getValue());
+                double maxAps = Math.max(minAPS.getValue(), maxAPS.getValue());
+                double aps = minAps + rng.nextDouble() * (maxAps - minAps);
+                holdTicks = Math.max(1, (int) Math.round(20.0 / aps));
                 if (!isPlayerBlocking()) startBlock();
                 blockTick = 1;
                 break;
             case 1:
-                // Stay blocked for 1 tick so attack can land, then release
-                if (isPlayerBlocking()) {
-                    stopBlock();
-                    if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
-                        Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
-                        lagging = true;
-                        lagStartMs = System.currentTimeMillis();
+                holdTicks--;
+                if (holdTicks <= 0) {
+                    if (isPlayerBlocking()) {
+                        stopBlock();
+                        if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
+                            Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
+                            lagging = true;
+                            lagStartMs = System.currentTimeMillis();
+                        }
                     }
+                    blockTick = 0;
                 }
-                // Schedule next cycle based on APS range
-                double minMs = 1000.0 / Math.max(minAPS.getValue(), maxAPS.getValue());
-                double maxMs = 1000.0 / Math.min(minAPS.getValue(), maxAPS.getValue());
-                nextCycleMs = System.currentTimeMillis() + (long)(minMs + rng.nextDouble() * (maxMs - minMs));
-                blockTick = 0;
                 break;
         }
     }
@@ -176,7 +176,7 @@ public class Autoblock extends Module {
 
     private void cleanup() {
         if (blockingState) stopBlock();
-        blockingState = false; fakeBlockState = false; blockTick = 0; nextCycleMs = 0L; holdTicks = 0;
+        blockingState = false; fakeBlockState = false; blockTick = 0; holdTicks = 0;
     }
 
     private boolean checkConditions() {
