@@ -35,9 +35,6 @@ public class Autoblock extends Module {
     public final BooleanSetting requireLMB     = register(new BooleanSetting("Require LMB",       false));
     public final BooleanSetting requireRMB     = register(new BooleanSetting("Require RMB",       false));
     public final BooleanSetting requireDamaged = register(new BooleanSetting("Only When Damaged",  false));
-    public final SliderSetting  minAPS         = register(new SliderSetting("Min APS",          8,   1, 20, 1));
-    public final SliderSetting  maxAPS         = register(new SliderSetting("Max APS",          12,   1, 20, 1));
-
     private static final Random rng = new Random();
     private boolean blockingState  = false;
     private boolean fakeBlockState = false;
