@@ -149,7 +149,7 @@ public class Autoblock extends Module {
     // TickEvent fires after position packet is sent, matching vanilla right-click timing
     @EventTarget
     public void onTick(TickEvent event) {
-        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (!isEnabled() || event.getType() != EventType.POST) return;
         if (mc.thePlayer == null) return;
         // Skip if AimAssist is attacking this tick
         if (AimAssist.attackingThisTick) {
@@ -157,11 +157,12 @@ public class Autoblock extends Module {
             pendingStop = false;
             return;
         }
+        // Never send C07 and C08 in same tick — prioritize release
         if (pendingStop && blockingState) {
             stopBlock();
             pendingStop = false;
-        }
-        if (pendingBlock && !blockingState) {
+            pendingBlock = false; // don't also start this tick
+        } else if (pendingBlock && !blockingState) {
             startBlock();
             pendingBlock = false;
         }
@@ -170,11 +171,10 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        // Stop using item properly — this sends C07 via vanilla pipeline
-        // Attack fires from playerController which handles packet ordering correctly
-        if (blockingState) stopBlock();
+        // Schedule stop for next TickEvent POST — never send C07 same tick as C02 attack
+        // (C07 release + C02 attack = PacketOrderI type=attack releasing=true)
+        if (blockingState) pendingStop = true;
         pendingBlock = false;
-        pendingStop = false;
         if (lagging && preventDelay.getValue()) {
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             lagging = false;
