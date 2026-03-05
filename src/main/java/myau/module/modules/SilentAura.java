@@ -4,6 +4,7 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.management.RotationState;
 import myau.events.MoveInputEvent;
+import myau.events.PacketEvent;
 import myau.events.PlayerUpdateEvent;
 import myau.util.MoveUtil;
 import myau.event.types.EventType;
@@ -20,6 +21,7 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
+import net.minecraft.network.play.client.C05PacketPlayerLook;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
@@ -89,6 +91,7 @@ public class SilentAura extends Module {
     private float silentYaw    = 0;
     private float silentPitch  = 0;
     private boolean pendingAttack = false;
+    private boolean positionSentThisTick = false; // true if vanilla sent a position packet
 
     public SilentAura() {
         super("SilentAura", false);
@@ -169,22 +172,37 @@ public class SilentAura extends Module {
         pendingAttack = dist <= attackRange && System.currentTimeMillis() >= nextAttackMs;
     }
 
+
+    // ── Track whether vanilla sent a position packet this tick ───────────────
+    @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || event.getType() != myau.event.types.EventType.SEND) return;
+        if (event.getPacket() instanceof net.minecraft.network.play.client.C03PacketPlayer) {
+            positionSentThisTick = true;
+        }
+    }
+
     // ── Silent rotation via UpdateEvent ──────────────────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
 
         if (event.getType() == myau.event.types.EventType.PRE) {
+            positionSentThisTick = false; // reset — will be set true if vanilla sends C03 this tick
             // setRotation: mixin sends silentYaw in the position packet
             event.setRotation(silentYaw, silentPitch, 10);
             // setPervRotation: RotationState.smoothYaw = silentYaw so
-            // MixinEntityLivingBase uses silentYaw inside moveFlying —
-            // actual velocity matches Grim's prediction, no Simulation flag
+            // MixinEntityLivingBase uses silentYaw inside moveFlying
             event.setPervRotation(silentYaw, 10);
         } else if (event.getType() == myau.event.types.EventType.POST) {
-            // POST fires at RETURN of onUpdate, AFTER onUpdateWalkingPlayer sent position.
-            // Vanilla order: position → attack. Sending here matches that exactly.
             if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
+                // If vanilla didn't send a position packet this tick (player standing still),
+                // send a C05 look packet first so Grim has a position update before the attack.
+                // Sending two position packets when vanilla already sent one causes its own flags.
+                if (!positionSentThisTick) {
+                    PacketUtil.sendPacketNoEvent(new C05PacketPlayerLook(
+                        silentYaw, silentPitch, mc.thePlayer.onGround));
+                }
                 PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
                 mc.thePlayer.swingItem();
                 attackingTarget = currentTarget;
