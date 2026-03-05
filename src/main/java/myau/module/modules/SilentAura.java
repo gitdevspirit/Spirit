@@ -3,7 +3,6 @@ package myau.module.modules;
 import myau.Myau;
 import myau.event.EventTarget;
 import myau.management.RotationState;
-import myau.events.MoveInputEvent;
 import myau.events.PlayerUpdateEvent;
 import myau.util.MoveUtil;
 import myau.event.types.EventType;
@@ -48,7 +47,6 @@ public class SilentAura extends Module {
     public final SliderSetting  aimSpeed      = register(new SliderSetting("Aim Speed",      50,   1, 100,   1));
 
     // ── Movement Settings ────────────────────────────────────────────────────
-    public final DropdownSetting movement    = register(new DropdownSetting("Movement", 0, "Proper", "Slow", "None"));
     public final BooleanSetting  aimIndicator = register(new BooleanSetting("Aim Indicator", true));
     public final BooleanSetting  thirdPerson  = register(new BooleanSetting("3rd Person Aim", true));
 
@@ -191,17 +189,6 @@ public class SilentAura extends Module {
         attackingTarget = currentTarget;
         scheduleNextAttack();
         pendingAttack = false;
-    }
-
-    // ── Movement: no correction needed ───────────────────────────────────────
-    // setPervRotation handles moveFlying yaw via MixinEntityLivingBase
-    @EventTarget
-    public void onMoveInput(MoveInputEvent event) {
-        if (!isEnabled() || currentTarget == null) return;
-        if (movement.getIndex() == 1) {
-            mc.thePlayer.movementInput.moveForward *= 0.6f;
-            mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
-        }
     }
 
 
