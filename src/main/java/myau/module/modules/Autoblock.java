@@ -3,13 +3,13 @@ package myau.module.modules;
 import myau.Myau;
 import myau.enums.BlinkModules;
 import myau.event.EventTarget;
-import myau.event.types.Priority;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.events.PlayerUpdateEvent;
 import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.Module;
+import myau.module.modules.SilentAura;
 import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
@@ -51,7 +51,7 @@ public class Autoblock extends Module {
     private boolean isBlocking     = false;
     private long    blockStartMs   = 0L;
     private boolean pendingBlock    = false;
-    private boolean attackedThisTick  = false; // set by AttackEvent, suppresses C07/C08
+    private boolean pendingStop     = false;
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
@@ -88,63 +88,83 @@ public class Autoblock extends Module {
     private void cleanup() {
         if (blockingState) stopBlock();
         if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
-        blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L; pendingBlock = false;
+        blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L; pendingBlock = false; pendingStop = false;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!isEnabled() || event.getType() != EventType.PRE) return;
-        attackedThisTick = false; // reset each tick
+        if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
-        if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
 
-        // Track damage for requireDamaged condition
-        int currentHurtTime = mc.thePlayer.hurtResistantTime;
-        if (currentHurtTime > lastHurtTime) lastDamagedMs = System.currentTimeMillis();
-        lastHurtTime = currentHurtTime;
+        if (event.getType() == EventType.PRE) {
+            if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
 
-        if (!checkConditions()) {
-            if (blockingState) stopBlock();
-            fakeBlockState = false; isBlocking = false; return;
-        }
+            // Track damage for requireDamaged condition
+            int currentHurtTime = mc.thePlayer.hurtResistantTime;
+            if (currentHurtTime > lastHurtTime) lastDamagedMs = System.currentTimeMillis();
+            lastHurtTime = currentHurtTime;
 
-        EntityLivingBase nearestTarget = getNearestTarget();
-        boolean targetInRange = nearestTarget != null;
-        fakeBlockState = targetInRange;
-
-        if (!targetInRange) {
-            if (blockingState && !attackedThisTick) stopBlock();
-            isBlocking = false; return;
-        }
-
-        // Lag management
-        if (lagging) {
-            long lagElapsed = System.currentTimeMillis() - lagStartMs;
-            if (lagElapsed >= lagMaxDuration.getValue()) {
-                Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-                lagging = false;
-                if (blockAgain.getValue()) pendingBlock = true;
-                else { if (blockingState) stopBlock(); isBlocking = false; }
+            if (!checkConditions()) {
+                fakeBlockState = false; isBlocking = false;
+                pendingBlock = false; pendingStop = false; return;
             }
-            return;
-        }
 
-        // Block when hurtResistantTime is low enough (player can soon take damage)
-        long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
-        boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
+            EntityLivingBase nearestTarget = getNearestTarget();
+            boolean targetInRange = nearestTarget != null;
+            fakeBlockState = targetInRange;
 
-        if (shouldBlock && !blockingState && !pendingBlock && !attackedThisTick) {
-            pendingBlock = true;
-        } else if (blockingState) {
-            long holdElapsed = System.currentTimeMillis() - blockStartMs;
-            if (holdElapsed >= maxHoldDuration.getValue() && !attackedThisTick) {
-                stopBlock();
-                isBlocking = false;
-                if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
-                    Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
-                    lagging = true; lagStartMs = System.currentTimeMillis();
+            if (!targetInRange) {
+                if (blockingState) pendingStop = true;
+                isBlocking = false; return;
+            }
+
+            // Lag management
+            if (lagging) {
+                long lagElapsed = System.currentTimeMillis() - lagStartMs;
+                if (lagElapsed >= lagMaxDuration.getValue()) {
+                    Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                    lagging = false;
+                    if (blockAgain.getValue()) pendingBlock = true;
+                    else { pendingStop = true; isBlocking = false; }
                 }
+                return;
+            }
+
+            // Decide whether to block or release — actual packets sent in POST
+            long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
+            boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
+
+            if (shouldBlock && !blockingState && !pendingBlock) {
+                pendingBlock = true;
+            } else if (blockingState) {
+                long holdElapsed = System.currentTimeMillis() - blockStartMs;
+                if (holdElapsed >= maxHoldDuration.getValue()) {
+                    pendingStop = true;
+                    isBlocking = false;
+                    if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
+                        Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
+                        lagging = true; lagStartMs = System.currentTimeMillis();
+                        pendingStop = false; // lag handles release
+                    }
+                }
+            }
+
+        } else if (event.getType() == EventType.POST) {
+            // Send block/release packets in POST, same phase as SilentAura's attack.
+            // Skip entirely if SilentAura attacked this tick — prevents PacketOrderI/MultiActionsE.
+            if (SilentAura.attackingThisTick) {
+                pendingBlock = false;
+                pendingStop = false;
+                return;
+            }
+            if (pendingStop && blockingState) {
+                stopBlock();
+                pendingStop = false;
+            }
+            if (pendingBlock && !blockingState) {
+                startBlock();
+                pendingBlock = false;
             }
         }
     }
@@ -157,13 +177,11 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        attackedThisTick = true;
-        // Suppress pending block this tick — sending C08 same tick as C02 = PacketOrderI
+        // Called when any attack fires (including SilentAura via AttackEvent)
+        // Unblock for full damage — C07/C08 suppressed via SilentAura.attackingThisTick in POST
+        if (blockingState) stopBlock();
         pendingBlock = false;
-        if (blockingState) {
-            // Unblock so full damage is dealt (blocking halves damage in 1.8)
-            stopBlock();
-        }
+        pendingStop = false;
         if (lagging && preventDelay.getValue()) {
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             lagging = false;
@@ -218,13 +236,7 @@ public class Autoblock extends Module {
     }
 
 
-    // ── Send block packet just before position packet (matches Grim's expected order) ─
-    @EventTarget(Priority.LOW)
-    public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled() || !pendingBlock || attackedThisTick) return;
-        pendingBlock = false;
-        startBlock();
-    }
+    // Block/release now sent in UpdateEvent POST (shared tick with SilentAura's attack check)
 
     private void startBlock() {
         ItemStack held = mc.thePlayer.getHeldItem();
