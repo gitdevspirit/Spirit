@@ -5,21 +5,15 @@ import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.*;
-import myau.events.PlayerUpdateEvent;
-import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.Module;
 import myau.module.modules.SilentAura;
 import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
+import net.minecraft.item.ItemStack;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.ItemSword;
-import net.minecraft.network.play.client.C07PacketPlayerDigging;
-import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
-import net.minecraft.util.BlockPos;
-import net.minecraft.util.EnumFacing;
 
 /**
  * Autoblock — predicts incoming damage using hurtResistantTime and blocks
@@ -86,7 +80,7 @@ public class Autoblock extends Module {
     public void onDisabled() { cleanup(); }
 
     private void cleanup() {
-        if (blockingState) stopBlock();
+        if (blockingState) { mc.thePlayer.stopUsingItem(); blockingState = false; }
         if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
         blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L; pendingBlock = false; pendingStop = false;
     }
@@ -150,27 +144,22 @@ public class Autoblock extends Module {
                 }
             }
 
-        }
-    }
-
-    // ── Send C07/C08 in PlayerUpdateEvent (before position packet) ────────────
-    // Vanilla item use packets arrive before position in Grim's transaction window
-    @EventTarget
-    public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled()) return;
-        // Never send block/release on same tick SilentAura attacks
-        if (SilentAura.attackingThisTick) {
-            pendingBlock = false;
-            pendingStop = false;
-            return;
-        }
-        if (pendingStop && blockingState) {
-            stopBlock();
-            pendingStop = false;
-        }
-        if (pendingBlock && !blockingState) {
-            startBlock();
-            pendingBlock = false;
+        } else if (event.getType() == EventType.POST) {
+            // POST = after position packet sent — same timing as vanilla rightClickMouse
+            // Skip if SilentAura attacked this tick to avoid MultiActionsE
+            if (SilentAura.attackingThisTick) {
+                pendingBlock = false;
+                pendingStop = false;
+                return;
+            }
+            if (pendingStop && blockingState) {
+                stopBlock();
+                pendingStop = false;
+            }
+            if (pendingBlock && !blockingState) {
+                startBlock();
+                pendingBlock = false;
+            }
         }
     }
 
@@ -182,10 +171,9 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        // Don't send C07 here — would arrive same tick as C02 attack = PacketOrderI
-        // Just clear blocking state; next tick's PRE will not re-block due to hurtResistantTime
-        blockingState = false;
-        isBlocking = false;
+        // Stop using item properly — this sends C07 via vanilla pipeline
+        // Attack fires from playerController which handles packet ordering correctly
+        if (blockingState) stopBlock();
         pendingBlock = false;
         pendingStop = false;
         if (lagging && preventDelay.getValue()) {
@@ -246,19 +234,16 @@ public class Autoblock extends Module {
 
     private void startBlock() {
         ItemStack held = mc.thePlayer.getHeldItem();
-        if (held == null || !(held.getItem() instanceof ItemSword)) return;
-        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-        // Only send C08 to server — do NOT call setItemInUse on client
-        // setItemInUse triggers Minecraft's 0.2x blocking speed penalty which
-        // Grim doesn't predict (it uses full speed), causing Simulation flags
-        PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(held));
+        if (held == null || !(held.getItem() instanceof net.minecraft.item.ItemSword)) return;
+        // Use vanilla sendUseItem — sends C08 through the normal pipeline
+        // NoSlow's isUsingItem() mixin intercept handles speed bypass automatically
+        mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, held);
         blockingState = true; isBlocking = true; blockStartMs = System.currentTimeMillis();
     }
 
     private void stopBlock() {
-        PacketUtil.sendPacket(new C07PacketPlayerDigging(
-            C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
-        // Don't call stopUsingItem — we never called setItemInUse
+        // Use vanilla stopUsingItem — sends C07 through normal pipeline
+        mc.thePlayer.stopUsingItem();
         blockingState = false;
     }
 
