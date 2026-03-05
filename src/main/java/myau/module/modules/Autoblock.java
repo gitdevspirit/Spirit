@@ -3,11 +3,12 @@ package myau.module.modules;
 import myau.Myau;
 import myau.enums.BlinkModules;
 import myau.event.EventTarget;
+import myau.event.types.Priority;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.module.BooleanSetting;
 import myau.module.Module;
-import myau.module.modules.SilentAura;
+import myau.module.modules.AimAssist;
 import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
@@ -86,7 +87,7 @@ public class Autoblock extends Module {
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
-    @EventTarget
+    @EventTarget(Priority.LOW)
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
@@ -146,8 +147,8 @@ public class Autoblock extends Module {
 
         } else if (event.getType() == EventType.POST) {
             // POST = after position packet sent — same timing as vanilla rightClickMouse
-            // Skip if SilentAura attacked this tick to avoid MultiActionsE
-            if (SilentAura.attackingThisTick) {
+            // Skip if AimAssist attacked this tick to avoid MultiActionsE
+            if (AimAssist.attackingThisTick) {
                 pendingBlock = false;
                 pendingStop = false;
                 return;
@@ -230,7 +231,6 @@ public class Autoblock extends Module {
     }
 
 
-    // Block/release now sent in UpdateEvent POST (shared tick with SilentAura's attack check)
 
     private void startBlock() {
         ItemStack held = mc.thePlayer.getHeldItem();
