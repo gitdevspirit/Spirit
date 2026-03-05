@@ -204,6 +204,72 @@ public class SilentAura extends Module {
         }
     }
 
+
+    // ── Target finding ────────────────────────────────────────────────────────
+    private EntityPlayer findTarget() {
+        java.util.List<EntityPlayer> targets = mc.theWorld.loadedEntityList.stream()
+                .filter(e -> e instanceof EntityPlayer)
+                .map(e -> (EntityPlayer) e)
+                .filter(this::isValidTarget)
+                .collect(java.util.stream.Collectors.toList());
+        if (targets.isEmpty()) return null;
+
+        switch (targetMode.getIndex()) {
+            case 1: // Yaw
+                targets.sort(java.util.Comparator.comparingDouble(p -> getAngleDiff(calcRotation(p)[0], calcRotation(p)[1])));
+                break;
+            case 2: // Armor
+                targets.sort(java.util.Comparator.comparingInt(p -> {
+                    int armor = 0;
+                    for (ItemStack s : p.inventory.armorInventory) if (s != null) armor++;
+                    return armor;
+                }));
+                break;
+            case 3: // Threat
+                targets.sort(java.util.Comparator.comparingDouble(this::getThreat).reversed());
+                break;
+            case 4: // Health
+                targets.sort(java.util.Comparator.comparingDouble(EntityPlayer::getHealth));
+                break;
+            default: // Distance
+                targets.sort(java.util.Comparator.comparingDouble(RotationUtil::distanceToEntity));
+                break;
+        }
+        return targets.get(0);
+    }
+
+    private boolean isValidTarget(EntityPlayer p) {
+        if (p == mc.thePlayer || p == mc.thePlayer.ridingEntity) return false;
+        if (p == mc.getRenderViewEntity() || p == mc.getRenderViewEntity().ridingEntity) return false;
+        if (p.deathTime > 0 || p.isDead) return false;
+        if (RotationUtil.distanceToEntity(p) > range.getValue() + extraSwing.getValue()) return false;
+        if (friendCheck.getValue() && TeamUtil.isFriend(p)) return false;
+        if (teamCheck.getValue() && TeamUtil.isSameTeam(p)) return false;
+        if (botCheck.getValue() && TeamUtil.isBot(p)) return false;
+        return true;
+    }
+
+    private float[] calcRotation(EntityPlayer target) {
+        AxisAlignedBB bb = target.getEntityBoundingBox();
+        float smooth = 1.0f - (float) aimSpeed.getValue() / 100.0f;
+        if (targetArea.getIndex() == 1) {
+            return RotationUtil.getRotationsToBox(bb, silentYaw, silentPitch, 180.0f, smooth);
+        } else {
+            double cx = (bb.minX + bb.maxX) / 2.0;
+            double cy = (bb.minY + bb.maxY) / 2.0;
+            double cz = (bb.minZ + bb.maxZ) / 2.0;
+            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+            return RotationUtil.getRotations(cx - eyes.xCoord, cy - eyes.yCoord, cz - eyes.zCoord,
+                    silentYaw, silentPitch, 180.0f, smooth);
+        }
+    }
+
+    private float getAngleDiff(float yaw, float pitch) {
+        float dy = Math.abs(MathHelper.wrapAngleTo180_float(yaw   - mc.thePlayer.rotationYaw));
+        float dp = Math.abs(MathHelper.wrapAngleTo180_float(pitch - mc.thePlayer.rotationPitch));
+        return Math.max(dy, dp);
+    }
+
     private void scheduleNextAttack() {
         double min = Math.min(minCPS.getValue(), maxCPS.getValue());
         double max = Math.max(minCPS.getValue(), maxCPS.getValue());
