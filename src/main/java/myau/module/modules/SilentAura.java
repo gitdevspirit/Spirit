@@ -4,7 +4,6 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.management.RotationState;
 import myau.events.MoveInputEvent;
-import myau.events.PacketEvent;
 import myau.events.PlayerUpdateEvent;
 import myau.util.MoveUtil;
 import myau.event.types.EventType;
@@ -19,8 +18,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.item.*;
-import net.minecraft.network.play.client.C02PacketUseEntity;
-import net.minecraft.network.play.client.C03PacketPlayer;
 import myau.mixin.IAccessorRenderManager;
 import net.minecraft.util.AxisAlignedBB;
 import myau.mixin.IAccessorRenderManager;
@@ -90,8 +87,7 @@ public class SilentAura extends Module {
     private float silentYaw    = 0;
     private float silentPitch  = 0;
     private boolean pendingAttack = false;
-    public static boolean attackingThisTick = false; // read by Autoblock to suppress C07/C08
-    private boolean positionSentThisTick = false; // true if vanilla sent a position packet
+    public static boolean attackingThisTick = false;
 
     public SilentAura() {
         super("SilentAura", false);
@@ -174,196 +170,40 @@ public class SilentAura extends Module {
     }
 
 
-    // ── Track whether vanilla sent a position packet this tick ───────────────
-    @EventTarget
-    public void onPacket(PacketEvent event) {
-        if (!isEnabled() || event.getType() != myau.event.types.EventType.SEND) return;
-        if (event.getPacket() instanceof net.minecraft.network.play.client.C03PacketPlayer) {
-            positionSentThisTick = true;
-        }
-    }
-
-    // ── Silent rotation via UpdateEvent ──────────────────────────────────────
+    // ── Silent rotation injected into movement packet ────────────────────────
     @EventTarget
     public void onUpdateEvent(UpdateEvent event) {
         if (!isEnabled() || currentTarget == null) return;
-
-        if (event.getType() == myau.event.types.EventType.PRE) {
-            positionSentThisTick = false; // reset — will be set true if vanilla sends C03 this tick
-            // setRotation: mixin sends silentYaw in the position packet
-            event.setRotation(silentYaw, silentPitch, 10);
-            // setPervRotation: RotationState.smoothYaw = silentYaw so
-            // MixinEntityLivingBase uses silentYaw inside moveFlying
-            event.setPervRotation(silentYaw, 10);
-        } else if (event.getType() == myau.event.types.EventType.POST) {
-            attackingThisTick = false; // reset — will be set true if we attack this POST
-            if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
-                // If vanilla didn't send a position packet this tick (player standing still),
-                // send a C05 look packet first so Grim has a position update before the attack.
-                // Sending two position packets when vanilla already sent one causes its own flags.
-                if (!positionSentThisTick) {
-                    // Ground-only packet — no position or rotation data that could cause Simulation.
-                    // Just tells Grim a position update happened this tick so the attack
-                    // arrives in the "post" phase, not "pre" phase. No double-position issue.
-                    PacketUtil.sendPacketNoEvent(new C03PacketPlayer(mc.thePlayer.onGround));
-                }
-                attackingThisTick = true;
-                PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-                mc.thePlayer.swingItem();
-                attackingTarget = currentTarget;
-                scheduleNextAttack();
-                pendingAttack = false;
-            }
-        }
+        if (event.getType() != myau.event.types.EventType.PRE) return;
+        event.setRotation(silentYaw, silentPitch, 10);
+        event.setPervRotation(silentYaw, 10);
     }
 
-    // ── PlayerUpdateEvent unused now ──────────────────────────────────────────
+    // ── Attack via vanilla playerController (before position packet) ──────────
+    // playerController.attackEntity() sends the full vanilla C02 sequence Grim expects
     @EventTarget
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        // Attack moved to UpdateEvent POST (after position packet)
-        // Movement handled via setPervRotation in UpdateEvent PRE
+        if (!isEnabled() || !pendingAttack) return;
+        if (currentTarget == null || currentTarget.isDead) { pendingAttack = false; return; }
+        attackingThisTick = true;
+        mc.playerController.attackEntity(mc.thePlayer, currentTarget);
+        mc.thePlayer.swingItem();
+        attackingTarget = currentTarget;
+        scheduleNextAttack();
+        pendingAttack = false;
     }
 
-    // ── Movement correction ───────────────────────────────────────────────────
-    // Note: moveFlying is intercepted by MixinEntityLivingBase which uses
-    // RotationState.getSmoothedYaw() — set via setPervRotation in onUpdateEvent PRE
+    // ── Movement: no correction needed ───────────────────────────────────────
+    // setPervRotation handles moveFlying yaw via MixinEntityLivingBase
     @EventTarget
     public void onMoveInput(MoveInputEvent event) {
         if (!isEnabled() || currentTarget == null) return;
         if (movement.getIndex() == 1) {
-            // Slow mode: reduce inputs
             mc.thePlayer.movementInput.moveForward *= 0.6f;
             mc.thePlayer.movementInput.moveStrafe  *= 0.6f;
         }
     }
 
-    // ── ESP rendering ─────────────────────────────────────────────────────────
-    @EventTarget
-    public void onRender3D(Render3DEvent event) {
-        if (!isEnabled()) return;
-
-        // Aim indicator — line from crosshair to target
-        if (aimIndicator.getValue() && currentTarget != null) {
-            IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
-            float pt = event.getPartialTicks();
-            double tx = currentTarget.lastTickPosX + (currentTarget.posX - currentTarget.lastTickPosX) * pt - rm.getRenderPosX();
-            double ty = currentTarget.lastTickPosY + (currentTarget.posY - currentTarget.lastTickPosY) * pt - rm.getRenderPosY()
-                    + currentTarget.height * 0.5;
-            double tz = currentTarget.lastTickPosZ + (currentTarget.posZ - currentTarget.lastTickPosZ) * pt - rm.getRenderPosZ();
-
-            // Origin: player eye position in render space
-            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(pt);
-            double ox = eyes.xCoord - rm.getRenderPosX();
-            double oy = eyes.yCoord - rm.getRenderPosY();
-            double oz = eyes.zCoord - rm.getRenderPosZ();
-
-            net.minecraft.client.renderer.GlStateManager.pushMatrix();
-            net.minecraft.client.renderer.GlStateManager.disableTexture2D();
-            net.minecraft.client.renderer.GlStateManager.disableDepth();
-            net.minecraft.client.renderer.GlStateManager.enableBlend();
-            net.minecraft.client.renderer.GlStateManager.blendFunc(770, 771);
-            GL11.glLineWidth(1.5f);
-            net.minecraft.client.renderer.GlStateManager.color(1.0f, 0.47f, 0.67f, 0.8f);
-            net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
-            net.minecraft.client.renderer.WorldRenderer wr = tess.getWorldRenderer();
-            wr.begin(1, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION);
-            wr.pos(ox, oy, oz).endVertex();
-            wr.pos(tx, ty, tz).endVertex();
-            tess.draw();
-            net.minecraft.client.renderer.GlStateManager.enableDepth();
-            net.minecraft.client.renderer.GlStateManager.enableTexture2D();
-            net.minecraft.client.renderer.GlStateManager.disableBlend();
-            net.minecraft.client.renderer.GlStateManager.popMatrix();
-        }
-
-        if (!showTarget.getValue()) return;
-
-        if (currentTarget != null && currentTarget != attackingTarget) {
-            int col = buildColor((int)targetR.getValue(), (int)targetG.getValue(), (int)targetB.getValue(), 180);
-            drawEntityBox(currentTarget, col, event.getPartialTicks());
-        }
-        if (attackingTarget != null) {
-            int col = buildColor((int)attackR.getValue(), (int)attackG.getValue(), (int)attackB.getValue(), 220);
-            drawEntityBox(attackingTarget, col, event.getPartialTicks());
-        }
-    }
-
-    // ── Target selection ──────────────────────────────────────────────────────
-    private EntityPlayer findTarget() {
-        if (mc.theWorld == null) return null;
-
-        List<EntityPlayer> targets = mc.theWorld.loadedEntityList.stream()
-                .filter(e -> e instanceof EntityPlayer)
-                .map(e -> (EntityPlayer) e)
-                .filter(this::isValidTarget)
-                .collect(Collectors.toList());
-
-        if (targets.isEmpty()) return null;
-
-        switch (targetMode.getIndex()) {
-            case 0: // Distance
-                targets.sort(Comparator.comparingDouble(RotationUtil::distanceToEntity));
-                break;
-            case 1: // Yaw
-                targets.sort(Comparator.comparingDouble(p -> getAngleDiff(calcRotation(p)[0], calcRotation(p)[1])));
-                break;
-            case 2: // Armor (weakest first)
-                targets.sort(Comparator.comparingInt(p -> p.getTotalArmorValue()));
-                break;
-            case 3: // Threat (weapon damage, highest first)
-                targets.sort(Comparator.comparingDouble((EntityPlayer p) -> getThreat(p)).reversed());
-                break;
-            case 4: // Health (lowest first)
-                targets.sort(Comparator.comparingDouble(EntityLivingBase::getHealth));
-                break;
-        }
-
-        return targets.get(0);
-    }
-
-    private boolean isValidTarget(EntityPlayer p) {
-        if (p == mc.thePlayer) return false;
-        if (p.deathTime > 0 || p.isDead) return false;
-        if (p.isInvisible()) return false;
-        if (RotationUtil.distanceToEntity(p) > range.getValue() + extraSwing.getValue()) return false;
-        if (friendCheck.getValue() && TeamUtil.isFriend(p)) return false;
-        if (teamCheck.getValue() && TeamUtil.isSameTeam(p)) return false;
-        if (botCheck.getValue() && TeamUtil.isBot(p)) return false;
-        return true;
-    }
-
-    // ── Rotation calculation ──────────────────────────────────────────────────
-    private float[] calcRotation(EntityPlayer target) {
-        AxisAlignedBB bb = target.getEntityBoundingBox();
-        float smooth = 1.0f - (float) aimSpeed.getValue() / 100.0f;
-
-        // Always smooth FROM the previous silentYaw/silentPitch (server-side rotation)
-        // NOT from client yaw — otherwise it snaps back to client each tick and flickers
-        if (targetArea.getIndex() == 1) {
-            // Closest point on hitbox
-            return RotationUtil.getRotationsToBox(bb,
-                    silentYaw, silentPitch,
-                    180.0f, smooth);
-        } else {
-            // Center
-            double cx = (bb.minX + bb.maxX) / 2.0;
-            double cy = (bb.minY + bb.maxY) / 2.0;
-            double cz = (bb.minZ + bb.maxZ) / 2.0;
-            net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
-            return RotationUtil.getRotations(
-                    cx - eyes.xCoord, cy - eyes.yCoord, cz - eyes.zCoord,
-                    silentYaw, silentPitch,
-                    180.0f, smooth);
-        }
-    }
-
-    private float getAngleDiff(float yaw, float pitch) {
-        float yawDiff   = Math.abs(MathHelper.wrapAngleTo180_float(yaw   - mc.thePlayer.rotationYaw));
-        float pitchDiff = Math.abs(MathHelper.wrapAngleTo180_float(pitch - mc.thePlayer.rotationPitch));
-        return (float) Math.sqrt(yawDiff * yawDiff + pitchDiff * pitchDiff);
-    }
-
-    // ── Attack timing ─────────────────────────────────────────────────────────
     private void scheduleNextAttack() {
         double min = Math.min(minCPS.getValue(), maxCPS.getValue());
         double max = Math.max(minCPS.getValue(), maxCPS.getValue());
