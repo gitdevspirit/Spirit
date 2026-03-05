@@ -51,6 +51,7 @@ public class Autoblock extends Module {
     private boolean isBlocking     = false;
     private long    blockStartMs   = 0L;
     private boolean pendingBlock    = false;
+    private boolean attackedThisTick  = false; // set by AttackEvent, suppresses C07/C08
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
@@ -94,6 +95,7 @@ public class Autoblock extends Module {
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
+        attackedThisTick = false; // reset each tick
         if (mc.thePlayer == null || mc.theWorld == null) return;
         if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
 
@@ -112,7 +114,7 @@ public class Autoblock extends Module {
         fakeBlockState = targetInRange;
 
         if (!targetInRange) {
-            if (blockingState) stopBlock();
+            if (blockingState && !attackedThisTick) stopBlock();
             isBlocking = false; return;
         }
 
@@ -132,11 +134,11 @@ public class Autoblock extends Module {
         long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
         boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
 
-        if (shouldBlock && !blockingState && !pendingBlock) {
-            pendingBlock = true; // actual C08 sent in PlayerUpdateEvent before position packet
+        if (shouldBlock && !blockingState && !pendingBlock && !attackedThisTick) {
+            pendingBlock = true;
         } else if (blockingState) {
             long holdElapsed = System.currentTimeMillis() - blockStartMs;
-            if (holdElapsed >= maxHoldDuration.getValue()) {
+            if (holdElapsed >= maxHoldDuration.getValue() && !attackedThisTick) {
                 stopBlock();
                 isBlocking = false;
                 if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
@@ -154,9 +156,14 @@ public class Autoblock extends Module {
 
     @EventTarget
     public void onAttack(AttackEvent event) {
-        if (!isEnabled() || !blockingState) return;
-        // Unblock before attack so full damage is dealt (blocking halves damage in 1.8)
-        stopBlock();
+        if (!isEnabled()) return;
+        attackedThisTick = true;
+        // Suppress pending block this tick — sending C08 same tick as C02 = PacketOrderI
+        pendingBlock = false;
+        if (blockingState) {
+            // Unblock so full damage is dealt (blocking halves damage in 1.8)
+            stopBlock();
+        }
         if (lagging && preventDelay.getValue()) {
             Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
             lagging = false;
@@ -214,7 +221,7 @@ public class Autoblock extends Module {
     // ── Send block packet just before position packet (matches Grim's expected order) ─
     @EventTarget(Priority.LOW)
     public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled() || !pendingBlock) return;
+        if (!isEnabled() || !pendingBlock || attackedThisTick) return;
         pendingBlock = false;
         startBlock();
     }
