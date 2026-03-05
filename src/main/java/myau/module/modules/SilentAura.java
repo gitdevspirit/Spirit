@@ -90,6 +90,7 @@ public class SilentAura extends Module {
     private float silentYaw    = 0;
     private float silentPitch  = 0;
     private boolean pendingAttack = false;
+    public static boolean attackingThisTick = false; // read by Autoblock to suppress C07/C08
     private boolean positionSentThisTick = false; // true if vanilla sent a position packet
 
     public SilentAura() {
@@ -98,6 +99,7 @@ public class SilentAura extends Module {
 
     @Override
     public void onDisabled() {
+        attackingThisTick = false;
         currentTarget   = null;
         attackingTarget = null;
     }
@@ -194,14 +196,18 @@ public class SilentAura extends Module {
             // MixinEntityLivingBase uses silentYaw inside moveFlying
             event.setPervRotation(silentYaw, 10);
         } else if (event.getType() == myau.event.types.EventType.POST) {
+            attackingThisTick = false; // reset — will be set true if we attack this POST
             if (pendingAttack && currentTarget != null && !currentTarget.isDead) {
                 // If vanilla didn't send a position packet this tick (player standing still),
                 // send a C05 look packet first so Grim has a position update before the attack.
                 // Sending two position packets when vanilla already sent one causes its own flags.
                 if (!positionSentThisTick) {
-                    PacketUtil.sendPacketNoEvent(new C03PacketPlayer.C05PacketPlayerLook(
-                        silentYaw, silentPitch, mc.thePlayer.onGround));
+                    // Ground-only packet — no position or rotation data that could cause Simulation.
+                    // Just tells Grim a position update happened this tick so the attack
+                    // arrives in the "post" phase, not "pre" phase. No double-position issue.
+                    PacketUtil.sendPacketNoEvent(new C03PacketPlayer(mc.thePlayer.onGround));
                 }
+                attackingThisTick = true;
                 PacketUtil.sendPacketNoEvent(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
                 mc.thePlayer.swingItem();
                 attackingTarget = currentTarget;
