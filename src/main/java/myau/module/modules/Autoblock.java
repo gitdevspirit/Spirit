@@ -3,7 +3,6 @@ package myau.module.modules;
 import myau.Myau;
 import myau.enums.BlinkModules;
 import myau.event.EventTarget;
-import myau.event.types.Priority;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.module.BooleanSetting;
@@ -12,9 +11,11 @@ import myau.module.modules.AimAssist;
 import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.item.ItemStack;
+import net.minecraft.network.play.client.C07PacketPlayerDigging;
+import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.item.ItemStack;
 
 /**
  * Autoblock — predicts incoming damage using hurtResistantTime and blocks
@@ -81,92 +82,89 @@ public class Autoblock extends Module {
     public void onDisabled() { cleanup(); }
 
     private void cleanup() {
-        if (blockingState) { mc.thePlayer.stopUsingItem(); blockingState = false; }
+        if (blockingState) stopBlock();
         if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
         blockingState = false; fakeBlockState = false; isBlocking = false; blockStartMs = 0L; pendingBlock = false; pendingStop = false;
     }
 
     // ── Events ────────────────────────────────────────────────────────────────
-    @EventTarget(Priority.LOW)
+    @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!isEnabled()) return;
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
 
-        if (event.getType() == EventType.PRE) {
-            if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
+        // Track damage for requireDamaged condition
+        int currentHurtTime = mc.thePlayer.hurtResistantTime;
+        if (currentHurtTime > lastHurtTime) lastDamagedMs = System.currentTimeMillis();
+        lastHurtTime = currentHurtTime;
 
-            // Track damage for requireDamaged condition
-            int currentHurtTime = mc.thePlayer.hurtResistantTime;
-            if (currentHurtTime > lastHurtTime) lastDamagedMs = System.currentTimeMillis();
-            lastHurtTime = currentHurtTime;
+        if (!checkConditions()) {
+            fakeBlockState = false; isBlocking = false;
+            pendingBlock = false; pendingStop = false; return;
+        }
 
-            if (!checkConditions()) {
-                fakeBlockState = false; isBlocking = false;
-                pendingBlock = false; pendingStop = false; return;
+        EntityLivingBase nearestTarget = getNearestTarget();
+        boolean targetInRange = nearestTarget != null;
+        fakeBlockState = targetInRange;
+
+        if (!targetInRange) {
+            if (blockingState) pendingStop = true;
+            isBlocking = false; return;
+        }
+
+        // Lag management
+        if (lagging) {
+            long lagElapsed = System.currentTimeMillis() - lagStartMs;
+            if (lagElapsed >= lagMaxDuration.getValue()) {
+                Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                lagging = false;
+                if (blockAgain.getValue()) pendingBlock = true;
+                else { pendingStop = true; isBlocking = false; }
             }
+            return;
+        }
 
-            EntityLivingBase nearestTarget = getNearestTarget();
-            boolean targetInRange = nearestTarget != null;
-            fakeBlockState = targetInRange;
+        long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
+        boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
 
-            if (!targetInRange) {
-                if (blockingState) pendingStop = true;
-                isBlocking = false; return;
-            }
-
-            // Lag management
-            if (lagging) {
-                long lagElapsed = System.currentTimeMillis() - lagStartMs;
-                if (lagElapsed >= lagMaxDuration.getValue()) {
-                    Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-                    lagging = false;
-                    if (blockAgain.getValue()) pendingBlock = true;
-                    else { pendingStop = true; isBlocking = false; }
+        if (shouldBlock && !blockingState && !pendingBlock) {
+            pendingBlock = true;
+        } else if (blockingState) {
+            long holdElapsed = System.currentTimeMillis() - blockStartMs;
+            if (holdElapsed >= maxHoldDuration.getValue()) {
+                pendingStop = true;
+                isBlocking = false;
+                if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
+                    Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
+                    lagging = true; lagStartMs = System.currentTimeMillis();
+                    pendingStop = false;
                 }
-                return;
-            }
-
-            // Decide whether to block or release — actual packets sent in POST
-            long hurtTimeMs = (long)(mc.thePlayer.hurtResistantTime * 50L);
-            boolean shouldBlock = hurtTimeMs <= maxHurtTime.getValue();
-
-            if (shouldBlock && !blockingState && !pendingBlock) {
-                pendingBlock = true;
-            } else if (blockingState) {
-                long holdElapsed = System.currentTimeMillis() - blockStartMs;
-                if (holdElapsed >= maxHoldDuration.getValue()) {
-                    pendingStop = true;
-                    isBlocking = false;
-                    if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
-                        Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
-                        lagging = true; lagStartMs = System.currentTimeMillis();
-                        pendingStop = false; // lag handles release
-                    }
-                }
-            }
-
-        } else if (event.getType() == EventType.POST) {
-            // POST = after position packet sent — same timing as vanilla rightClickMouse
-            // Skip if AimAssist attacked this tick to avoid MultiActionsE
-            if (AimAssist.attackingThisTick) {
-                pendingBlock = false;
-                pendingStop = false;
-                return;
-            }
-            if (pendingStop && blockingState) {
-                stopBlock();
-                pendingStop = false;
-            }
-            if (pendingBlock && !blockingState) {
-                startBlock();
-                pendingBlock = false;
             }
         }
     }
 
+    // ── Send C07/C08 via sendQueue in TickEvent — same method BlockHit uses ──
+    // sendQueue.addToSendQueue bypasses PacketEvent hooks entirely, no conflicts
+    // TickEvent fires after position packet is sent, matching vanilla right-click timing
     @EventTarget
     public void onTick(TickEvent event) {
-        // Keep-alive not needed — we don't use setItemInUse
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (mc.thePlayer == null) return;
+        // Skip if AimAssist is attacking this tick
+        if (AimAssist.attackingThisTick) {
+            pendingBlock = false;
+            pendingStop = false;
+            return;
+        }
+        if (pendingStop && blockingState) {
+            stopBlock();
+            pendingStop = false;
+        }
+        if (pendingBlock && !blockingState) {
+            startBlock();
+            pendingBlock = false;
+        }
     }
 
     @EventTarget
@@ -233,17 +231,20 @@ public class Autoblock extends Module {
 
 
     private void startBlock() {
-        ItemStack held = mc.thePlayer.getHeldItem();
-        if (held == null || !(held.getItem() instanceof net.minecraft.item.ItemSword)) return;
-        // Use vanilla sendUseItem — sends C08 through the normal pipeline
-        // NoSlow's isUsingItem() mixin intercept handles speed bypass automatically
-        mc.playerController.sendUseItem(mc.thePlayer, mc.theWorld, held);
+        if (mc.thePlayer.getHeldItem() == null
+                || !(mc.thePlayer.getHeldItem().getItem() instanceof net.minecraft.item.ItemSword)) return;
+        // C07 release first to ensure clean state, then C08 to block
+        // sendQueue bypasses PacketEvent hooks — no MultiActionsE conflicts
+        mc.thePlayer.sendQueue.addToSendQueue(new C07PacketPlayerDigging(
+                C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+        mc.thePlayer.sendQueue.addToSendQueue(
+                new C08PacketPlayerBlockPlacement(mc.thePlayer.inventory.getCurrentItem()));
         blockingState = true; isBlocking = true; blockStartMs = System.currentTimeMillis();
     }
 
     private void stopBlock() {
-        // Use vanilla stopUsingItem — sends C07 through normal pipeline
-        mc.thePlayer.stopUsingItem();
+        mc.thePlayer.sendQueue.addToSendQueue(new C07PacketPlayerDigging(
+            C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
         blockingState = false;
     }
 
