@@ -150,22 +150,27 @@ public class Autoblock extends Module {
                 }
             }
 
-        } else if (event.getType() == EventType.POST) {
-            // Send block/release packets in POST, same phase as SilentAura's attack.
-            // Skip entirely if SilentAura attacked this tick — prevents PacketOrderI/MultiActionsE.
-            if (SilentAura.attackingThisTick) {
-                pendingBlock = false;
-                pendingStop = false;
-                return;
-            }
-            if (pendingStop && blockingState) {
-                stopBlock();
-                pendingStop = false;
-            }
-            if (pendingBlock && !blockingState) {
-                startBlock();
-                pendingBlock = false;
-            }
+        }
+    }
+
+    // ── Send C07/C08 in PlayerUpdateEvent (before position packet) ────────────
+    // Vanilla item use packets arrive before position in Grim's transaction window
+    @EventTarget
+    public void onPlayerUpdate(PlayerUpdateEvent event) {
+        if (!isEnabled()) return;
+        // Never send block/release on same tick SilentAura attacks
+        if (SilentAura.attackingThisTick) {
+            pendingBlock = false;
+            pendingStop = false;
+            return;
+        }
+        if (pendingStop && blockingState) {
+            stopBlock();
+            pendingStop = false;
+        }
+        if (pendingBlock && !blockingState) {
+            startBlock();
+            pendingBlock = false;
         }
     }
 
@@ -177,9 +182,10 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        // Called when any attack fires (including SilentAura via AttackEvent)
-        // Unblock for full damage — C07/C08 suppressed via SilentAura.attackingThisTick in POST
-        if (blockingState) stopBlock();
+        // Don't send C07 here — would arrive same tick as C02 attack = PacketOrderI
+        // Just clear blocking state; next tick's PRE will not re-block due to hurtResistantTime
+        blockingState = false;
+        isBlocking = false;
         pendingBlock = false;
         pendingStop = false;
         if (lagging && preventDelay.getValue()) {
