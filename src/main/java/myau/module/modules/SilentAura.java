@@ -83,7 +83,7 @@ public class SilentAura extends Module {
     }
     @Override
     public void onDisabled() {
-        currentTarget = null; attackingTarget = null; attackingThisTick = false; positionSentTick = false;
+        currentTarget = null; attackingTarget = null; attackingThisTick = false;
     }
 
     // ── UpdateEvent PRE: inject silent rotation ───────────────────────────────
@@ -182,39 +182,8 @@ public class SilentAura extends Module {
 
         } else if (event.getType() == EventType.POST) {
             // Attack in POST (after position packet sent) to preserve correct order.
-            // If vanilla skipped the position packet this tick (standing still / tiny delta),
-            // send a C05 look packet first so Grim always has a rotation update before attack.
-            if (currentTarget == null || currentTarget.isDead) return;
-            double dist = RotationUtil.distanceToEntity(currentTarget);
-            if (dist > range.getValue() + extraSwing.getValue()) return;
-            if (System.currentTimeMillis() < nextAttackMs) return;
-
-            if (!positionSentTick) {
-                // Send position+look packet so Grim has a movement update before the attack
-                // C06 (pos+look) is more reliable than C05 (look only) for PacketOrderB
-                PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(
-                        mc.thePlayer.posX, mc.thePlayer.getEntityBoundingBox().minY,
-                        mc.thePlayer.posZ, silentYaw, silentPitch, mc.thePlayer.onGround));
-            }
-
-            // Don't attack while Autoblock has blockingState=true.
-            // Server's rightClicking=true + C02 ATTACK = PacketOrderI flag.
-            Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
-            if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
-
-            attackingThisTick = true;
-            EventManager.call(new AttackEvent(currentTarget));
-            ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-
-            // Vanilla attackEntity sends INTERACT then ATTACK
-            // "Post interact entity v1.8" fires when ATTACK arrives without preceding INTERACT
-            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.INTERACT));
-            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-            mc.thePlayer.swingItem();
-            attackingTarget = currentTarget;
-            scheduleNextAttack();
-        }
     }
+
 
     // ── MoveInputEvent: fixStrafe when keepMoveDir=ON ─────────────────────────
     // Adjusts movement inputs so the actual displacement matches the silentYaw direction,
