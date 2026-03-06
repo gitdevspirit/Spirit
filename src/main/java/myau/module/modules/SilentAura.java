@@ -86,8 +86,28 @@ public class SilentAura extends Module {
     // ── UpdateEvent PRE: silent rotation + attack (same as KillAura SILENT) ──
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
+
+        // ── POST: attack after position packet is sent (fixes PacketOrderB) ──────
+        if (event.getType() == EventType.POST) {
+            if (currentTarget == null || currentTarget.isDead) return;
+            if (System.currentTimeMillis() < nextAttackMs) return;
+            double dist = RotationUtil.distanceToEntity(currentTarget);
+            if (dist > range.getValue() + extraSwing.getValue()) return;
+            Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
+            if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
+            attackingThisTick = true;
+            EventManager.call(new AttackEvent(currentTarget));
+            ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
+            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+            mc.thePlayer.swingItem();
+            attackingTarget = currentTarget;
+            scheduleNextAttack();
+            return;
+        }
+
+        if (event.getType() != EventType.PRE) return;
 
         attackingTarget   = null;
         attackingThisTick = false;
@@ -136,26 +156,10 @@ public class SilentAura extends Module {
         RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
         event.setRotation(silentYaw, silentPitch, 10);
 
-        if (!keepMoveDir.getValue()) {
-            event.setPervRotation(silentYaw, 10);
-        }
+        // Always set prevRotation = silentYaw so moveFlying computes velocity
+        // along silentYaw direction — matches Grim's simulation, fixes Simulation flag.
+        event.setPervRotation(silentYaw, 10);
 
-        // ── Attack: send only C02 ATTACK in PRE — proven Grim bypass (same as KillAura) ──
-        if (System.currentTimeMillis() < nextAttackMs) return;
-        double dist = RotationUtil.distanceToEntity(currentTarget);
-        if (dist > range.getValue() + extraSwing.getValue()) return;
-
-        // Skip while Autoblock server-blocks to avoid PacketOrderI (rightClicking=true + attack)
-        Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
-        if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
-
-        attackingThisTick = true;
-        EventManager.call(new AttackEvent(currentTarget));
-        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-        PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-        mc.thePlayer.swingItem();
-        attackingTarget = currentTarget;
-        scheduleNextAttack();
     }
 
     // ── fixStrafe so movement direction matches silentYaw for Grim sim ────────
