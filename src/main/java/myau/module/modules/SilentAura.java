@@ -18,7 +18,6 @@ import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
-import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
 import net.minecraft.util.Vec3;
 
@@ -188,22 +187,14 @@ public class SilentAura extends Module {
                         silentYaw, silentPitch, mc.thePlayer.onGround));
             }
 
+            // Don't attack while Autoblock has blockingState=true.
+            // Server's rightClicking=true + C02 ATTACK = PacketOrderI flag.
+            Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
+            if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
+
             attackingThisTick = true;
             EventManager.call(new AttackEvent(currentTarget));
             ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-
-            // INTERACT_AT before ATTACK — vanilla 1.8 always sends both.
-            // Grim flags "Post interact entity v1.8" without it.
-            AxisAlignedBB bb  = currentTarget.getEntityBoundingBox();
-            MovingObjectPosition mop = RotationUtil.rayTrace(bb, silentYaw, silentPitch,
-                    range.getValue() + extraSwing.getValue());
-            if (mop != null) {
-                Vec3 hitRelative = new Vec3(
-                        mop.hitVec.xCoord - currentTarget.posX,
-                        mop.hitVec.yCoord - currentTarget.posY,
-                        mop.hitVec.zCoord - currentTarget.posZ);
-                PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, hitRelative));
-            }
 
             PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
             mc.thePlayer.swingItem();
