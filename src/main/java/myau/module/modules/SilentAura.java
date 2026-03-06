@@ -15,6 +15,7 @@ import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
@@ -28,7 +29,7 @@ public class SilentAura extends Module {
     private static final Minecraft mc  = Minecraft.getMinecraft();
     private static final Random    rng = new Random();
 
-    // ── Target settings ───────────────────────────────────────────────────────
+    // ── Settings ──────────────────────────────────────────────────────────────
     public final SliderSetting   range       = register(new SliderSetting("Range",       4.0, 1.0, 8.0, 0.1));
     public final SliderSetting   extraSwing  = register(new SliderSetting("Extra Swing", 0.5, 0.0, 2.0, 0.1));
     public final SliderSetting   maxAngle    = register(new SliderSetting("Max Angle",   180, 1,   180, 1));
@@ -37,32 +38,25 @@ public class SilentAura extends Module {
     public final BooleanSetting  teamCheck   = register(new BooleanSetting("Team Check",   true));
     public final BooleanSetting  friendCheck = register(new BooleanSetting("Friend Check", true));
     public final BooleanSetting  botCheck    = register(new BooleanSetting("Bot Check",    true));
-
-    // ── Aim settings ──────────────────────────────────────────────────────────
-    public final SliderSetting aimSpeed = register(new SliderSetting("Aim Speed", 50, 1, 100, 1));
-
-    // ── Attack settings ───────────────────────────────────────────────────────
-    public final SliderSetting minCPS      = register(new SliderSetting("Min CPS",     8,   1, 20,  1));
-    public final SliderSetting maxCPS      = register(new SliderSetting("Max CPS",    12,   1, 20,  1));
-
-    // ── Behaviour ─────────────────────────────────────────────────────────────
-    public final BooleanSetting requireMouse   = register(new BooleanSetting("Require Mouse Down", false));
-    public final BooleanSetting breakBlocks    = register(new BooleanSetting("Break Blocks Pause", true));
-    public final BooleanSetting disableOnDeath = register(new BooleanSetting("Disable on Death",   true));
-
-    // ── Show target ───────────────────────────────────────────────────────────
-    public final BooleanSetting showTarget = register(new BooleanSetting("Show Target",  false));
-    public final SliderSetting  targetR    = register(new SliderSetting("Target R",      255, 0, 255, 1));
-    public final SliderSetting  targetG    = register(new SliderSetting("Target G",      0,   0, 255, 1));
-    public final SliderSetting  targetB    = register(new SliderSetting("Target B",      255, 0, 255, 1));
+    public final SliderSetting   aimSpeed    = register(new SliderSetting("Aim Speed",    50, 1, 100, 1));
+    public final SliderSetting   minCPS      = register(new SliderSetting("Min CPS",       8, 1,  20, 1));
+    public final SliderSetting   maxCPS      = register(new SliderSetting("Max CPS",      12, 1,  20, 1));
+    public final BooleanSetting  requireMouse   = register(new BooleanSetting("Require Mouse Down", false));
+    public final BooleanSetting  breakBlocks    = register(new BooleanSetting("Break Blocks Pause", true));
+    public final BooleanSetting  disableOnDeath = register(new BooleanSetting("Disable on Death",   true));
+    public final BooleanSetting  showTarget  = register(new BooleanSetting("Show Target",  false));
+    public final SliderSetting   targetR     = register(new SliderSetting("Target R", 255, 0, 255, 1));
+    public final SliderSetting   targetG     = register(new SliderSetting("Target G",   0, 0, 255, 1));
+    public final SliderSetting   targetB     = register(new SliderSetting("Target B", 255, 0, 255, 1));
 
     // ── State ─────────────────────────────────────────────────────────────────
-    private EntityPlayer currentTarget   = null;
-    private EntityPlayer attackingTarget = null;
-    private float        silentYaw       = 0;
-    private float        silentPitch     = 0;
-    private long         nextAttackMs    = 0;
-    private long         breakPauseUntil = 0;
+    private EntityPlayer currentTarget     = null;
+    private EntityPlayer attackingTarget   = null;
+    private float        silentYaw         = 0;
+    private float        silentPitch       = 0;
+    private long         nextAttackMs      = 0;
+    private long         breakPauseUntil   = 0;
+    private boolean      positionSentThisTick = false;
 
     public static boolean attackingThisTick = false;
 
@@ -81,79 +75,98 @@ public class SilentAura extends Module {
 
     @Override
     public void onDisabled() {
-        currentTarget     = null;
-        attackingTarget   = null;
-        attackingThisTick = false;
+        currentTarget       = null;
+        attackingTarget     = null;
+        attackingThisTick   = false;
+        positionSentThisTick = false;
     }
 
-    // ── UpdateEvent PRE: inject silent rotation + compute target ──────────────
+    // ── Track whether vanilla sent a position packet this tick ────────────────
+    @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || event.getType() != EventType.SEND) return;
+        if (event.getPacket() instanceof C03PacketPlayer) {
+            positionSentThisTick = true;
+        }
+    }
+
+    // ── UpdateEvent PRE: compute target + inject silent rotation ──────────────
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (!isEnabled()) return;
         if (mc.thePlayer == null || mc.theWorld == null) return;
 
-        attackingTarget   = null;
-        attackingThisTick = false;
+        if (event.getType() == EventType.PRE) {
+            // Reset per-tick state
+            positionSentThisTick = false;
+            attackingTarget      = null;
+            attackingThisTick    = false;
 
-        if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) { setEnabled(false); return; }
-        if (requireMouse.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) { currentTarget = null; return; }
+            if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) { setEnabled(false); return; }
+            if (requireMouse.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) { currentTarget = null; return; }
 
-        if (breakBlocks.getValue()) {
-            if (mc.objectMouseOver != null
-                    && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK
-                    && mc.thePlayer.isUsingItem()) {
-                breakPauseUntil = System.currentTimeMillis() + 200;
+            if (breakBlocks.getValue()) {
+                if (mc.objectMouseOver != null
+                        && mc.objectMouseOver.typeOfHit == MovingObjectType.BLOCK
+                        && mc.thePlayer.isUsingItem()) {
+                    breakPauseUntil = System.currentTimeMillis() + 200;
+                }
+                if (System.currentTimeMillis() < breakPauseUntil) { currentTarget = null; return; }
             }
-            if (System.currentTimeMillis() < breakPauseUntil) { currentTarget = null; return; }
+
+            currentTarget = findTarget();
+            if (currentTarget == null) {
+                silentYaw   = mc.thePlayer.rotationYaw;
+                silentPitch = mc.thePlayer.rotationPitch;
+                return;
+            }
+
+            float[] rot = calcRotation(currentTarget);
+            silentYaw   = rot[0];
+            silentPitch = rot[1];
+
+            if (getAngleDiff(silentYaw, silentPitch) > maxAngle.getValue()) {
+                currentTarget = null;
+                silentYaw   = mc.thePlayer.rotationYaw;
+                silentPitch = mc.thePlayer.rotationPitch;
+                return;
+            }
+
+            // Body rotation so other players see you looking at the target (cosmetic)
+            RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
+
+            // Inject rotation into position packet silently (camera stays on client yaw)
+            event.setRotation(silentYaw, silentPitch, 10);
+
+            // setPervRotation → RotationState.smoothYaw = silentYaw
+            // MixinEntityLivingBase uses smoothYaw for moveFlying()
+            // so actual velocity direction matches Grim's simulation — fixes Simulation flag
+            event.setPervRotation(silentYaw, 10);
+
+        } else if (event.getType() == EventType.POST) {
+            // POST fires after onUpdateWalkingPlayer has sent the position packet.
+            // Attack here so Grim sees: position → attack (correct vanilla order).
+            if (currentTarget == null || currentTarget.isDead) return;
+            double dist = RotationUtil.distanceToEntity(currentTarget);
+            if (dist > range.getValue() + extraSwing.getValue()) return;
+            if (System.currentTimeMillis() < nextAttackMs) return;
+
+            // If vanilla didn't send a position packet this tick (standing still /
+            // tiny rotation delta < 9°), force a look packet so Grim has a rotation
+            // update before seeing our attack — this is what fixes PacketOrderB.
+            if (!positionSentThisTick) {
+                PacketUtil.sendPacket(new C03PacketPlayer.C05PacketPlayerLook(
+                        silentYaw, silentPitch, mc.thePlayer.onGround));
+            }
+
+            attackingThisTick = true;
+            EventManager.call(new AttackEvent(currentTarget));
+            ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
+            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+            mc.thePlayer.swingItem();
+            attackingTarget = currentTarget;
+            scheduleNextAttack();
         }
-
-        currentTarget = findTarget();
-        if (currentTarget == null) {
-            silentYaw   = mc.thePlayer.rotationYaw;
-            silentPitch = mc.thePlayer.rotationPitch;
-            return;
-        }
-
-        float[] rot = calcRotation(currentTarget);
-        silentYaw   = rot[0];
-        silentPitch = rot[1];
-
-        if (getAngleDiff(silentYaw, silentPitch) > maxAngle.getValue()) {
-            currentTarget = null;
-            silentYaw   = mc.thePlayer.rotationYaw;
-            silentPitch = mc.thePlayer.rotationPitch;
-            return;
-        }
-
-        // Body rotation so other players see you aiming at the target
-        RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
-
-        // Silent rotation: injected into position packet without moving camera
-        event.setRotation(silentYaw, silentPitch, 10);
-
-        // setPervRotation = sets RotationState.smoothYaw = silentYaw
-        // MixinEntityLivingBase uses smoothYaw inside moveFlying()
-        // so actual velocity direction matches what Grim simulates — fixes Simulation flag
-        event.setPervRotation(silentYaw, 10);
-    }
-
-    // ── PlayerUpdateEvent: send attack (same pattern as KillAura) ─────────────
-    // Fires right before onUpdateWalkingPlayer sends the position packet.
-    // KillAura sends C02 here and bypasses Grim — no PacketOrderB.
-    @EventTarget
-    public void onPlayerUpdate(PlayerUpdateEvent event) {
-        if (!isEnabled() || currentTarget == null || currentTarget.isDead) return;
-        double dist = RotationUtil.distanceToEntity(currentTarget);
-        if (dist > range.getValue() + extraSwing.getValue()) return;
-        if (System.currentTimeMillis() < nextAttackMs) return;
-
-        attackingThisTick = true;
-        EventManager.call(new AttackEvent(currentTarget));
-        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-        PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
-        mc.thePlayer.swingItem();
-        attackingTarget = currentTarget;
-        scheduleNextAttack();
     }
 
     // ── Rendering ─────────────────────────────────────────────────────────────
