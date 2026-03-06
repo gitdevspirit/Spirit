@@ -13,6 +13,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.util.IChatComponent;
+import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
+import org.lwjgl.opengl.GL11;
 
 public class Timer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -156,20 +158,18 @@ public class Timer extends Module {
     }
 
     private static void drawRect(int x1, int y1, int x2, int y2, int color) {
-        float a = (color >> 24 & 0xFF) / 255f;
-        float r = (color >> 16 & 0xFF) / 255f;
-        float g = (color >> 8  & 0xFF) / 255f;
-        float b = (color       & 0xFF) / 255f;
-        org.lwjgl.opengl.GL11.glColor4f(r, g, b, a);
+        int a = (color >> 24 & 0xFF);
+        int r = (color >> 16 & 0xFF);
+        int g = (color >> 8  & 0xFF);
+        int b = (color       & 0xFF);
         net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
         net.minecraft.client.renderer.WorldRenderer wr  = tess.getWorldRenderer();
-        wr.startDrawingQuads();
-        wr.addVertex(x1, y2, 0);
-        wr.addVertex(x2, y2, 0);
-        wr.addVertex(x2, y1, 0);
-        wr.addVertex(x1, y1, 0);
+        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
+        wr.pos(x1, y2, 0).color(r, g, b, a).endVertex();
+        wr.pos(x2, y2, 0).color(r, g, b, a).endVertex();
+        wr.pos(x2, y1, 0).color(r, g, b, a).endVertex();
+        wr.pos(x1, y1, 0).color(r, g, b, a).endVertex();
         tess.draw();
-        org.lwjgl.opengl.GL11.glColor4f(1,1,1,1);
     }
 
     @Override
