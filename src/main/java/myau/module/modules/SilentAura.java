@@ -15,7 +15,6 @@ import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C02PacketUseEntity;
-import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
@@ -69,7 +68,6 @@ public class SilentAura extends Module {
     private float        silentPitch        = 0;
     private long         nextAttackMs       = 0;
     private long         breakPauseUntil    = 0;
-    private boolean      positionSentTick   = false;
 
     public static boolean attackingThisTick = false;
 
@@ -88,21 +86,13 @@ public class SilentAura extends Module {
         currentTarget = null; attackingTarget = null; attackingThisTick = false; positionSentTick = false;
     }
 
-    // ── Track position packet for PacketOrderB guard ──────────────────────────
-    @EventTarget
-    public void onPacket(PacketEvent event) {
-        if (!isEnabled() || event.getType() != EventType.SEND) return;
-        if (event.getPacket() instanceof C03PacketPlayer) positionSentTick = true;
-    }
-
     // ── UpdateEvent PRE: inject silent rotation ───────────────────────────────
     @EventTarget
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
 
         if (event.getType() == EventType.PRE) {
-            positionSentTick  = false;
-            attackingTarget   = null;
+                attackingTarget   = null;
             attackingThisTick = false;
 
             if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) { setEnabled(false); return; }
@@ -166,12 +156,29 @@ public class SilentAura extends Module {
 
             // Movement direction handling:
             // keepMoveDir=OFF → setPervRotation so moveFlying uses silentYaw
-            //                   → Grim simulation matches actual velocity (no Simulation flag)
-            // keepMoveDir=ON  → do NOT setPervRotation; fixStrafe in MoveInputEvent corrects
-            //                   movement inputs so actual displacement matches silentYaw for Grim
+            // keepMoveDir=ON  → fixStrafe in MoveInputEvent corrects inputs for Grim sim
             if (!keepMoveDir.getValue()) {
                 event.setPervRotation(silentYaw, 10);
             }
+
+            // ── Attack in PRE — exactly like KillAura SILENT ──────────────────
+            // Sending C02 ATTACK in PRE (before position packet) is the proven Grim bypass.
+            // No INTERACT or INTERACT_AT needed — KillAura sends only ATTACK and bypasses.
+            // Skip while Autoblock server-blocks (rightClicking=true → PacketOrderI).
+            if (System.currentTimeMillis() < nextAttackMs) return;
+            double dist = RotationUtil.distanceToEntity(currentTarget);
+            if (dist > range.getValue() + extraSwing.getValue()) return;
+
+            Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
+            if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
+
+            attackingThisTick = true;
+            EventManager.call(new AttackEvent(currentTarget));
+            ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
+            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+            mc.thePlayer.swingItem();
+            attackingTarget = currentTarget;
+            scheduleNextAttack();
 
         } else if (event.getType() == EventType.POST) {
             // Attack in POST (after position packet sent) to preserve correct order.
