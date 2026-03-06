@@ -31,7 +31,18 @@ public class Timer extends Module {
 
     public Timer() { super("Timer", false); }
 
-    // ── Intercept toggle so we can delay the disable ──────────────────────────
+    // ── Override setEnabled to intercept the disable with a countdown ────────
+    @Override
+    public void setEnabled(boolean enabled) {
+        if (!enabled && isEnabled() && (long) offDelay.getValue() > 0) {
+            // Don't actually disable yet — start the countdown
+            countdownEnd   = System.currentTimeMillis() + (long) offDelay.getValue();
+            pendingDisable = true;
+            return; // skip super.setEnabled(false)
+        }
+        super.setEnabled(enabled);
+    }
+
     @Override
     public void onDisabled() {
         // Reset real timer to 1x when actually disabled
@@ -39,21 +50,6 @@ public class Timer extends Module {
         if (timer != null) timer.timerSpeed = 1.0F;
         countdownEnd   = -1;
         pendingDisable = false;
-    }
-
-    @EventTarget
-    public void onKey(KeyEvent event) {
-        if (!isEnabled()) return;
-        if (event.getKey() != getKey()) return;
-        if (offDelay.getValue() <= 0) return; // no delay — let normal toggle happen
-
-        // Intercept the disable: start countdown instead
-        countdownEnd   = System.currentTimeMillis() + (long) offDelay.getValue();
-        pendingDisable = true;
-        // Re-enable so the normal toggle (which just fired) doesn't actually turn it off
-        // We need to cancel the toggle — do this by immediately re-enabling
-        // The toggle already ran setEnabled(false), so re-enable here
-        setEnabled(true);
     }
 
     @EventTarget(Priority.HIGHEST)
