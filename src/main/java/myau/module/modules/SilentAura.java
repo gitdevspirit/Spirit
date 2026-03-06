@@ -183,8 +183,11 @@ public class SilentAura extends Module {
             if (System.currentTimeMillis() < nextAttackMs) return;
 
             if (!positionSentTick) {
-                PacketUtil.sendPacket(new C03PacketPlayer.C05PacketPlayerLook(
-                        silentYaw, silentPitch, mc.thePlayer.onGround));
+                // Send position+look packet so Grim has a movement update before the attack
+                // C06 (pos+look) is more reliable than C05 (look only) for PacketOrderB
+                PacketUtil.sendPacket(new C03PacketPlayer.C06PacketPlayerPosLook(
+                        mc.thePlayer.posX, mc.thePlayer.getEntityBoundingBox().minY,
+                        mc.thePlayer.posZ, silentYaw, silentPitch, mc.thePlayer.onGround));
             }
 
             // Don't attack while Autoblock has blockingState=true.
@@ -196,6 +199,9 @@ public class SilentAura extends Module {
             EventManager.call(new AttackEvent(currentTarget));
             ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
 
+            // Vanilla attackEntity sends INTERACT then ATTACK
+            // "Post interact entity v1.8" fires when ATTACK arrives without preceding INTERACT
+            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.INTERACT));
             PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
             mc.thePlayer.swingItem();
             attackingTarget = currentTarget;
