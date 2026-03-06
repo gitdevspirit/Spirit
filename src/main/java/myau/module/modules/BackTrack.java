@@ -5,6 +5,7 @@ import myau.event.types.EventType;
 import myau.events.*;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
+import myau.mixin.IAccessorMinecraft;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.util.PacketUtil;
@@ -157,7 +158,7 @@ public class BackTrack extends Module {
                 if (!(ent instanceof AbstractClientPlayer) || ent.isDead) continue;
                 AbstractClientPlayer player = (AbstractClientPlayer) ent;
                 ArrayDeque<double[]> hist = entry.getValue();
-                double[] positions = hist.toArray(new double[0][]);
+                Object[] positions = hist.toArray();
                 int count = positions.length;
                 for (int i = 0; i < count; i++) {
                     double[] pos = (double[]) positions[i];
@@ -208,7 +209,7 @@ public class BackTrack extends Module {
                 alpha);
         try {
             mc.getRenderManager().renderEntityWithPosYaw(
-                    player, 0, 0, 0, player.rotationYaw, mc.timer.renderPartialTicks);
+                    player, 0, 0, 0, player.rotationYaw, ((IAccessorMinecraft) mc).getTimer().renderPartialTicks);
         } catch (Exception ignored) {}
         GlStateManager.enableDepth();
         GlStateManager.color(1, 1, 1, 1);
