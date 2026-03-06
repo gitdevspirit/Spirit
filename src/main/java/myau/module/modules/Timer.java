@@ -1,63 +1,91 @@
 package myau.module.modules;
 
 import myau.event.EventTarget;
-import myau.events.PacketEvent;
-import net.minecraft.network.play.server.S02PacketChat;
-import net.minecraft.util.IChatComponent;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
-import myau.events.UpdateEvent;
+import myau.events.*;
 import myau.mixin.IAccessorMinecraft;
+import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.network.play.server.S02PacketChat;
+import net.minecraft.util.IChatComponent;
 
 public class Timer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   speed    = register(new SliderSetting("Speed", 1.0, 0.01, 10.0, 0.01));
-    public final DropdownSetting mode     = register(new DropdownSetting("Mode", 0, "CONSTANT", "VARIABLE", "FREEZE"));
-    public final SliderSetting   maxSpeed = register(new SliderSetting("Max (Variable)", 2.0, 1.0, 5.0, 0.1));
+    public final SliderSetting   speed       = register(new SliderSetting("Speed",          1.0, 0.01, 10.0, 0.01));
+    public final DropdownSetting mode        = register(new DropdownSetting("Mode", 0, "CONSTANT", "VARIABLE", "FREEZE"));
+    public final SliderSetting   maxSpeed    = register(new SliderSetting("Max (Variable)", 2.0,  1.0,  5.0,  0.1));
+    public final SliderSetting   offDelay    = register(new SliderSetting("Off Delay (ms)", 0,    0,    5000, 100));
+    public final BooleanSetting  showCountdown = register(new BooleanSetting("Show Countdown", true));
 
-    public Timer() {
-        super("Timer", false);
-    }
+    // Countdown state
+    private long  countdownEnd   = -1;   // -1 = not counting down
+    private boolean pendingDisable = false;
 
+    public Timer() { super("Timer", false); }
+
+    // ── Intercept toggle so we can delay the disable ──────────────────────────
     @Override
     public void onDisabled() {
+        // Reset real timer to 1x when actually disabled
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
-        if (timer != null) {
-            timer.timerSpeed = 1.0F;
-        }
+        if (timer != null) timer.timerSpeed = 1.0F;
+        countdownEnd   = -1;
+        pendingDisable = false;
+    }
+
+    @EventTarget
+    public void onKey(KeyEvent event) {
+        if (!isEnabled()) return;
+        if (event.getKey() != getKey()) return;
+        if (offDelay.getValue() <= 0) return; // no delay — let normal toggle happen
+
+        // Intercept the disable: start countdown instead
+        countdownEnd   = System.currentTimeMillis() + (long) offDelay.getValue();
+        pendingDisable = true;
+        // Re-enable so the normal toggle (which just fired) doesn't actually turn it off
+        // We need to cancel the toggle — do this by immediately re-enabling
+        // The toggle already ran setEnabled(false), so re-enable here
+        setEnabled(true);
     }
 
     @EventTarget(Priority.HIGHEST)
     public void onUpdate(UpdateEvent event) {
-        if (!this.isEnabled() || event.getType() != EventType.PRE) {
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
+
+        // Check if countdown expired
+        if (pendingDisable && countdownEnd > 0
+                && System.currentTimeMillis() >= countdownEnd) {
+            pendingDisable = false;
+            countdownEnd   = -1;
+            setEnabled(false);
             return;
         }
 
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
-        if (timer != null) {
-            double spd;
-            switch (mode.getIndex()) {
-                case 1: // VARIABLE
-                    spd = speed.getValue() + (maxSpeed.getValue() - speed.getValue()) * Math.random();
-                    break;
-                case 2: // FREEZE — near-zero timer, but chat/notifications pass through via PacketEvent
-                    spd = 0.01;
-                    break;
-                default: // CONSTANT
-                    spd = speed.getValue();
-                    break;
-            }
-            timer.timerSpeed = (float) spd;
+        if (timer == null) return;
+
+        double spd;
+        switch (mode.getIndex()) {
+            case 1: // VARIABLE
+                spd = speed.getValue() + (maxSpeed.getValue() - speed.getValue()) * Math.random();
+                break;
+            case 2: // FREEZE
+                spd = 0.01;
+                break;
+            default: // CONSTANT
+                spd = speed.getValue();
+                break;
         }
+        timer.timerSpeed = (float) spd;
     }
 
-    // In FREEZE mode, push chat messages directly to the GUI so they appear
-    // instantly without waiting for the near-frozen tick queue to process them.
+    // FREEZE mode: push chat directly to GUI so it bypasses the frozen tick queue
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (!isEnabled() || mode.getIndex() != 2) return;
@@ -71,8 +99,85 @@ public class Timer extends Module {
         }
     }
 
+    // ── Countdown HUD ─────────────────────────────────────────────────────────
+    @EventTarget
+    public void onRender2D(Render2DEvent event) {
+        if (!isEnabled() || !pendingDisable || !showCountdown.getValue()) return;
+        if (mc.thePlayer == null || mc.currentScreen != null) return;
+
+        long remaining = countdownEnd - System.currentTimeMillis();
+        if (remaining <= 0) return;
+
+        double seconds  = remaining / 1000.0;
+        long   total    = (long) offDelay.getValue();
+        float  progress = 1.0f - (float) remaining / total; // 0 → 1 as countdown progresses
+
+        ScaledResolution sr = new ScaledResolution(mc);
+        int cx = sr.getScaledWidth()  / 2;
+        int cy = sr.getScaledHeight() / 2 + 30; // just below crosshair
+
+        String label = String.format("%.1fs", seconds);
+
+        // Background bar
+        int barW = 80;
+        int barH = 6;
+        int bx   = cx - barW / 2;
+        int by   = cy + 10;
+
+        // Draw using vanilla font renderer + GL primitives
+        net.minecraft.client.renderer.GlStateManager.pushMatrix();
+        net.minecraft.client.renderer.GlStateManager.disableTexture2D();
+        net.minecraft.client.renderer.GlStateManager.enableBlend();
+
+        // Background
+        drawRect(bx - 1, by - 1, bx + barW + 1, by + barH + 1, 0x88000000);
+        // Empty bar
+        drawRect(bx, by, bx + barW, by + barH, 0xFF333333);
+        // Filled portion — fades from pink to red as time runs out
+        int fillW = (int)(barW * progress);
+        float hue = 0.93f - progress * 0.13f; // pink → red
+        int barColor = java.awt.Color.HSBtoRGB(hue, 0.85f, 1.0f) | 0xFF000000;
+        if (fillW > 0) drawRect(bx, by, bx + fillW, by + barH, barColor);
+
+        net.minecraft.client.renderer.GlStateManager.enableTexture2D();
+        net.minecraft.client.renderer.GlStateManager.popMatrix();
+
+        // Text
+        mc.fontRendererObj.drawStringWithShadow(
+                label,
+                cx - mc.fontRendererObj.getStringWidth(label) / 2f,
+                cy,
+                0xFFFFFFFF);
+        mc.fontRendererObj.drawStringWithShadow(
+                "Timer off in",
+                cx - mc.fontRendererObj.getStringWidth("Timer off in") / 2f,
+                cy - 10,
+                0xAAFFFFFF);
+    }
+
+    private static void drawRect(int x1, int y1, int x2, int y2, int color) {
+        float a = (color >> 24 & 0xFF) / 255f;
+        float r = (color >> 16 & 0xFF) / 255f;
+        float g = (color >> 8  & 0xFF) / 255f;
+        float b = (color       & 0xFF) / 255f;
+        org.lwjgl.opengl.GL11.glColor4f(r, g, b, a);
+        net.minecraft.client.renderer.Tessellator tess = net.minecraft.client.renderer.Tessellator.getInstance();
+        net.minecraft.client.renderer.WorldRenderer wr  = tess.getWorldRenderer();
+        wr.startDrawingQuads();
+        wr.addVertex(x1, y2, 0);
+        wr.addVertex(x2, y2, 0);
+        wr.addVertex(x2, y1, 0);
+        wr.addVertex(x1, y1, 0);
+        tess.draw();
+        org.lwjgl.opengl.GL11.glColor4f(1,1,1,1);
+    }
+
     @Override
     public String[] getSuffix() {
-        return new String[]{String.format("%.1fx", this.speed.getValue())};
+        if (pendingDisable) {
+            long rem = Math.max(0, countdownEnd - System.currentTimeMillis());
+            return new String[]{ String.format("off in %.1fs", rem / 1000.0) };
+        }
+        return new String[]{ String.format("%.2fx", speed.getValue()) };
     }
 }
