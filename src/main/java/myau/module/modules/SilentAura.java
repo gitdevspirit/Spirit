@@ -15,6 +15,7 @@ import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C02PacketUseEntity;
+import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition.MovingObjectType;
@@ -41,7 +42,7 @@ public class SilentAura extends Module {
 
     // ── Rotation ──────────────────────────────────────────────────────────────
     public final SliderSetting   aimSpeed       = register(new SliderSetting("Aim Speed",          50, 1, 100, 1));
-    public final BooleanSetting  keepMoveDir    = register(new BooleanSetting("Keep Move Direction", true));
+    public final BooleanSetting  keepMoveDir    = register(new BooleanSetting("Keep Move Direction", false));
     public final BooleanSetting  ignoreManualAim= register(new BooleanSetting("Ignore Manual Aim",   false));
 
     // ── Attack ────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ public class SilentAura extends Module {
     private float        silentPitch      = 0;
     private long         nextAttackMs     = 0;
     private long         breakPauseUntil  = 0;
+    private boolean      positionSentTick = false;
 
     public static boolean attackingThisTick = false;
 
@@ -83,6 +85,13 @@ public class SilentAura extends Module {
         currentTarget = null; attackingTarget = null; attackingThisTick = false;
     }
 
+    // ── Track whether vanilla sent a position packet this tick ───────────────
+    @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || event.getType() != EventType.SEND) return;
+        if (event.getPacket() instanceof C03PacketPlayer) positionSentTick = true;
+    }
+
     // ── UpdateEvent PRE: silent rotation + attack (same as KillAura SILENT) ──
     @EventTarget
     public void onUpdate(UpdateEvent event) {
@@ -97,6 +106,11 @@ public class SilentAura extends Module {
             if (dist > range.getValue() + extraSwing.getValue()) return;
             Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
             if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
+            // Ensure position/look packet precedes attack (fixes PacketOrderB)
+            if (!positionSentTick) {
+                PacketUtil.sendPacket(new C03PacketPlayer.C05PacketPlayerLook(
+                        silentYaw, silentPitch, mc.thePlayer.onGround));
+            }
             attackingThisTick = true;
             EventManager.call(new AttackEvent(currentTarget));
             ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
@@ -111,6 +125,7 @@ public class SilentAura extends Module {
 
         attackingTarget   = null;
         attackingThisTick = false;
+        positionSentTick  = false;
 
         if (disableOnDeath.getValue() && mc.thePlayer.getHealth() <= 0) { setEnabled(false); return; }
         if (requireMouse.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) { currentTarget = null; return; }
