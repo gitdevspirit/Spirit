@@ -13,7 +13,7 @@ import net.minecraft.client.Minecraft;
 public class Timer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   speed  = register(new SliderSetting("Speed", 1.0, 0.05, 10.0, 0.05));
+    public final SliderSetting   speed  = register(new SliderSetting("Speed", 1.0, 0.01, 10.0, 0.01));
     public final DropdownSetting mode   = register(new DropdownSetting("Mode", 0, "CONSTANT", "VARIABLE"));
     public final SliderSetting   maxSpeed = register(new SliderSetting("Max (Variable)", 2.0, 1.0, 5.0, 0.1));
 
