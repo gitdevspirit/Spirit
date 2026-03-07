@@ -182,33 +182,7 @@ public class TargetHUD extends Module {
         float barX1 = cardW - PAD - hpNumW - 4;
         float barW  = barX1 - barX0;
 
-        GlStateManager.enableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GlStateManager.disableDepth();
-
-        mc.fontRendererObj.drawString(nameStr, contentX, nameY, 0xFFFFFFFF, shadow.getValue());
-
-        // W/L tag — small, muted, right after name
-        if (showWL.getValue()) {
-            String wl;
-            int wlColor;
-            if (selfHp > hp + 0.5f)      { wl = "W";  wlColor = 0xFF55FF55; }
-            else if (selfHp < hp - 0.5f) { wl = "L";  wlColor = 0xFFFF5555; }
-            else                          { wl = "=";  wlColor = 0xFF888888; }
-            mc.fontRendererObj.drawString(wl,
-                    contentX + nameW + 4, nameY, wlColor, shadow.getValue());
-        }
-
-        // HP number — pink, right-aligned
-        mc.fontRendererObj.drawString(hpStr,
-                cardW - PAD - hpNumW, barY + (BAR_H - mc.fontRendererObj.FONT_HEIGHT) / 2f - 1,
-                ACCENT, shadow.getValue());
-
-        GlStateManager.disableBlend();
-        GlStateManager.enableDepth();
-
-        // ── Health bar ────────────────────────────────────────────────────────
+        // ── Health bar (drawn BEFORE text so GL state is clean) ─────────────────
         // Track
         RoundedUtils.drawRoundedRect(barX0, barY, barW, BAR_H, BAR_R, BAR_TRACK);
         // Fill
@@ -221,8 +195,32 @@ public class TargetHUD extends Module {
             RoundedUtils.drawRoundedRect(barX0, barY, Math.max(fillW, 2), BAR_H, 1, ACCENT);
         }
 
-        GL11.glColor4f(1f, 1f, 1f, 1f);
+        // ── Text (drawn AFTER geometry) ───────────────────────────────────────
         GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GlStateManager.disableDepth();
+
+        mc.fontRendererObj.drawString(nameStr, contentX, nameY, 0xFFFFFFFF, shadow.getValue());
+
+        // W/L tag
+        if (showWL.getValue()) {
+            String wl;
+            int wlColor;
+            if (selfHp > hp + 0.5f)      { wl = "W";  wlColor = 0xFF55FF55; }
+            else if (selfHp < hp - 0.5f) { wl = "L";  wlColor = 0xFFFF5555; }
+            else                          { wl = "=";  wlColor = 0xFF888888; }
+            mc.fontRendererObj.drawString(wl, contentX + nameW + 4, nameY, wlColor, shadow.getValue());
+        }
+
+        // HP number — pink, right-aligned
+        mc.fontRendererObj.drawString(hpStr,
+                cardW - PAD - hpNumW, barY + (BAR_H - mc.fontRendererObj.FONT_HEIGHT) / 2f - 1,
+                ACCENT, shadow.getValue());
+
+        GlStateManager.enableDepth();
+        GlStateManager.disableBlend();
+        GL11.glColor4f(1f, 1f, 1f, 1f);
         GlStateManager.popMatrix();
     }
 
