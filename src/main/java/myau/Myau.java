@@ -12,6 +12,7 @@ import myau.command.commands.KosCommand;
 import myau.command.commands.NameProtectCommand;
 import myau.command.commands.SpammerCommand;
 import myau.command.commands.ConfigCommand;
+import myau.command.commands.IntelKeyCommand;
 import myau.config.Config;
 import myau.event.EventManager;
 import myau.management.*;
@@ -67,6 +68,7 @@ public class Myau {
         commandManager.register(new KosCommand());
         commandManager.register(new NameProtectCommand());
         commandManager.register(new SpammerCommand());
+        commandManager.register(new IntelKeyCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
