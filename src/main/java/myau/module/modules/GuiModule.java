@@ -30,7 +30,8 @@ public class GuiModule extends Module {
                 ModuleRegistry.movementModules,
                 ModuleRegistry.playerModules,
                 ModuleRegistry.renderModules,
-                ModuleRegistry.miscModules
+                ModuleRegistry.miscModules,
+                ModuleRegistry.blatantModules
         );
 
         // Open the GUI
