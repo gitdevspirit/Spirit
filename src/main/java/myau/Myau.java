@@ -79,6 +79,7 @@ public class Myau {
 
         moduleManager.modules.put(AimAssist.class,       new AimAssist());
         moduleManager.modules.put(Autoblock.class,       new Autoblock());
+        moduleManager.modules.put(myau.module.modules.KillAura.class, new myau.module.modules.KillAura());
         moduleManager.modules.put(AntiAFK.class,         new AntiAFK());
         moduleManager.modules.put(AntiDebuff.class,      new AntiDebuff());
         moduleManager.modules.put(AntiFireball.class,    new AntiFireball());
