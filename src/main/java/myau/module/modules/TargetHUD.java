@@ -28,7 +28,6 @@ import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.util.ResourceLocation;
 import org.lwjgl.opengl.GL11;
 
-import java.awt.*;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.Locale;
@@ -39,9 +38,8 @@ public class TargetHUD extends Module {
 
     // ── Design constants ──────────────────────────────────────────────────────
     private static final int   ACCENT      = 0xFFE991B8;
-    private static final int   ACCENT_DIM  = 0x88E991B8;
+    private static final int   ACCENT_DIM  = 0x66E991B8;
     private static final int   BG          = 0xDD0D0D0D;
-    private static final int   BG_SHADOW   = 0x55000000;
     private static final float CARD_W      = 170f;
     private static final float CARD_H      = 44f;
     private static final float CORNER_R    = 8f;
@@ -75,7 +73,6 @@ public class TargetHUD extends Module {
 
     public EntityLivingBase getTarget() { return target; }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
     private EntityLivingBase resolveTarget() {
         if (!lastAttackTimer.hasTimeElapsed(1500L) && TeamUtil.isEntityLoaded(lastTarget))
             return lastTarget;
@@ -92,7 +89,6 @@ public class TargetHUD extends Module {
         return null;
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
     @EventTarget
     public void onRender(Render2DEvent event) {
         if (!isEnabled() || mc.thePlayer == null) return;
@@ -100,9 +96,9 @@ public class TargetHUD extends Module {
         target = resolveTarget();
         if (target == null) return;
 
-        float abs   = target.getAbsorptionAmount() / 2.0f;
-        float hp    = target.getHealth() / 2.0f + abs;
-        float maxHp = target.getMaxHealth() / 2.0f;
+        float abs    = target.getAbsorptionAmount() / 2.0f;
+        float hp     = target.getHealth() / 2.0f + abs;
+        float maxHp  = target.getMaxHealth() / 2.0f;
         float selfHp = (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0f;
 
         if (target != prev) {
@@ -111,7 +107,6 @@ public class TargetHUD extends Module {
             oldHealth = hp; newHealth = hp;
             maxHealth = Math.max(0.001f, maxHp);
         }
-
         if (!animations.getValue() || animTimer.hasTimeElapsed(250L)) {
             oldHealth = newHealth; newHealth = hp;
             maxHealth = Math.max(0.001f, maxHp);
@@ -121,23 +116,20 @@ public class TargetHUD extends Module {
         ResourceLocation skin = getSkin(target);
         if (skin != null) headTexture = skin;
 
-        float elapsed  = (float) Math.min(Math.max(animTimer.getElapsedTime(), 0L), 250L);
-        float animHp   = RenderUtil.lerpFloat(newHealth, oldHealth, elapsed / 250f);
-        float hpRatio  = Math.min(1f, Math.max(0f, animHp / maxHealth));
+        float elapsed = (float) Math.min(Math.max(animTimer.getElapsedTime(), 0L), 250L);
+        float animHp  = RenderUtil.lerpFloat(newHealth, oldHealth, elapsed / 250f);
+        float hpRatio = Math.min(1f, Math.max(0f, animHp / maxHealth));
 
         // ── Position ──────────────────────────────────────────────────────────
         ScaledResolution sr = new ScaledResolution(mc);
         float scaleVal = (float) scale.getValue();
         float px = (float) offX.getValue();
         float py = (float) offY.getValue();
-
         switch (posX.getIndex()) {
-            case 0: break;
             case 1: px += sr.getScaledWidth()  / 2f - (CARD_W * scaleVal) / 2f; break;
             case 2: px  = sr.getScaledWidth()  - (CARD_W * scaleVal) - px; break;
         }
         switch (posY.getIndex()) {
-            case 0: break;
             case 1: py += sr.getScaledHeight() / 2f - (CARD_H * scaleVal) / 2f; break;
             case 2: py  = sr.getScaledHeight() - (CARD_H * scaleVal) - py; break;
         }
@@ -146,76 +138,94 @@ public class TargetHUD extends Module {
         GlStateManager.translate(px, py, 0f);
         GlStateManager.scale(scaleVal, scaleVal, 1f);
 
-        // ── Drop shadow (fake blur) ────────────────────────────────────────────
-        // Draw several increasingly transparent rounded rects behind to simulate blur/glow
+        // ── Draw everything with proper GL state ──────────────────────────────
+        // All geometry uses RoundedUtils which correctly manages disableTexture2D internally
+
+        // Drop shadow layers
         for (int i = 4; i >= 1; i--) {
-            int shadowAlpha = (int)(0x30 / (float)i);
-            int shadowColor = (shadowAlpha << 24);
-            RoundedUtils.drawRoundedRect(-i, -i, CARD_W + i * 2, CARD_H + i * 2, CORNER_R + i, shadowColor);
+            int a = (int)(40f / i);
+            RoundedUtils.drawRoundedRect(-i, -i, CARD_W + i * 2f, CARD_H + i * 2f, CORNER_R + i, a << 24);
         }
 
-        // ── Main card background ──────────────────────────────────────────────
+        // Main card
         RoundedUtils.drawRoundedRect(0, 0, CARD_W, CARD_H, CORNER_R, BG);
 
-        // ── Pink accent outline ───────────────────────────────────────────────
+        // Pink outline
         RoundedUtils.drawRoundedOutline(0, 0, CARD_W, CARD_H, CORNER_R, 1.0f, ACCENT_DIM);
 
-        // ── Pink left accent stripe ───────────────────────────────────────────
-        // Draw as a rounded rect clipped to left edge
+        // Left accent stripe — draw as a narrow rounded rect
         RoundedUtils.drawRoundedRect(0, 0, 3, CARD_H, CORNER_R, ACCENT);
 
-        // ── Player head ───────────────────────────────────────────────────────
-        float headX = PAD + 3;
-        float textX = headX + (showHead.getValue() && headTexture != null ? HEAD_S + PAD : 0);
+        // ── Health bar track and fill ─────────────────────────────────────────
+        float headW  = (showHead.getValue() && headTexture != null) ? HEAD_S + PAD : 0f;
+        float textX  = 3 + PAD + headW;
+        float barY   = CARD_H - PAD - BAR_H;
+        float barX0  = textX;
+        float barX1  = CARD_W - PAD;
+        float barW   = barX1 - barX0;
 
+        // Bar track
+        RoundedUtils.drawRoundedRect(barX0, barY, barW, BAR_H, BAR_CORNER, 0xFF1A1A1A);
+
+        // Bar fill
+        float fillW = hpRatio * barW;
+        if (fillW >= BAR_CORNER * 2) {
+            RoundedUtils.drawRoundedRect(barX0, barY, fillW, BAR_H, BAR_CORNER, ACCENT);
+            // Shimmer on leading edge
+            RoundedUtils.drawRoundedRect(barX0 + fillW - 5, barY, 5, BAR_H, BAR_CORNER, 0x88FFD6EC);
+        } else if (fillW > 0) {
+            RoundedUtils.drawRoundedRect(barX0, barY, fillW, BAR_H, 1, ACCENT);
+        }
+
+        // ── Player head ───────────────────────────────────────────────────────
         if (showHead.getValue() && headTexture != null) {
+            float headX = 3 + PAD;
             // Head shadow
-            RoundedUtils.drawRoundedRect(headX - 1, PAD - 1, HEAD_S + 2, HEAD_S + 2, 3, 0x55000000);
+            RoundedUtils.drawRoundedRect(headX - 1, PAD - 1, HEAD_S + 2, HEAD_S + 2, 3, 0x44000000);
+
+            // Now bind texture and draw head
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.enableTexture2D();
             GlStateManager.color(1f, 1f, 1f, 1f);
-            GL11.glEnable(GL11.GL_TEXTURE_2D);
-            GL11.glEnable(GL11.GL_BLEND);
-            GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             mc.getTextureManager().bindTexture(headTexture);
-            // Base face
             Gui.drawScaledCustomSizeModalRect(
                     (int) headX, (int) PAD,
                     8f, 8f, 8, 8,
                     (int) HEAD_S, (int) HEAD_S,
                     64f, 64f);
-            // Hat layer
             Gui.drawScaledCustomSizeModalRect(
                     (int) headX, (int) PAD,
                     40f, 8f, 8, 8,
                     (int) HEAD_S, (int) HEAD_S,
                     64f, 64f);
+            GlStateManager.disableTexture2D();
+            GlStateManager.disableBlend();
         }
 
         // ── Text ──────────────────────────────────────────────────────────────
-        GlStateManager.disableDepth();
+        GlStateManager.enableTexture2D();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GlStateManager.disableDepth();
 
-        String name = target instanceof EntityPlayer
+        String name  = target instanceof EntityPlayer
                 ? ChatColors.formatColor("&r" + TeamUtil.stripName(target))
                 : target.getName();
         String hpStr = hpFmt.format(animHp) + " \u2764";
 
-        float nameY = PAD + 1;
+        float nameY  = PAD + 1;
         float hpNumY = nameY + 10;
-        float barY   = CARD_H - PAD - BAR_H;
-        float barX0  = textX;
-        float barX1  = CARD_W - PAD;
 
         // Name
         mc.fontRendererObj.drawString(name, textX, nameY, 0xFFFFFFFF, shadow.getValue());
 
-        // HP number — pink, right-aligned above bar
+        // HP — pink, right-aligned
         mc.fontRendererObj.drawString(hpStr,
                 barX1 - mc.fontRendererObj.getStringWidth(hpStr),
                 hpNumY, ACCENT, shadow.getValue());
 
-        // W/L — left side, same row as HP
+        // W/L — left, same row
         if (showWL.getValue()) {
             String wl;
             int wlColor;
@@ -225,37 +235,13 @@ public class TargetHUD extends Module {
             mc.fontRendererObj.drawString(wl, textX, hpNumY, wlColor, shadow.getValue());
         }
 
-        GlStateManager.disableBlend();
         GlStateManager.enableDepth();
-
-        // ── Health bar (rounded) ──────────────────────────────────────────────
-        GlStateManager.disableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-
-        // Track
-        RoundedUtils.drawRoundedRect(barX0, barY, barX1 - barX0, BAR_H, BAR_CORNER, 0xFF1A1A1A);
-
-        // Fill
-        float fillW = hpRatio * (barX1 - barX0);
-        if (fillW >= BAR_CORNER * 2) {
-            RoundedUtils.drawRoundedRect(barX0, barY, fillW, BAR_H, BAR_CORNER, ACCENT);
-            // Bright shimmer on leading edge
-            RoundedUtils.drawRoundedRect(barX0 + fillW - 4, barY, 4, BAR_H, BAR_CORNER,
-                    0xAAFFCCE8);
-        } else if (fillW > 0) {
-            // Too narrow for rounded — fallback to plain rect
-            RenderUtil.drawRect(barX0, barY, barX0 + fillW, barY + BAR_H, ACCENT);
-        }
-
         GlStateManager.disableBlend();
-        GlStateManager.enableTexture2D();
         GL11.glColor4f(1f, 1f, 1f, 1f);
 
         GlStateManager.popMatrix();
     }
 
-    // ── Attack tracking ───────────────────────────────────────────────────────
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (event.getType() != EventType.SEND || !(event.getPacket() instanceof C02PacketUseEntity)) return;
