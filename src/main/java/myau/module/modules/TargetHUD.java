@@ -43,72 +43,74 @@ import java.util.Locale;
 
 public class TargetHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private static final DecimalFormat healthFormat = new DecimalFormat("0.0",    new DecimalFormatSymbols(Locale.US));
-    private static final DecimalFormat diffFormat   = new DecimalFormat("+0.0;-0.0", new DecimalFormatSymbols(Locale.US));
+    private static final DecimalFormat hpFmt = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
 
     private final TimerUtil lastAttackTimer = new TimerUtil();
     private final TimerUtil animTimer       = new TimerUtil();
     private EntityLivingBase lastTarget  = null;
     private EntityLivingBase target      = null;
     private ResourceLocation headTexture = null;
-    private float oldHealth = 0.0F, newHealth = 0.0F, maxHealth = 0.0F;
+    private float oldHealth = 0, newHealth = 0, maxHealth = 0;
 
-    public final DropdownSetting color        = new DropdownSetting("Color",        0, "DEFAULT", "HUD");
-    public final DropdownSetting posX         = new DropdownSetting("Position X",   1, "LEFT", "MIDDLE", "RIGHT");
-    public final DropdownSetting posY         = new DropdownSetting("Position Y",   1, "TOP", "MIDDLE", "BOTTOM");
-    public final SliderSetting   scale        = new SliderSetting("Scale",        1.0,  0.5, 1.5, 0.05);
-    public final SliderSetting   offX         = new SliderSetting("Offset X",       0, -255, 255, 1);
-    public final SliderSetting   offY         = new SliderSetting("Offset Y",      40, -255, 255, 1);
-    public final SliderSetting   background   = new SliderSetting("Background",    25,    0, 100, 1);
-    public final BooleanSetting  head         = new BooleanSetting("Head",          true);
-    public final BooleanSetting  indicator    = new BooleanSetting("Indicator",     true);
-    public final BooleanSetting  outline      = new BooleanSetting("Outline",       false);
-    public final BooleanSetting  animations   = new BooleanSetting("Animations",    true);
-    public final BooleanSetting  shadow       = new BooleanSetting("Shadow",        true);
-    public final BooleanSetting  kaOnly       = new BooleanSetting("KA Only",       true);
-    public final BooleanSetting  chatPreview  = new BooleanSetting("Chat Preview",  false);
-    public final BooleanSetting  trackTarget  = new BooleanSetting("Track Target",  false);
-    public final DropdownSetting trackingMode = new DropdownSetting("Tracking Mode", 0, "TOP", "MIDDLE", "LEFT", "RIGHT");
-    public final BooleanSetting  distanceScale= new BooleanSetting("Distance Scale", true);
+    // ── Settings ──────────────────────────────────────────────────────────────
+    public final DropdownSetting style       = register(new DropdownSetting("Style",      0, "Modern", "Minimal"));
+    public final DropdownSetting color       = register(new DropdownSetting("Color",      0, "Default", "HUD"));
+    public final DropdownSetting posX        = register(new DropdownSetting("Position X", 1, "Left", "Middle", "Right"));
+    public final DropdownSetting posY        = register(new DropdownSetting("Position Y", 1, "Top", "Middle", "Bottom"));
+    public final SliderSetting   scale       = register(new SliderSetting("Scale",    1.0, 0.5, 2.0, 0.05));
+    public final SliderSetting   offX        = register(new SliderSetting("Offset X",   0, -300, 300, 1));
+    public final SliderSetting   offY        = register(new SliderSetting("Offset Y",  40, -300, 300, 1));
+    public final SliderSetting   bgAlpha     = register(new SliderSetting("BG Alpha",  85,    0, 100, 1));
+    public final BooleanSetting  showHead    = register(new BooleanSetting("Show Head",   true));
+    public final BooleanSetting  showArmor   = register(new BooleanSetting("Show Armor",  true));
+    public final BooleanSetting  showPing    = register(new BooleanSetting("Show Ping",   true));
+    public final BooleanSetting  showWL      = register(new BooleanSetting("Show W/L",    true));
+    public final BooleanSetting  outline     = register(new BooleanSetting("Outline",     true));
+    public final BooleanSetting  animations  = register(new BooleanSetting("Animations",  true));
+    public final BooleanSetting  shadow      = register(new BooleanSetting("Shadow",      true));
+    public final BooleanSetting  kaOnly      = register(new BooleanSetting("KA Only",     true));
+    public final BooleanSetting  chatPreview = register(new BooleanSetting("Chat Preview",false));
 
-    public TargetHUD() {
-        super("TargetHUD", false, true);
-        register(color); register(posX); register(posY);
-        register(scale); register(offX); register(offY); register(background);
-        register(head); register(indicator); register(outline);
-        register(animations); register(shadow); register(kaOnly);
-        register(chatPreview); register(trackTarget); register(trackingMode); register(distanceScale);
-    }
+    public TargetHUD() { super("TargetHUD", false, true); }
 
     public EntityLivingBase getTarget() { return target; }
 
+    // ── Internal helpers ──────────────────────────────────────────────────────
     private EntityLivingBase resolveTarget() {
         if (!lastAttackTimer.hasTimeElapsed(1500L) && TeamUtil.isEntityLoaded(lastTarget))
             return lastTarget;
         return chatPreview.getValue() && mc.currentScreen instanceof GuiChat ? mc.thePlayer : null;
     }
 
-    private ResourceLocation getSkin(EntityLivingBase entity) {
-        if (entity instanceof EntityPlayer) {
-            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(entity.getName());
+    private ResourceLocation getSkin(EntityLivingBase e) {
+        if (e instanceof EntityPlayer) {
+            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(e.getName());
             if (info != null) return info.getLocationSkin();
         }
         return null;
     }
 
-    private Color getTargetColor(EntityLivingBase entity) {
-        if (entity instanceof EntityPlayer) {
-            if (TeamUtil.isFriend((EntityPlayer) entity)) return Myau.friendManager.getColor();
-            if (TeamUtil.isTarget((EntityPlayer) entity)) return Myau.targetManager.getColor();
+    private int getPing(EntityLivingBase e) {
+        if (e instanceof EntityPlayer) {
+            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(e.getName());
+            if (info != null) return info.getResponseTime();
         }
-        switch (color.getIndex()) {
-            case 0: return (entity instanceof EntityPlayer)
-                    ? TeamUtil.getTeamColor((EntityPlayer) entity, 1.0F) : new Color(-1);
-            case 1: return new Color(((HUD) Myau.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB());
-            default: return new Color(-1);
-        }
+        return -1;
     }
 
+    private Color getAccentColor(EntityLivingBase e) {
+        if (e instanceof EntityPlayer) {
+            if (TeamUtil.isFriend((EntityPlayer) e)) return Myau.friendManager.getColor();
+            if (TeamUtil.isTarget((EntityPlayer) e)) return Myau.targetManager.getColor();
+        }
+        if (color.getIndex() == 1)
+            return new Color(((HUD) Myau.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()).getRGB());
+        if (e instanceof EntityPlayer)
+            return TeamUtil.getTeamColor((EntityPlayer) e, 1.0f);
+        return new Color(0xE991B8);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     @EventTarget
     public void onRender(Render2DEvent event) {
         if (!isEnabled() || mc.thePlayer == null) return;
@@ -116,148 +118,170 @@ public class TargetHUD extends Module {
         target = resolveTarget();
         if (target == null) return;
 
-        float abs  = target.getAbsorptionAmount() / 2.0F;
-        float heal = target.getHealth() / 2.0F + abs;
-        float health = (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0F;
+        float abs   = target.getAbsorptionAmount() / 2.0f;
+        float heal  = target.getHealth() / 2.0f + abs;
+        float selfHp = (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2.0f;
 
         if (target != prev) {
-            headTexture = null;
-            animTimer.setTime();
+            headTexture = null; animTimer.setTime();
             oldHealth = heal; newHealth = heal;
         }
         if (!animations.getValue() || animTimer.hasTimeElapsed(150L)) {
             oldHealth = newHealth; newHealth = heal;
-            maxHealth = target.getMaxHealth() / 2.0F;
+            maxHealth = target.getMaxHealth() / 2.0f;
             if (oldHealth != newHealth) animTimer.reset();
         }
         ResourceLocation skin = getSkin(target);
         if (skin != null) headTexture = skin;
 
         float elapsed     = (float) Math.min(Math.max(animTimer.getElapsedTime(), 0L), 150L);
-        float healthRatio = Math.min(Math.max(
-                RenderUtil.lerpFloat(newHealth, oldHealth, elapsed / 150.0F) / maxHealth, 0.0F), 1.0F);
-        Color targetColor      = getTargetColor(target);
-        Color healthBarColor   = color.getIndex() == 0 ? ColorUtil.getHealthBlend(healthRatio) : targetColor;
-        float hdRatio          = Math.min(Math.max((health - heal + 1.0F) / 2.0F, 0.0F), 1.0F);
-        Color healthDeltaColor = ColorUtil.getHealthBlend(hdRatio);
+        float healthRatio = Math.min(1, Math.max(0,
+                RenderUtil.lerpFloat(newHealth, oldHealth, elapsed / 150f) / Math.max(0.001f, maxHealth)));
+        Color accent    = getAccentColor(target);
+        Color hpColor   = color.getIndex() == 0 ? ColorUtil.getHealthBlend(healthRatio) : accent;
+        Color hpDark    = ColorUtil.darker(hpColor, 0.25f);
 
-        ScaledResolution sr = new ScaledResolution(mc);
-        String targetNameText = ChatColors.formatColor(String.format("&r%s&r", TeamUtil.stripName(target)));
-        String healthText     = ChatColors.formatColor(String.format("&r&f%s%s❤&r",
-                healthFormat.format(heal), abs > 0.0F ? "&6" : "&c"));
-        String statusText     = ChatColors.formatColor(String.format("&r&l%s&r",
-                heal == health ? "D" : (heal < health ? "W" : "L")));
-        String healthDiffText = ChatColors.formatColor(String.format("&r%s&r",
-                heal == health ? "0.0" : diffFormat.format(health - heal)));
+        boolean modern  = style.getIndex() == 0;
+        float   headW   = showHead.getValue() && headTexture != null ? (modern ? 28f : 22f) : 0;
+        float   armorH  = showArmor.getValue() && modern ? 12f : 0;
 
-        int targetNameWidth = mc.fontRendererObj.getStringWidth(targetNameText);
-        int healthTextWidth = mc.fontRendererObj.getStringWidth(healthText);
-        int statusTextWidth = mc.fontRendererObj.getStringWidth(statusText);
-        int healthDiffWidth = mc.fontRendererObj.getStringWidth(healthDiffText);
+        // Calculate width from content
+        String name    = ChatColors.formatColor("&r" + TeamUtil.stripName(target));
+        String hpStr   = ChatColors.formatColor(String.format("&f%s%s❤", hpFmt.format(heal), abs > 0 ? "&6" : "&c"));
+        int ping       = getPing(target);
+        String pingStr = ping >= 0 ? ping + "ms" : "";
+        String wlStr   = selfHp > heal ? "Winning" : selfHp < heal ? "Losing" : "Even";
 
-        float barContentWidth = Math.max(
-                targetNameWidth  + (indicator.getValue() ? 2.0F + statusTextWidth  + 2.0F : 0.0F),
-                healthTextWidth  + (indicator.getValue() ? 2.0F + healthDiffWidth   + 2.0F : 0.0F));
-        float headIconOffset = head.getValue() && headTexture != null ? 25.0F : 0.0F;
-        float barTotalWidth  = Math.max(headIconOffset + 70.0F, headIconOffset + 2.0F + barContentWidth + 2.0F);
+        int nameW = mc.fontRendererObj.getStringWidth(name);
+        int hpW   = mc.fontRendererObj.getStringWidth(hpStr);
+        int pingW = showPing.getValue() && !pingStr.isEmpty() ? mc.fontRendererObj.getStringWidth(pingStr) + 4 : 0;
+        int wlW   = showWL.getValue() ? mc.fontRendererObj.getStringWidth(wlStr) + 4 : 0;
 
+        float rightExtra = Math.max(pingW, wlW);
+        float contentW   = Math.max(nameW, hpW) + (rightExtra > 0 ? 4 + rightExtra : 0);
+        float totalW     = headW + 6 + contentW + 6;
+        if (modern) totalW = Math.max(totalW, headW + 80);
+        float totalH     = modern ? 30 + armorH : 24;
+
+        // Position
+        ScaledResolution sr   = new ScaledResolution(mc);
         float scaleVal = (float) scale.getValue();
         float px = (float) offX.getValue() / scaleVal;
-        switch (posX.getIndex()) {
-            case 1: px += sr.getScaledWidth()  / scaleVal / 2.0F - barTotalWidth / 2.0F; break;
-            case 2: px = -px + sr.getScaledWidth() / scaleVal - barTotalWidth;            break;
-        }
         float py = (float) offY.getValue() / scaleVal;
+        switch (posX.getIndex()) {
+            case 1: px += sr.getScaledWidth()  / scaleVal / 2f - totalW / 2f; break;
+            case 2: px  = -px + sr.getScaledWidth() / scaleVal - totalW;      break;
+        }
         switch (posY.getIndex()) {
-            case 1: py += sr.getScaledHeight() / scaleVal / 2.0F - 13.5F; break;
-            case 2: py = -py + sr.getScaledHeight() / scaleVal - 27.0F;    break;
+            case 1: py += sr.getScaledHeight() / scaleVal / 2f - totalH / 2f; break;
+            case 2: py  = -py + sr.getScaledHeight() / scaleVal - totalH;     break;
         }
 
         GlStateManager.pushMatrix();
-        GlStateManager.scale(scaleVal, scaleVal, 0.0F);
-        GlStateManager.translate(px, py, -450.0F);
+        GlStateManager.scale(scaleVal, scaleVal, 1f);
+        GlStateManager.translate(px, py, -450f);
+
         RenderUtil.enableRenderState();
-        int bgColor      = new Color(0.0F, 0.0F, 0.0F, (float) background.getValue() / 100.0F).getRGB();
-        int outlineColor = outline.getValue() ? targetColor.getRGB() : new Color(0, 0, 0, 0).getRGB();
-        RenderUtil.drawOutlineRect(0.0F, 0.0F, barTotalWidth, 27.0F, 1.5F, bgColor, outlineColor);
-        RenderUtil.drawRect(headIconOffset + 2.0F, 22.0F, barTotalWidth - 2.0F, 25.0F,
-                ColorUtil.darker(healthBarColor, 0.2F).getRGB());
-        RenderUtil.drawRect(headIconOffset + 2.0F, 22.0F,
-                headIconOffset + 2.0F + healthRatio * (barTotalWidth - 2.0F - headIconOffset - 2.0F), 25.0F,
-                healthBarColor.getRGB());
+
+        float bgA = (float) bgAlpha.getValue() / 100f;
+        int   bg  = new Color(0.06f, 0.06f, 0.06f, bgA).getRGB();
+
+        if (modern) {
+            // ── Modern style ──────────────────────────────────────────────────
+            // Main card
+            RenderUtil.drawOutlineRect(0, 0, totalW, totalH, 1f,
+                    bg, outline.getValue() ? new Color(accent.getRed(), accent.getGreen(), accent.getBlue(), 160).getRGB() : 0);
+
+            // Left accent stripe
+            RenderUtil.drawRect(0, 0, 2, totalH, accent.getRGB());
+
+            // Health bar track + fill (bottom of card, above armor if shown)
+            float barY0 = armorH > 0 ? totalH - armorH - 4 : totalH - 4;
+            float barX0 = headW + 4, barX1 = totalW - 4;
+            RenderUtil.drawRect(barX0, barY0, barX1, barY0 + 3, hpDark.getRGB());
+            RenderUtil.drawRect(barX0, barY0, barX0 + healthRatio * (barX1 - barX0), barY0 + 3, hpColor.getRGB());
+
+            // Armor row
+            if (armorH > 0) {
+                drawArmorRow(target, barX0, totalH - armorH + 1, barX1);
+            }
+
+        } else {
+            // ── Minimal style ─────────────────────────────────────────────────
+            RenderUtil.drawOutlineRect(0, 0, totalW, totalH, 1f,
+                    bg, outline.getValue() ? accent.getRGB() : 0);
+            float barY0 = totalH - 3;
+            float barX0 = headW + 4, barX1 = totalW - 4;
+            RenderUtil.drawRect(barX0, barY0, barX1, barY0 + 2, hpDark.getRGB());
+            RenderUtil.drawRect(barX0, barY0, barX0 + healthRatio * (barX1 - barX0), barY0 + 2, hpColor.getRGB());
+        }
+
         RenderUtil.disableRenderState();
+
+        // ── Text ──────────────────────────────────────────────────────────────
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        mc.fontRendererObj.drawString(targetNameText, headIconOffset + 2.0F, 2.0F,  -1, shadow.getValue());
-        mc.fontRendererObj.drawString(healthText,     headIconOffset + 2.0F, 12.0F, -1, shadow.getValue());
-        if (indicator.getValue()) {
-            mc.fontRendererObj.drawString(statusText,    barTotalWidth - 2.0F - statusTextWidth, 2.0F,
-                    healthDeltaColor.getRGB(), shadow.getValue());
-            mc.fontRendererObj.drawString(healthDiffText, barTotalWidth - 2.0F - healthDiffWidth, 12.0F,
-                    ColorUtil.darker(healthDeltaColor, 0.8F).getRGB(), shadow.getValue());
+
+        float textX = headW + 6, nameY = 4, hpY = nameY + 9;
+        mc.fontRendererObj.drawString(name,  textX, nameY, -1, shadow.getValue());
+        mc.fontRendererObj.drawString(hpStr, textX, hpY,   -1, shadow.getValue());
+
+        if (showPing.getValue() && !pingStr.isEmpty()) {
+            int pingColor = ping < 80 ? 0xFF55FF55 : ping < 150 ? 0xFFFFFF55 : 0xFFFF5555;
+            mc.fontRendererObj.drawString(pingStr, totalW - 4 - mc.fontRendererObj.getStringWidth(pingStr), nameY,
+                    pingColor, shadow.getValue());
         }
-        if (head.getValue() && headTexture != null) {
-            GlStateManager.color(1.0F, 1.0F, 1.0F);
+        if (showWL.getValue()) {
+            int wlColor = selfHp > heal ? 0xFF55FF55 : selfHp < heal ? 0xFFFF5555 : 0xFFFFFFFF;
+            mc.fontRendererObj.drawString(wlStr, totalW - 4 - mc.fontRendererObj.getStringWidth(wlStr), hpY,
+                    wlColor, shadow.getValue());
+        }
+
+        // ── Head ──────────────────────────────────────────────────────────────
+        if (showHead.getValue() && headTexture != null) {
+            GlStateManager.color(1f, 1f, 1f);
             mc.getTextureManager().bindTexture(headTexture);
-            Gui.drawScaledCustomSizeModalRect(2, 2, 8.0F, 8.0F, 8, 8, 23, 23, 64.0F, 64.0F);
-            Gui.drawScaledCustomSizeModalRect(2, 2, 40.0F, 8.0F, 8, 8, 23, 23, 64.0F, 64.0F);
-            GlStateManager.color(1.0F, 1.0F, 1.0F);
+            float hs = headW - 4;
+            Gui.drawScaledCustomSizeModalRect(2, 2, 8f,  8f, 8, 8, (int)hs, (int)hs, 64f, 64f);
+            Gui.drawScaledCustomSizeModalRect(2, 2, 40f, 8f, 8, 8, (int)hs, (int)hs, 64f, 64f);
         }
+
         GlStateManager.disableBlend();
         GlStateManager.enableDepth();
         GlStateManager.popMatrix();
     }
 
-    private float damage(ItemStack stack, Entity attacker, Entity target) {
-        float base = 1.0f;
-        if (stack != null) {
-            Item item = stack.getItem();
-            int sharpness = EnchantmentHelper.getEnchantmentLevel(Enchantment.sharpness.effectId, stack);
-            if (item instanceof ItemSword)     base = 4.0f;
-            else if (item instanceof ItemTool) base = 3.0f;
-            base += sharpness * 1.25f;
+    private void drawArmorRow(EntityLivingBase entity, float x, float y, float maxX) {
+        // Slots: 3=helmet, 2=chest, 1=legs, 0=boots
+        float slotSize = 10f;
+        float spacing  = 1f;
+        float startX   = x;
+        for (int i = 3; i >= 0; i--) {
+            ItemStack armor = entity.getCurrentArmor(i);
+            if (armor == null) continue;
+            if (startX + slotSize > maxX) break;
+            GlStateManager.color(1f, 1f, 1f);
+            mc.getRenderItem().renderItemAndEffectIntoGUI(armor, (int) startX, (int) y);
+            startX += slotSize + spacing;
         }
-        if (attacker instanceof EntityLivingBase) {
-            EntityLivingBase la = (EntityLivingBase) attacker;
-            int strength = la.getActivePotionEffect(Potion.damageBoost) != null
-                    ? la.getActivePotionEffect(Potion.damageBoost).getAmplifier() + 1 : 0;
-            base += strength * 3.0f;
+        // Also render held item after armor
+        ItemStack held = entity.getHeldItem();
+        if (held != null && startX + slotSize <= maxX) {
+            GlStateManager.color(1f, 1f, 1f);
+            mc.getRenderItem().renderItemAndEffectIntoGUI(held, (int)(startX + 2), (int) y);
         }
-        float total = base;
-        if (target instanceof EntityLivingBase) {
-            EntityLivingBase lt = (EntityLivingBase) target;
-            int prot = 0;
-            for (int i = 0; i < 4; i++)
-                prot += EnchantmentHelper.getEnchantmentLevel(Enchantment.protection.effectId, lt.getCurrentArmor(i));
-            total *= 1 - lt.getTotalArmorValue() * 0.04f;
-            total *= 1 - prot * 0.04f;
-            int resistance = lt.getActivePotionEffect(Potion.resistance) != null
-                    ? lt.getActivePotionEffect(Potion.resistance).getAmplifier() + 1 : 0;
-            total *= 1 - resistance * 0.2f;
-        }
-        return total;
-    }
-
-    private float calculateWinning() {
-        if (target == null || mc.thePlayer == null) return 0f;
-        float playerHP = mc.thePlayer.getHealth(), targetHP = target.getHealth();
-        while (playerHP > 0 && targetHP > 0) {
-            targetHP -= damage(mc.thePlayer.getHeldItem(), mc.thePlayer, target);
-            playerHP -= damage(target.getHeldItem(), target, mc.thePlayer);
-        }
-        return playerHP - targetHP;
     }
 
     @EventTarget
     public void onPacket(PacketEvent event) {
         if (event.getType() != EventType.SEND || !(event.getPacket() instanceof C02PacketUseEntity)) return;
-        C02PacketUseEntity packet = (C02PacketUseEntity) event.getPacket();
-        if (packet.getAction() != Action.ATTACK) return;
-        Entity entity = packet.getEntityFromWorld(mc.theWorld);
-        if (entity instanceof EntityLivingBase && !(entity instanceof EntityArmorStand)) {
+        C02PacketUseEntity pkt = (C02PacketUseEntity) event.getPacket();
+        if (pkt.getAction() != Action.ATTACK) return;
+        Entity e = pkt.getEntityFromWorld(mc.theWorld);
+        if (e instanceof EntityLivingBase && !(e instanceof EntityArmorStand)) {
             lastAttackTimer.reset();
-            lastTarget = (EntityLivingBase) entity;
+            lastTarget = (EntityLivingBase) e;
         }
     }
 }
