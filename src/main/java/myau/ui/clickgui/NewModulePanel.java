@@ -147,6 +147,7 @@ public class NewModulePanel {
         int oy = y + 5;
         boolean skipUntilNextHeader = false;
         for (Setting s : m.getSettings()) {
+            if (s == null || s.getName() == null) continue;
             if (!s.isVisible()) continue;
             // A "header" is a BooleanSetting whose name does NOT start with spaces
             boolean isHeader = s instanceof BooleanSetting && !s.getName().startsWith(" ");
@@ -256,6 +257,7 @@ public class NewModulePanel {
         int oy = y + 5;
         boolean skipClick = false;
         for (Setting s : m.getSettings()) {
+            if (s == null || s.getName() == null) continue;
             if (!s.isVisible()) continue;
             boolean isHeaderClick = s instanceof BooleanSetting && !s.getName().startsWith(" ");
             if (isHeaderClick) skipClick = collapsedHeaders.contains(s);
@@ -325,6 +327,7 @@ public class NewModulePanel {
         int h = 10;
         boolean skip = false;
         for (Setting s : m.getSettings()) {
+            if (s == null || s.getName() == null) continue;
             if (!s.isVisible()) continue;
             boolean isHeader = s instanceof BooleanSetting && !s.getName().startsWith(" ");
             if (isHeader) skip = collapsedHeaders.contains(s);
