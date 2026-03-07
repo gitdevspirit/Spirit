@@ -120,10 +120,12 @@ public class IntelManager {
         try {
             // GET https://urchin.ws/cubelify?id=<uuid>&name=<name>&sources=&key=<key>
             // id can be empty if we don't have UUID — name alone is enough
+            // Build URL manually - don't encode the key as it contains safe chars
             String url = URCHIN_URL
-                    + "?id=&name=" + java.net.URLEncoder.encode(p.name, "UTF-8")
+                    + "?id="
+                    + "&name=" + java.net.URLEncoder.encode(p.name, "UTF-8")
                     + "&sources="
-                    + "&key=" + java.net.URLEncoder.encode(urchinApiKey, "UTF-8");
+                    + "&key=" + urchinApiKey;
 
             String json = get(url, null, null);
             if (json == null) return;
