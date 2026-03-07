@@ -10,138 +10,159 @@ import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.ui.clickgui.RoundedUtils;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
 
-import java.awt.*;
 import java.util.List;
 
 public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   duration  = register(new SliderSetting("Duration",  3.0, 1.0, 8.0, 0.5));
-    public final DropdownSetting position  = register(new DropdownSetting("Position", 0,
+    // Timing
+    public final SliderSetting duration  = register(new SliderSetting("Duration",  3.0, 1.0, 10.0, 0.5));
+
+    // Layout
+    public final DropdownSetting position = register(new DropdownSetting("Position", 0,
             "Bottom Right", "Top Right", "Bottom Left", "Top Left"));
-    public final BooleanSetting  slideAnim = register(new BooleanSetting("Slide Anim", true));
-    public final SliderSetting   toastW    = register(new SliderSetting("Width", 155, 80, 280, 4));
+    public final SliderSetting   width    = register(new SliderSetting("Width",    160, 80, 300, 2));
+    public final BooleanSetting  anim     = register(new BooleanSetting("Animation", true));
 
-    private static final int   BG_COLOR  = 0xEE0D0D12;
-    private static final int   TOAST_H   = 24;
-    private static final int   ACCENT_W  = 3;
-    private static final int   PAD_H     = 7;
-    private static final int   MARGIN    = 8;
-    private static final int   GAP       = 4;
-    private static final float RADIUS    = 4f;
+    // Background
+    public final SliderSetting bgR     = register(new SliderSetting(" BG Red",    20,  0, 255, 1));
+    public final SliderSetting bgG     = register(new SliderSetting(" BG Green",  20,  0, 255, 1));
+    public final SliderSetting bgB     = register(new SliderSetting(" BG Blue",   20,  0, 255, 1));
+    public final SliderSetting bgAlpha = register(new SliderSetting(" BG Alpha", 220,  0, 255, 1));
+    public final SliderSetting radius  = register(new SliderSetting(" Radius",     6,  0,  20, 1));
 
-    private static final float ANIM_IN   = 160f;
-    private static final float ANIM_OUT  = 220f;
+    // Accent bar
+    public final BooleanSetting accentBar   = register(new BooleanSetting(" Accent Bar", true));
+    public final SliderSetting  accentR     = register(new SliderSetting(" Accent Red",   233, 0, 255, 1));
+    public final SliderSetting  accentG     = register(new SliderSetting(" Accent Green", 145, 0, 255, 1));
+    public final SliderSetting  accentB     = register(new SliderSetting(" Accent Blue",  184, 0, 255, 1));
+
+    // Title text
+    public final SliderSetting titleR = register(new SliderSetting(" Title Red",   255, 0, 255, 1));
+    public final SliderSetting titleG = register(new SliderSetting(" Title Green", 255, 0, 255, 1));
+    public final SliderSetting titleB = register(new SliderSetting(" Title Blue",  255, 0, 255, 1));
+
+    // Body text
+    public final SliderSetting bodyR = register(new SliderSetting(" Body Red",   160, 0, 255, 1));
+    public final SliderSetting bodyG = register(new SliderSetting(" Body Green", 160, 0, 255, 1));
+    public final SliderSetting bodyB = register(new SliderSetting(" Body Blue",  160, 0, 255, 1));
+
+    private static final int   H        = 28;
+    private static final int   MARGIN   = 10;
+    private static final int   GAP      = 5;
+    private static final int   PAD_H    = 8;
+    private static final float ANIM_IN  = 180f;
+    private static final float ANIM_OUT = 240f;
 
     public Notifications() { super("Notifications", true); }
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
         if (mc.thePlayer == null || Myau.notificationManager == null) return;
-
         List<NotificationManager.NotificationEntry> active = Myau.notificationManager.getActive();
         if (active.isEmpty()) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int W  = (int) toastW.getValue();
+        int W = (int) width.getValue();
         int pos = position.getIndex();
-
         boolean fromRight  = pos == 0 || pos == 1;
         boolean fromBottom = pos == 0 || pos == 2;
 
-        HUD hud = (HUD) Myau.moduleManager.modules.get(HUD.class);
-        int accent = (hud != null ? hud.getColor(System.currentTimeMillis()) : new Color(0xE991B8)).getRGB();
+        int bgColor     = rgba(bgR, bgG, bgB, bgAlpha);
+        int accentColor = rgb(accentR, accentG, accentB);
+        int titleColor  = rgb(titleR, titleG, titleB);
+        int bodyColor   = rgb(bodyR, bodyG, bodyB);
+        float r         = (float) radius.getValue();
+        boolean bar     = accentBar.getValue();
 
         for (int i = 0; i < active.size(); i++) {
             NotificationManager.NotificationEntry n = active.get(i);
 
             String[] parts = n.message.split(" ", 2);
-            String name    = parts[0];
+            String title   = parts[0];
             String body    = parts.length > 1 ? parts[1] : "";
-            boolean isOn   = !body.toLowerCase().contains("disabled")
-                          && !body.toLowerCase().contains("untoggled")
-                          && !body.toLowerCase().contains("off");
 
-            long age   = n.getAge();
-            long total = n.durationMillis;
-
-            float slide = computeSlide(age, total);
+            long  age   = n.getAge();
+            long  total = n.durationMillis;
             float alpha = computeAlpha(age, total);
-            float slideOff = slideAnim.getValue() ? (W + MARGIN + 10) * (1f - slide) : 0f;
+            float slide = computeSlide(age, total);
+            float slideOff = anim.getValue() ? (W + MARGIN + 20) * (1f - slide) : 0f;
 
             float x = fromRight  ? sw - MARGIN - W + slideOff : MARGIN - slideOff;
-            float y = fromBottom ? sh - MARGIN - TOAST_H - i * (TOAST_H + GAP)
-                                 : MARGIN + i * (TOAST_H + GAP);
+            float y = fromBottom ? sh - MARGIN - H - i * (H + GAP)
+                                 : MARGIN + i * (H + GAP);
 
-            renderToast(x, y, W, name, body, isOn, accent, alpha);
+            // ── Background ───────────────────────────────────────────────────
+            RoundedUtils.drawRoundedRect(x, y, W, H, r, applyAlpha(bgColor, alpha));
+
+            // ── Accent bar ───────────────────────────────────────────────────
+            float textX = x + PAD_H;
+            if (bar) {
+                int barCol = applyAlpha(0xFF000000 | accentColor, alpha);
+                RoundedUtils.drawRoundedRect(x, y, 3, H, Math.min(r, 3f), barCol);
+                // sharp right edge on bar
+                drawRect(x + 2, y, x + 3, y + H, barCol);
+                textX = x + 3 + PAD_H;
+            }
+
+            // ── Text ─────────────────────────────────────────────────────────
+            GlStateManager.pushMatrix();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(770, 771);
+            GlStateManager.enableTexture2D();
+            GlStateManager.color(1f, 1f, 1f, 1f);
+
+            int fontH = mc.fontRendererObj.FONT_HEIGHT;
+            float ty  = y + (H - fontH) / 2f;
+
+            mc.fontRendererObj.drawString(title, textX, ty,
+                    applyAlpha(0xFF000000 | titleColor, alpha), false);
+
+            int nw = mc.fontRendererObj.getStringWidth(title);
+            mc.fontRendererObj.drawString(body, textX + nw + 5, ty,
+                    applyAlpha(0xFF000000 | bodyColor, alpha), false);
+
+            GlStateManager.popMatrix();
         }
     }
 
-    private void renderToast(float x, float y, int w,
-                             String name, String body,
-                             boolean isOn, int accent, float alpha) {
-
-        int bgA = applyAlpha(BG_COLOR, alpha);
-
-        // ── Background ───────────────────────────────────────────────────────
-        RoundedUtils.drawRoundedRect(x, y, w, TOAST_H, RADIUS, bgA);
-
-        // ── Left accent bar: rounded rect for the caps, plain rect to fill middle ─
-        int barCol = isOn
-                ? applyAlpha(accent | 0xFF000000, alpha)
-                : applyAlpha((accent & 0x00FFFFFF) | 0x44000000, alpha);
-
-        // Draw full-radius pill then paint background over the right overhang
-        RoundedUtils.drawRoundedRect(x, y, ACCENT_W + RADIUS * 2, TOAST_H, RADIUS, barCol);
-        // Fill the right half of that pill shape back with bg to get a flat right edge
-        Gui.drawRect((int)(x + ACCENT_W), (int)y,
-                     (int)(x + ACCENT_W + (int)(RADIUS * 2)), (int)(y + TOAST_H), bgA);
-        // Now the accent bar is exactly ACCENT_W wide with left-rounded, right-flat edge
-
-        // ── Subtle border ────────────────────────────────────────────────────
-        int borderCol = applyAlpha((accent & 0x00FFFFFF) | 0x20000000, alpha);
-        RoundedUtils.drawRoundedOutline(x, y, w, TOAST_H, RADIUS, 0.75f, borderCol);
-
-        // ── Text ─────────────────────────────────────────────────────────────
-        GlStateManager.pushMatrix();
+    private void drawRect(float x1, float y1, float x2, float y2, int color) {
+        net.minecraft.client.renderer.Tessellator t = net.minecraft.client.renderer.Tessellator.getInstance();
+        net.minecraft.client.renderer.WorldRenderer w = t.getWorldRenderer();
+        GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(770, 771);
+        int a = (color >> 24) & 0xFF, r = (color >> 16) & 0xFF,
+            g = (color >>  8) & 0xFF, b = color & 0xFF;
+        w.begin(7, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION_COLOR);
+        w.pos(x1, y2, 0).color(r,g,b,a).endVertex();
+        w.pos(x2, y2, 0).color(r,g,b,a).endVertex();
+        w.pos(x2, y1, 0).color(r,g,b,a).endVertex();
+        w.pos(x1, y1, 0).color(r,g,b,a).endVertex();
+        t.draw();
         GlStateManager.enableTexture2D();
-        GlStateManager.color(1f, 1f, 1f, 1f);
-
-        int fontH  = mc.fontRendererObj.FONT_HEIGHT;
-        float textY = y + (TOAST_H - fontH) / 2f;
-        float textX = x + ACCENT_W + PAD_H;
-
-        // Module name: accent when enabled, muted when disabled
-        int nameCol = applyAlpha(isOn ? accent | 0xFF000000 : 0xFFAAAAAA, alpha);
-        mc.fontRendererObj.drawString(name, textX, textY, nameCol, false);
-
-        // Body text: softer, follows after a small gap
-        int nameW   = mc.fontRendererObj.getStringWidth(name);
-        int bodyCol = applyAlpha(isOn ? 0xFF888888 : 0xFF555555, alpha);
-        mc.fontRendererObj.drawString(body, textX + nameW + 4, textY, bodyCol, false);
-
-        GlStateManager.popMatrix();
     }
 
-    private int applyAlpha(int color, float alpha) {
-        int origA = (color >>> 24) & 0xFF;
-        int newA  = (int)(origA * alpha);
-        return (newA << 24) | (color & 0x00FFFFFF);
+    private int applyAlpha(int color, float a) {
+        int orig = (color >>> 24) & 0xFF;
+        return ((int)(orig * a) << 24) | (color & 0x00FFFFFF);
+    }
+
+    private int rgba(SliderSetting r, SliderSetting g, SliderSetting b, SliderSetting a) {
+        return ((int)a.getValue() << 24) | ((int)r.getValue() << 16) | ((int)g.getValue() << 8) | (int)b.getValue();
+    }
+
+    private int rgb(SliderSetting r, SliderSetting g, SliderSetting b) {
+        return ((int)r.getValue() << 16) | ((int)g.getValue() << 8) | (int)b.getValue();
     }
 
     private float computeSlide(long age, long total) {
-        if (age < ANIM_IN) {
-            return easeOutQuart(age / ANIM_IN);
-        } else if (total > 0 && total - age < ANIM_OUT) {
-            return easeInQuart((total - age) / ANIM_OUT);
-        }
+        if (age < ANIM_IN) { float t = age / ANIM_IN; return 1f - (1f-t)*(1f-t)*(1f-t); }
+        if (total > 0 && total - age < ANIM_OUT) { float t = (total - age) / ANIM_OUT; return t*t*t; }
         return 1f;
     }
 
@@ -150,7 +171,4 @@ public class Notifications extends Module {
         if (total > 0 && total - age < ANIM_OUT) return Math.max(0f, (total - age) / ANIM_OUT);
         return 1f;
     }
-
-    private float easeOutQuart(float t) { float r = 1f-t; return 1f - r*r*r*r; }
-    private float easeInQuart(float t)  { return t*t*t*t; }
 }
