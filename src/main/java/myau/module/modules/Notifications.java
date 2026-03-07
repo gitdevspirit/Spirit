@@ -19,44 +19,36 @@ import java.util.List;
 public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    // Timing
-    public final SliderSetting duration  = register(new SliderSetting("Duration",  3.0, 1.0, 10.0, 0.5));
-
-    // Layout
+    public final SliderSetting   duration = register(new SliderSetting("Duration", 3.0, 1.0, 10.0, 0.5));
     public final DropdownSetting position = register(new DropdownSetting("Position", 0,
             "Bottom Right", "Top Right", "Bottom Left", "Top Left"));
-    public final SliderSetting   width    = register(new SliderSetting("Width",    160, 80, 300, 2));
     public final BooleanSetting  anim     = register(new BooleanSetting("Animation", true));
 
-    // Background
-    public final SliderSetting bgR     = register(new SliderSetting(" BG Red",    20,  0, 255, 1));
-    public final SliderSetting bgG     = register(new SliderSetting(" BG Green",  20,  0, 255, 1));
-    public final SliderSetting bgB     = register(new SliderSetting(" BG Blue",   20,  0, 255, 1));
-    public final SliderSetting bgAlpha = register(new SliderSetting(" BG Alpha", 220,  0, 255, 1));
-    public final SliderSetting radius  = register(new SliderSetting(" Radius",     6,  0,  20, 1));
+    // Label pill (left side — "Spirit")
+    public final SliderSetting pillR = register(new SliderSetting(" Pill Red",   200,  0, 255, 1));
+    public final SliderSetting pillG = register(new SliderSetting(" Pill Green",  80,  0, 255, 1));
+    public final SliderSetting pillB = register(new SliderSetting(" Pill Blue",   30,  0, 255, 1));
 
-    // Accent bar
-    public final BooleanSetting accentBar   = register(new BooleanSetting(" Accent Bar", true));
-    public final SliderSetting  accentR     = register(new SliderSetting(" Accent Red",   233, 0, 255, 1));
-    public final SliderSetting  accentG     = register(new SliderSetting(" Accent Green", 145, 0, 255, 1));
-    public final SliderSetting  accentB     = register(new SliderSetting(" Accent Blue",  184, 0, 255, 1));
+    // Background of the whole toast
+    public final SliderSetting bgR = register(new SliderSetting(" BG Red",    18,  0, 255, 1));
+    public final SliderSetting bgG = register(new SliderSetting(" BG Green",  18,  0, 255, 1));
+    public final SliderSetting bgB = register(new SliderSetting(" BG Blue",   18,  0, 255, 1));
 
-    // Title text
-    public final SliderSetting titleR = register(new SliderSetting(" Title Red",   255, 0, 255, 1));
-    public final SliderSetting titleG = register(new SliderSetting(" Title Green", 255, 0, 255, 1));
-    public final SliderSetting titleB = register(new SliderSetting(" Title Blue",  255, 0, 255, 1));
+    // Message text
+    public final SliderSetting msgR = register(new SliderSetting(" Text Red",   220, 0, 255, 1));
+    public final SliderSetting msgG = register(new SliderSetting(" Text Green", 220, 0, 255, 1));
+    public final SliderSetting msgB = register(new SliderSetting(" Text Blue",  220, 0, 255, 1));
 
-    // Body text
-    public final SliderSetting bodyR = register(new SliderSetting(" Body Red",   160, 0, 255, 1));
-    public final SliderSetting bodyG = register(new SliderSetting(" Body Green", 160, 0, 255, 1));
-    public final SliderSetting bodyB = register(new SliderSetting(" Body Blue",  160, 0, 255, 1));
+    private static final int   H         = 26;   // toast height
+    private static final int   PILL_PAD  = 8;    // horizontal padding inside pill
+    private static final int   MSG_PAD   = 10;   // padding between pill and message text
+    private static final int   MARGIN    = 10;   // screen edge margin
+    private static final int   GAP       = 5;    // between stacked toasts
+    private static final float ANIM_IN   = 200f;
+    private static final float ANIM_OUT  = 250f;
 
-    private static final int   H        = 28;
-    private static final int   MARGIN   = 10;
-    private static final int   GAP      = 5;
-    private static final int   PAD_H    = 8;
-    private static final float ANIM_IN  = 180f;
-    private static final float ANIM_OUT = 240f;
+    // Fixed label
+    private static final String LABEL = "Spirit";
 
     public Notifications() { super("Notifications", true); }
 
@@ -68,103 +60,79 @@ public class Notifications extends Module {
 
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int W = (int) width.getValue();
         int pos = position.getIndex();
         boolean fromRight  = pos == 0 || pos == 1;
         boolean fromBottom = pos == 0 || pos == 2;
 
-        int bgColor     = rgba(bgR, bgG, bgB, bgAlpha);
-        int accentColor = rgb(accentR, accentG, accentB);
-        int titleColor  = rgb(titleR, titleG, titleB);
-        int bodyColor   = rgb(bodyR, bodyG, bodyB);
-        float r         = (float) radius.getValue();
-        boolean bar     = accentBar.getValue();
+        int fontH    = mc.fontRendererObj.FONT_HEIGHT;
+        int labelW   = mc.fontRendererObj.getStringWidth(LABEL);
+        int pillW    = labelW + PILL_PAD * 2;  // pill width based on text
 
         for (int i = 0; i < active.size(); i++) {
             NotificationManager.NotificationEntry n = active.get(i);
+            String msg   = n.message; // full message e.g. "ESP enabled"
+            int msgW     = mc.fontRendererObj.getStringWidth(msg);
+            int toastW   = pillW + MSG_PAD + msgW + MSG_PAD; // total width
 
-            String[] parts = n.message.split(" ", 2);
-            String title   = parts[0];
-            String body    = parts.length > 1 ? parts[1] : "";
+            long  age    = n.getAge();
+            long  total  = n.durationMillis;
+            float alpha  = computeAlpha(age, total);
+            float slide  = computeSlide(age, total);
+            float slideOff = anim.getValue() ? (toastW + MARGIN + 20) * (1f - slide) : 0f;
 
-            long  age   = n.getAge();
-            long  total = n.durationMillis;
-            float alpha = computeAlpha(age, total);
-            float slide = computeSlide(age, total);
-            float slideOff = anim.getValue() ? (W + MARGIN + 20) * (1f - slide) : 0f;
-
-            float x = fromRight  ? sw - MARGIN - W + slideOff : MARGIN - slideOff;
+            float x = fromRight  ? sw - MARGIN - toastW + slideOff : MARGIN - slideOff;
             float y = fromBottom ? sh - MARGIN - H - i * (H + GAP)
                                  : MARGIN + i * (H + GAP);
 
-            // ── Background ───────────────────────────────────────────────────
-            GL11.glEnable(GL11.GL_BLEND);
-            RoundedUtils.drawRoundedRect(x, y, W, H, r, applyAlpha(bgColor, alpha));
+            float r = H / 2f; // full pill radius
 
-            // ── Accent bar ───────────────────────────────────────────────────
-            float textX = x + PAD_H;
-            if (bar) {
-                int barCol = applyAlpha(0xFF000000 | accentColor, alpha);
-                GL11.glEnable(GL11.GL_BLEND);
-                RoundedUtils.drawRoundedRect(x, y, 3, H, Math.min(r, 3f), barCol);
-                drawRect(x + 2, y, x + 3, y + H, barCol);
-                textX = x + 3 + PAD_H;
-            }
+            // ── Full toast background (dark pill) ────────────────────────────
+            int bg = rgba((int)bgR.getValue(), (int)bgG.getValue(), (int)bgB.getValue(), (int)(220 * alpha));
+            GL11.glEnable(GL11.GL_BLEND);
+            RoundedUtils.drawRoundedRect(x, y, toastW, H, r, bg);
+
+            // ── Colored pill label on the left ───────────────────────────────
+            int pill = rgba((int)pillR.getValue(), (int)pillG.getValue(), (int)pillB.getValue(), (int)(255 * alpha));
+            GL11.glEnable(GL11.GL_BLEND);
+            RoundedUtils.drawRoundedRect(x, y, pillW, H, r, pill);
 
             // ── Text ─────────────────────────────────────────────────────────
             GlStateManager.pushMatrix();
-            GlStateManager.enableBlend();
+            GL11.glEnable(GL11.GL_BLEND);
             GlStateManager.blendFunc(770, 771);
             GlStateManager.enableTexture2D();
             GlStateManager.color(1f, 1f, 1f, 1f);
 
-            int fontH = mc.fontRendererObj.FONT_HEIGHT;
-            float ty  = y + (H - fontH) / 2f;
+            float ty = y + (H - fontH) / 2f;
 
-            mc.fontRendererObj.drawString(title, textX, ty,
-                    applyAlpha(0xFF000000 | titleColor, alpha), false);
+            // Label text (white, centered in pill)
+            int labelCol = rgba(255, 255, 255, (int)(255 * alpha));
+            mc.fontRendererObj.drawString(LABEL,
+                    x + (pillW - labelW) / 2f, ty, labelCol, false);
 
-            int nw = mc.fontRendererObj.getStringWidth(title);
-            mc.fontRendererObj.drawString(body, textX + nw + 5, ty,
-                    applyAlpha(0xFF000000 | bodyColor, alpha), false);
+            // Message text
+            int msgCol = rgba((int)msgR.getValue(), (int)msgG.getValue(), (int)msgB.getValue(), (int)(255 * alpha));
+            mc.fontRendererObj.drawString(msg,
+                    x + pillW + MSG_PAD, ty, msgCol, false);
 
             GlStateManager.popMatrix();
         }
     }
 
-    private void drawRect(float x1, float y1, float x2, float y2, int color) {
-        net.minecraft.client.renderer.Tessellator t = net.minecraft.client.renderer.Tessellator.getInstance();
-        net.minecraft.client.renderer.WorldRenderer w = t.getWorldRenderer();
-        GlStateManager.disableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(770, 771);
-        int a = (color >> 24) & 0xFF, r = (color >> 16) & 0xFF,
-            g = (color >>  8) & 0xFF, b = color & 0xFF;
-        w.begin(7, net.minecraft.client.renderer.vertex.DefaultVertexFormats.POSITION_COLOR);
-        w.pos(x1, y2, 0).color(r,g,b,a).endVertex();
-        w.pos(x2, y2, 0).color(r,g,b,a).endVertex();
-        w.pos(x2, y1, 0).color(r,g,b,a).endVertex();
-        w.pos(x1, y1, 0).color(r,g,b,a).endVertex();
-        t.draw();
-        GlStateManager.enableTexture2D();
-    }
-
-    private int applyAlpha(int color, float a) {
-        int orig = (color >>> 24) & 0xFF;
-        return ((int)(orig * a) << 24) | (color & 0x00FFFFFF);
-    }
-
-    private int rgba(SliderSetting r, SliderSetting g, SliderSetting b, SliderSetting a) {
-        return ((int)a.getValue() << 24) | ((int)r.getValue() << 16) | ((int)g.getValue() << 8) | (int)b.getValue();
-    }
-
-    private int rgb(SliderSetting r, SliderSetting g, SliderSetting b) {
-        return ((int)r.getValue() << 16) | ((int)g.getValue() << 8) | (int)b.getValue();
+    private int rgba(int r, int g, int b, int a) {
+        a = Math.max(0, Math.min(255, a));
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
     private float computeSlide(long age, long total) {
-        if (age < ANIM_IN) { float t = age / ANIM_IN; return 1f - (1f-t)*(1f-t)*(1f-t); }
-        if (total > 0 && total - age < ANIM_OUT) { float t = (total - age) / ANIM_OUT; return t*t*t; }
+        if (age < ANIM_IN) {
+            float t = age / ANIM_IN;
+            return 1f - (1f - t) * (1f - t) * (1f - t);
+        }
+        if (total > 0 && total - age < ANIM_OUT) {
+            float t = (total - age) / ANIM_OUT;
+            return t * t * t;
+        }
         return 1f;
     }
 
