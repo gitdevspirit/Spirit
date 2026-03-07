@@ -15,6 +15,7 @@ public class ModuleRegistry {
     public static List<Module> playerModules;
     public static List<Module> renderModules;
     public static List<Module> miscModules;
+    public static List<Module> blatantModules;
 
     public static void init() {
 
@@ -22,7 +23,6 @@ public class ModuleRegistry {
 
         combatModules = new ArrayList<>();
         combatModules.add(Myau.moduleManager.getModule(AimAssist.class));
-        combatModules.add(Myau.moduleManager.getModule(SilentAura.class));
         combatModules.add(Myau.moduleManager.getModule(AutoClicker.class));
         combatModules.add(Myau.moduleManager.getModule(Wtap.class));
         combatModules.add(Myau.moduleManager.getModule(Velocity.class));
@@ -125,5 +125,9 @@ public class ModuleRegistry {
         miscModules.add(Myau.moduleManager.getModule(Pit.class));
         miscModules.add(Myau.moduleManager.getModule(ItemAlerts.class));
         miscModules.sort(comparator);
+
+        blatantModules = new ArrayList<>();
+        blatantModules.add(Myau.moduleManager.getModule(KillAura.class));
+        blatantModules.sort(comparator);
     }
 }
