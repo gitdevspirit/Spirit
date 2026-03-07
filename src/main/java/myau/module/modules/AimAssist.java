@@ -179,7 +179,6 @@ public class AimAssist extends Module {
             event.setRotation(silentYaw, silentPitch, 10);
 
         } else if (event.getType() == EventType.POST) {
-            // Attack after position packet — vanilla order
             if (currentTarget == null || currentTarget.isDead) return;
             double dist = RotationUtil.distanceToEntity(currentTarget);
             if (dist > range.getValue() + extraSwing.getValue()) return;
@@ -256,5 +255,10 @@ public class AimAssist extends Module {
         double minMs = 1000.0 / maxCPS.getValue();
         double maxMs = 1000.0 / minCPS.getValue();
         nextAttackMs = System.currentTimeMillis() + (long)(minMs + rng.nextDouble() * (maxMs - minMs));
+    }
+
+    @Override
+    public String[] getSuffix() {
+        return new String[]{ mode.getOptions()[mode.getIndex()] };
     }
 }
