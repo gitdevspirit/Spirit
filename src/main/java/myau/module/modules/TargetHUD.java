@@ -1,6 +1,5 @@
 package myau.module.modules;
 
-import myau.Myau;
 import myau.enums.ChatColors;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
@@ -10,7 +9,6 @@ import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
-import myau.ui.clickgui.RoundedUtils;
 import myau.util.RenderUtil;
 import myau.util.TeamUtil;
 import myau.util.TimerUtil;
@@ -26,7 +24,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.util.ResourceLocation;
-import org.lwjgl.opengl.GL11;
 
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
@@ -35,40 +32,33 @@ import java.util.Locale;
 public class TargetHUD extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
     private static final DecimalFormat hpFmt = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
+    private static final ResourceLocation STEVE = new ResourceLocation("textures/entity/steve.png");
 
-    // ── Design ────────────────────────────────────────────────────────────────
-    //   Card:  [HEAD] Name
-    //                 [====bar====] 10.0
-    private static final int   ACCENT     = 0xFFE991B8;  // pink
-    private static final int   BAR_TRACK  = 0xFF1E1E1E;
-    private static final int   BG         = 0xCC0A0A0A;
-    private static final float CARD_R     = 6f;
-    private static final float HEAD_S     = 34f;
-    private static final float PAD        = 7f;
-    private static final float BAR_H      = 5f;
-    private static final float BAR_R      = 2.5f;
-    // Card width/height computed from content
+    // colors as ARGB
+    private static final int ACCENT   = 0xFFE991B8;
+    private static final int BG       = 0xCC111111;
+    private static final int BAR_BG   = 0xFF222222;
+    private static final float HEAD_S = 32f;
+    private static final float PAD    = 6f;
+    private static final float BAR_H  = 4f;
 
-    // ── State ─────────────────────────────────────────────────────────────────
     private final TimerUtil lastAttackTimer = new TimerUtil();
     private final TimerUtil animTimer       = new TimerUtil();
     private EntityLivingBase lastTarget = null;
     private EntityLivingBase target     = null;
-    private ResourceLocation headTex    = null;
     private float oldHp = 0, newHp = 0, maxHp = 1;
 
-    // ── Settings ──────────────────────────────────────────────────────────────
-    public final DropdownSetting posX       = register(new DropdownSetting("Position X", 1, "Left", "Middle", "Right"));
-    public final DropdownSetting posY       = register(new DropdownSetting("Position Y", 2, "Top", "Middle", "Bottom"));
-    public final SliderSetting   offX       = register(new SliderSetting("Offset X",   0, -500, 500, 1));
-    public final SliderSetting   offY       = register(new SliderSetting("Offset Y", -55, -500, 500, 1));
-    public final SliderSetting   scale      = register(new SliderSetting("Scale",    1.0,  0.5, 2.0, 0.05));
-    public final BooleanSetting  showHead   = register(new BooleanSetting("Show Head",   true));
-    public final BooleanSetting  showWL     = register(new BooleanSetting("Show W/L",    true));
-    public final BooleanSetting  animations = register(new BooleanSetting("Animations",  true));
-    public final BooleanSetting  shadow     = register(new BooleanSetting("Shadow",      true));
-    public final BooleanSetting  kaOnly     = register(new BooleanSetting("KA Only",     true));
-    public final BooleanSetting  trackTarget= register(new BooleanSetting("Track Target",false));
+    public final DropdownSetting posX        = register(new DropdownSetting("Position X", 1, "Left", "Middle", "Right"));
+    public final DropdownSetting posY        = register(new DropdownSetting("Position Y", 2, "Top", "Middle", "Bottom"));
+    public final SliderSetting   offX        = register(new SliderSetting("Offset X",   0, -500, 500, 1));
+    public final SliderSetting   offY        = register(new SliderSetting("Offset Y", -55, -500, 500, 1));
+    public final SliderSetting   scale       = register(new SliderSetting("Scale",    1.0,  0.5, 2.0, 0.05));
+    public final BooleanSetting  showHead    = register(new BooleanSetting("Show Head",    true));
+    public final BooleanSetting  showWL      = register(new BooleanSetting("Show W/L",     true));
+    public final BooleanSetting  animations  = register(new BooleanSetting("Animations",   true));
+    public final BooleanSetting  shadowText  = register(new BooleanSetting("Shadow",        true));
+    public final BooleanSetting  kaOnly      = register(new BooleanSetting("KA Only",       true));
+    public final BooleanSetting  trackTarget = register(new BooleanSetting("Track Target",  false));
 
     public TargetHUD() { super("TargetHUD", false, true); }
     public EntityLivingBase getTarget() { return target; }
@@ -78,12 +68,15 @@ public class TargetHUD extends Module {
         return null;
     }
 
+    // Always returns a texture — Steve as fallback so head shows immediately
     private ResourceLocation getSkin(EntityLivingBase e) {
-        if (!(e instanceof EntityPlayer)) return null;
-        try {
-            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(e.getName());
-            return info != null ? info.getLocationSkin() : null;
-        } catch (Exception ignored) { return null; }
+        if (e instanceof EntityPlayer) {
+            try {
+                NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(e.getName());
+                if (info != null && info.getLocationSkin() != null) return info.getLocationSkin();
+            } catch (Exception ignored) {}
+        }
+        return STEVE;
     }
 
     @EventTarget
@@ -99,7 +92,7 @@ public class TargetHUD extends Module {
         float selfHp = (mc.thePlayer.getHealth() + mc.thePlayer.getAbsorptionAmount()) / 2f;
 
         if (target != prev) {
-            headTex = null; animTimer.setTime();
+            animTimer.setTime();
             oldHp = hp; newHp = hp; maxHp = Math.max(0.001f, mxHp);
         }
         if (!animations.getValue() || animTimer.hasTimeElapsed(250L)) {
@@ -107,30 +100,31 @@ public class TargetHUD extends Module {
             if (oldHp != newHp) animTimer.reset();
         }
 
-        ResourceLocation skin = getSkin(target);
-        if (skin != null) headTex = skin;
-
-        float elapsed  = (float) Math.min(animTimer.getElapsedTime(), 250L);
-        float animHp   = RenderUtil.lerpFloat(newHp, oldHp, elapsed / 250f);
-        float hpRatio  = Math.min(1f, Math.max(0f, animHp / maxHp));
-
-        // ── Layout ────────────────────────────────────────────────────────────
-        boolean hasHead = showHead.getValue() && headTex != null;
-        float headW     = hasHead ? HEAD_S + PAD : 0f;
+        float elapsed = (float) Math.min(animTimer.getElapsedTime(), 250L);
+        float animHp  = RenderUtil.lerpFloat(newHp, oldHp, elapsed / 250f);
+        float hpRatio = Math.min(1f, Math.max(0f, animHp / maxHp));
 
         String nameStr = target instanceof EntityPlayer
                 ? ChatColors.formatColor("&r" + TeamUtil.stripName(target))
                 : target.getName();
         String hpStr   = hpFmt.format(animHp);
+        int    fontH   = mc.fontRendererObj.FONT_HEIGHT;
 
-        float nameW    = mc.fontRendererObj.getStringWidth(nameStr);
-        float hpNumW   = mc.fontRendererObj.getStringWidth(hpStr);
+        boolean hasHead = showHead.getValue();
+        float headBlockW = hasHead ? HEAD_S + PAD : 0f;
+        float hpNumW     = mc.fontRendererObj.getStringWidth(hpStr);
+        float nameW      = mc.fontRendererObj.getStringWidth(nameStr);
+        float minContent = Math.max(nameW + 20, 80 + 4 + hpNumW);
+        float cardW      = PAD + headBlockW + minContent + PAD;
+        float cardH      = PAD + fontH + 3 + BAR_H + PAD;
 
-        // Minimum bar width so card doesn't get too narrow
-        float minBarW  = 80f;
-        float contentW = Math.max(nameW, minBarW + PAD + hpNumW);
-        float cardW    = PAD + headW + contentW + PAD;
-        float cardH    = PAD + mc.fontRendererObj.FONT_HEIGHT + 4 + BAR_H + PAD;
+        // layout coords
+        float contentX = PAD + headBlockW;
+        float nameY    = PAD;
+        float barY     = nameY + fontH + 3;
+        float barX0    = contentX;
+        float barX1    = cardW - PAD - hpNumW - 4;
+        float barW     = barX1 - barX0;
 
         // ── Position ──────────────────────────────────────────────────────────
         ScaledResolution sr = new ScaledResolution(mc);
@@ -139,88 +133,67 @@ public class TargetHUD extends Module {
         float py = (float) offY.getValue();
         switch (posX.getIndex()) {
             case 1: px += sr.getScaledWidth()  / 2f - (cardW * sv) / 2f; break;
-            case 2: px  = sr.getScaledWidth()  - (cardW * sv) - px;       break;
+            case 2: px  = sr.getScaledWidth()  - (cardW * sv) - px; break;
         }
         switch (posY.getIndex()) {
             case 1: py += sr.getScaledHeight() / 2f - (cardH * sv) / 2f; break;
-            case 2: py  = sr.getScaledHeight() - (cardH * sv) - py;       break;
+            case 2: py  = sr.getScaledHeight() - (cardH * sv) - py; break;
         }
 
         GlStateManager.pushMatrix();
         GlStateManager.translate(px, py, 0f);
         GlStateManager.scale(sv, sv, 1f);
 
-        // ── Background ────────────────────────────────────────────────────────
-        // Soft shadow
-        RoundedUtils.drawRoundedRect(-3, -3, cardW + 6, cardH + 6, CARD_R + 3, 0x33000000);
-        RoundedUtils.drawRoundedRect(-1, -1, cardW + 2, cardH + 2, CARD_R + 1, 0x22000000);
-        // Main bg
-        RoundedUtils.drawRoundedRect(0, 0, cardW, cardH, CARD_R, BG);
+        // ── 1. Background — use Gui.drawRect (handles its own GL state) ───────
+        Gui.drawRect(0, 0, (int) cardW, (int) cardH, BG);
 
-        // ── Head ──────────────────────────────────────────────────────────────
-        float contentX = PAD + headW;
+        // ── 2. Bar track and fill — Gui.drawRect, zero GL fuss ────────────────
+        Gui.drawRect((int) barX0, (int) barY,
+                     (int)(barX0 + barW), (int)(barY + BAR_H), BAR_BG);
+        if (hpRatio > 0.001f) {
+            float fillW = Math.max(1f, hpRatio * barW);
+            Gui.drawRect((int) barX0, (int) barY,
+                         (int)(barX0 + fillW), (int)(barY + BAR_H), ACCENT);
+        }
+
+        // ── 3. Head ───────────────────────────────────────────────────────────
         if (hasHead) {
+            ResourceLocation skin = getSkin(target);
             float hx = PAD;
             float hy = (cardH - HEAD_S) / 2f;
-            // Subtle head bg
-            RoundedUtils.drawRoundedRect(hx - 1, hy - 1, HEAD_S + 2, HEAD_S + 2, 4, 0x33000000);
-            GlStateManager.enableBlend();
-            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GlStateManager.enableTexture2D();
             GlStateManager.color(1f, 1f, 1f, 1f);
-            mc.getTextureManager().bindTexture(headTex);
-            Gui.drawScaledCustomSizeModalRect((int)hx, (int)hy, 8, 8, 8, 8, (int)HEAD_S, (int)HEAD_S, 64, 64);
-            Gui.drawScaledCustomSizeModalRect((int)hx, (int)hy, 40, 8, 8, 8, (int)HEAD_S, (int)HEAD_S, 64, 64);
-            GlStateManager.disableTexture2D();
+            GlStateManager.enableBlend();
+            GlStateManager.enableTexture2D();
+            mc.getTextureManager().bindTexture(skin);
+            // base face layer
+            Gui.drawScaledCustomSizeModalRect(
+                    (int) hx, (int) hy, 8, 8, 8, 8,
+                    (int) HEAD_S, (int) HEAD_S, 64, 64);
+            // hat layer
+            Gui.drawScaledCustomSizeModalRect(
+                    (int) hx, (int) hy, 40, 8, 8, 8,
+                    (int) HEAD_S, (int) HEAD_S, 64, 64);
             GlStateManager.disableBlend();
         }
 
-        // ── Name ──────────────────────────────────────────────────────────────
-        float nameY = PAD;
-        float barY  = nameY + mc.fontRendererObj.FONT_HEIGHT + 4;
-        float barX0 = contentX;
-        float barX1 = cardW - PAD - hpNumW - 4;
-        float barW  = barX1 - barX0;
-
-        // ── Health bar (drawn BEFORE text so GL state is clean) ─────────────────
-        // Track
-        RoundedUtils.drawRoundedRect(barX0, barY, barW, BAR_H, BAR_R, BAR_TRACK);
-        // Fill
-        float fillW = hpRatio * barW;
-        if (fillW >= BAR_R * 2) {
-            RoundedUtils.drawRoundedRect(barX0, barY, fillW, BAR_H, BAR_R, ACCENT);
-            // Shimmer
-            RoundedUtils.drawRoundedRect(barX0 + fillW - 5, barY, 5, BAR_H, BAR_R, 0x66FFD6EC);
-        } else if (fillW > 0) {
-            RoundedUtils.drawRoundedRect(barX0, barY, Math.max(fillW, 2), BAR_H, 1, ACCENT);
-        }
-
-        // ── Text (drawn AFTER geometry) ───────────────────────────────────────
+        // ── 4. Text ───────────────────────────────────────────────────────────
         GlStateManager.enableTexture2D();
-        GlStateManager.enableBlend();
-        GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GlStateManager.disableDepth();
+        boolean shad = shadowText.getValue();
+        mc.fontRendererObj.drawString(nameStr, (int) contentX, (int) nameY, 0xFFFFFFFF, shad);
 
-        mc.fontRendererObj.drawString(nameStr, contentX, nameY, 0xFFFFFFFF, shadow.getValue());
-
-        // W/L tag
         if (showWL.getValue()) {
-            String wl;
-            int wlColor;
-            if (selfHp > hp + 0.5f)      { wl = "W";  wlColor = 0xFF55FF55; }
-            else if (selfHp < hp - 0.5f) { wl = "L";  wlColor = 0xFFFF5555; }
-            else                          { wl = "=";  wlColor = 0xFF888888; }
-            mc.fontRendererObj.drawString(wl, contentX + nameW + 4, nameY, wlColor, shadow.getValue());
+            String wl; int wlCol;
+            if (selfHp > hp + 0.5f)      { wl = "W"; wlCol = 0xFF55FF55; }
+            else if (selfHp < hp - 0.5f) { wl = "L"; wlCol = 0xFFFF5555; }
+            else                          { wl = "="; wlCol = 0xFF888888; }
+            mc.fontRendererObj.drawString(wl, (int)(contentX + nameW + 4), (int) nameY, wlCol, shad);
         }
 
-        // HP number — pink, right-aligned
         mc.fontRendererObj.drawString(hpStr,
-                cardW - PAD - hpNumW, barY + (BAR_H - mc.fontRendererObj.FONT_HEIGHT) / 2f - 1,
-                ACCENT, shadow.getValue());
+                (int)(cardW - PAD - hpNumW),
+                (int)(barY + (BAR_H - fontH) / 2f - 1),
+                ACCENT, shad);
 
-        GlStateManager.enableDepth();
-        GlStateManager.disableBlend();
-        GL11.glColor4f(1f, 1f, 1f, 1f);
         GlStateManager.popMatrix();
     }
 
