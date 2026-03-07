@@ -371,7 +371,7 @@ public class KillAura extends Module {
          Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
       }
 
-      if (!this.isEnabled() || event.getType() != EventType.PRE) return;
+      if (!this.isEnabled() || event.getType() != EventType.PRE || mc.currentScreen != null) return;
 
       if (this.attackDelayMS > 0L) this.attackDelayMS -= 50L;
 
