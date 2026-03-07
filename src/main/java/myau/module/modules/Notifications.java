@@ -46,7 +46,7 @@ public class Notifications extends Module {
     private static final int    MSG_PAD  = 9;
     private static final int    MARGIN   = 10;
     private static final int    GAP      = 5;
-    private static final int    RADIUS   = H / 2;
+    private static final int    RADIUS   = 4;
 
     private static final float ANIM_IN  = 200f;
     private static final float ANIM_OUT = 250f;
