@@ -60,7 +60,7 @@ public class IntelGui extends GuiScreen {
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
 
         // Semi-transparent dark overlay (keeps world faintly visible)
-        drawRect(0, 0, sw, sh, 0xBB000008);
+        fillRect(0, 0, sw, sh, 0xBB000008);
 
         int HDR = 40, FTR = 28;
         int detailW = selected != null ? sw / 3 : 0;
@@ -77,8 +77,8 @@ public class IntelGui extends GuiScreen {
     // ── Header ────────────────────────────────────────────────────────────────
 
     private void drawHeader(int sw, int hdr, int mx, int my) {
-        drawRect(0, 0, sw, hdr, 0xCC08080F);
-        drawRect(0, hdr - 1, sw, 1, 0x33E991B8);
+        fillRect(0, 0, sw, hdr, 0xCC08080F);
+        fillRect(0, hdr - 1, sw, 1, 0x33E991B8);
 
         gl(); mc.fontRendererObj.drawString("LOBBY INTEL", 14, 8, ACCENT, false);
         mc.fontRendererObj.drawString(players.size() + " players  •  " +
@@ -116,7 +116,7 @@ public class IntelGui extends GuiScreen {
     // ── List ──────────────────────────────────────────────────────────────────
 
     private void drawList(int lx, int ly, int lw, int lh, int mx, int my, int sh) {
-        drawRect(lx, ly, lw, lh, 0xAA08080E);
+        fillRect(lx, ly, lw, lh, 0xAA08080E);
 
         // Column headers
         int hY = ly + 5;
@@ -126,7 +126,7 @@ public class IntelGui extends GuiScreen {
         mc.fontRendererObj.drawString("WLR",     lx + lw * 50/100, hY, TEXT_DIM, false);
         mc.fontRendererObj.drawString("STREAK",  lx + lw * 64/100, hY, TEXT_DIM, false);
         mc.fontRendererObj.drawString("THREAT",  lx + lw - 58,     hY, TEXT_DIM, false);
-        drawRect(lx + 6, hY + 10, lw - 12, 1, 0x22FFFFFF);
+        fillRect(lx + 6, hY + 10, lw - 12, 1, 0x22FFFFFF);
 
         int cY  = ly + 20;
         int cH  = lh - 20;
@@ -153,8 +153,8 @@ public class IntelGui extends GuiScreen {
         if (maxScroll > 0) {
             int sbH = Math.max(16, cH * cH / tot);
             int sbY = cY + (int)((float) scrollOff / maxScroll * (cH - sbH));
-            drawRect(lx + lw - 4, cY, 2, cH, 0x22FFFFFF);
-            drawRect(lx + lw - 4, sbY, 2, sbH, 0x66E991B8);
+            fillRect(lx + lw - 4, cY, 2, cH, 0x22FFFFFF);
+            fillRect(lx + lw - 4, sbY, 2, sbH, 0x66E991B8);
         }
     }
 
@@ -209,17 +209,17 @@ public class IntelGui extends GuiScreen {
 
         // Threat bar + number
         int bx = cx + cw - 54, bw = 36, bh = 3, by = cy + ch / 2 - 1;
-        drawRect(bx, by, bw, bh, 0x22FFFFFF);
+        fillRect(bx, by, bw, bh, 0x22FFFFFF);
         int fw = (int)(Math.min(1f, p.threatScore / 100f) * bw);
-        if (fw > 0) drawRect(bx, by, fw, bh, tc);
+        if (fw > 0) fillRect(bx, by, fw, bh, tc);
         mc.fontRendererObj.drawString(String.valueOf((int) p.threatScore), bx + bw + 3f, by - 2f, tc, false);
     }
 
     // ── Detail panel ──────────────────────────────────────────────────────────
 
     private void drawDetail(int px, int py, int pw, int ph) {
-        drawRect(px, py, pw, ph, 0xCC0A0A14);
-        drawRect(px, py, 1, ph, 0x33E991B8);
+        fillRect(px, py, pw, ph, 0xCC0A0A14);
+        fillRect(px, py, 1, ph, 0x33E991B8);
 
         IntelPlayer p = selected;
         if (p == null) return;
@@ -251,19 +251,19 @@ public class IntelGui extends GuiScreen {
         }
 
         // Threat bar
-        drawRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 6;
+        fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 6;
         gl(); mc.fontRendererObj.drawString("THREAT", x, y, TEXT_DIM, false);
         mc.fontRendererObj.drawString((int) p.threatScore + "/100",
                 x + pw - 28 - mc.fontRendererObj.getStringWidth((int)p.threatScore+"/100") - 14, y, tc, false);
         y += 10;
-        drawRect(x, y, pw - 28, 4, 0x22FFFFFF);
+        fillRect(x, y, pw - 28, 4, 0x22FFFFFF);
         int fw = (int)(Math.min(1f, p.threatScore / 100f) * (pw - 28));
-        if (fw > 0) drawRect(x, y, fw, 4, tc);
+        if (fw > 0) fillRect(x, y, fw, 4, tc);
         y += 12;
 
         if (p.loading) { gl(); mc.fontRendererObj.drawString("Fetching stats...", x, y, TEXT_DIM, false); return; }
 
-        drawRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
+        fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
         y = dRow(x, y, pw, "Final K/D",    fmt(p.fkdr),                statCol(p.fkdr,  3,  6));
         y = dRow(x, y, pw, "Win/Loss",     fmt(p.wlr),                 statCol(p.wlr,   1.5,4));
         y = dRow(x, y, pw, "Streak",       String.valueOf(p.winstreak), statCol(p.winstreak,10,30));
@@ -271,7 +271,7 @@ public class IntelGui extends GuiScreen {
         y = dRow(x, y, pw, "Beds Broken",  String.valueOf(p.bedsBroken),  TEXT_BRIGHT);
         y = dRow(x, y, pw, "Total Wins",   String.valueOf(p.wins),        TEXT_BRIGHT);
 
-        y += 4; drawRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
+        y += 4; fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
         gl(); mc.fontRendererObj.drawString("INTEL", x, y, TEXT_DIM, false); y += 12;
         for (String line : wrap(recommend(p), pw - 28)) {
             gl(); mc.fontRendererObj.drawString(line, x, y, TEXT_MID, false); y += 11;
@@ -282,8 +282,8 @@ public class IntelGui extends GuiScreen {
 
     private void drawFooter(int sw, int sh, int ftr) {
         int fy = sh - ftr;
-        drawRect(0, fy, sw, ftr, 0xCC08080F);
-        drawRect(0, fy, sw, 1, 0x22E991B8);
+        fillRect(0, fy, sw, ftr, 0xCC08080F);
+        fillRect(0, fy, sw, 1, 0x22E991B8);
         gl(); mc.fontRendererObj.drawString(
                 "ESC  close    SCROLL  navigate    CLICK  inspect player    R  refresh",
                 14, fy + (ftr - 8) / 2f, TEXT_DIM, false);
@@ -441,7 +441,7 @@ public class IntelGui extends GuiScreen {
         return out;
     }
 
-    private void drawRect(int x, int y, int w, int h, int color) {
+    private void fillRect(int x, int y, int w, int h, int color) {
         Gui.drawRect(x, y, x + w, y + h, color);
     }
 
