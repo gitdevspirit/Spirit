@@ -28,7 +28,7 @@ public class Timer extends Module {
     public final DropdownSetting mode          = register(new DropdownSetting("Mode", 0, "CONSTANT", "VARIABLE", "FREEZE"));
     public final SliderSetting   maxSpeed      = register(new SliderSetting("Max (Variable)", 2.0, 1.0, 5.0, 0.1));
     public final DropdownSetting side          = register(new DropdownSetting("Side", 0, "CLIENT", "SERVER", "BOTH"));
-    public final SliderSetting   countdownSecs = register(new SliderSetting("Countdown (s)", 5, 1, 10, 1));
+    public final SliderSetting   countdownSecs = register(new SliderSetting("Countdown (s)", 3, 1, 10, 1));
     public final BooleanSetting  showCountdown = register(new BooleanSetting("Show Countdown", true));
     public final BooleanSetting  pauseOnScroll = register(new BooleanSetting("Pause on Scroll", true));
     public final BooleanSetting  pauseOnRight  = register(new BooleanSetting("Pause on RClick", true));
@@ -41,34 +41,50 @@ public class Timer extends Module {
     // Server-side packet accumulator
     private double packetAccum = 0.0;
 
-    // Post-off cosmetic countdown (purely visual, timer is already OFF)
-    private boolean counting    = false;
-    private long    countStart  = -1;
-    private int     totalCount  = 5;
+    // Countdown — timer still ON while this is running
+    private boolean pendingOff   = false;
+    private long    offAt        = -1; // absolute time when timer actually turns off
+    private long    countdownTotal = 0;
 
     public Timer() { super("Timer", false); }
 
     @Override
+    public void setEnabled(boolean enabled) {
+        if (!enabled && isEnabled()) {
+            long ms = (long)(countdownSecs.getValue() * 1000.0);
+            if (showCountdown.getValue() && ms > 0) {
+                if (pendingOff) {
+                    // Second press = instant off
+                    pendingOff = false;
+                    offAt      = -1;
+                    super.setEnabled(false);
+                } else {
+                    pendingOff     = true;
+                    offAt          = System.currentTimeMillis() + ms;
+                    countdownTotal = ms;
+                }
+                return;
+            }
+        }
+        super.setEnabled(enabled);
+    }
+
+    @Override
     public void onEnabled() {
-        counting   = false;
-        countStart = -1;
-        packetAccum = 0.0;
+        pendingOff    = false;
+        offAt         = -1;
+        packetAccum   = 0.0;
     }
 
     @Override
     public void onDisabled() {
-        // Instantly reset — zero delay
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer != null) timer.timerSpeed = 1.0F;
+        pendingOff  = false;
+        offAt       = -1;
         paused      = false;
         pauseEnd    = -1;
         packetAccum = 0.0;
-        // Start cosmetic countdown
-        if (showCountdown.getValue()) {
-            counting   = true;
-            countStart = System.currentTimeMillis();
-            totalCount = (int) countdownSecs.getValue();
-        }
     }
 
     private double getSpeed() {
@@ -82,6 +98,14 @@ public class Timer extends Module {
     @EventTarget(Priority.HIGHEST)
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
+
+        // Check if countdown expired — actually turn off now
+        if (pendingOff && offAt > 0 && System.currentTimeMillis() >= offAt) {
+            pendingOff = false;
+            offAt      = -1;
+            super.setEnabled(false);
+            return;
+        }
 
         if (paused && System.currentTimeMillis() >= pauseEnd) {
             paused = false; pauseEnd = -1;
@@ -108,7 +132,6 @@ public class Timer extends Module {
 
         C03PacketPlayer pkt = (C03PacketPlayer) event.getPacket();
         if (!pkt.isMoving()) return;
-
         double spd = getSpeed();
         if (spd <= 1.0) return;
 
@@ -144,125 +167,81 @@ public class Timer extends Module {
         paused = true; pauseEnd = System.currentTimeMillis() + PAUSE_MS;
     }
 
-    // ── Cosmetic countdown HUD (fires even when module is OFF) ────────────────
+    // ── HUD: shown while countdown is active (timer still ON) ─────────────────
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (!counting || countStart < 0) return;
+        if (!pendingOff || offAt < 0) return;
         if (mc.thePlayer == null || mc.currentScreen != null) return;
 
-        long elapsed  = System.currentTimeMillis() - countStart;
-        long totalMs  = totalCount * 1000L;
-        if (elapsed >= totalMs) { counting = false; countStart = -1; return; }
+        long remaining = offAt - System.currentTimeMillis();
+        if (remaining <= 0) return;
 
-        // Which second we're on (5, 4, 3, 2, 1)
-        int secsLeft  = (int) Math.ceil((totalMs - elapsed) / 1000.0);
-        // Progress within the current second (0→1)
-        float secProg = 1f - (float)((totalMs - elapsed) % 1000) / 1000f;
-        // Overall fade out in last 500ms
-        float fadeAlpha = elapsed > totalMs - 500 ? (float)(totalMs - elapsed) / 500f : 1f;
+        float progress = 1f - (float) remaining / countdownTotal; // 0→1
+        int   secsLeft = (int) Math.ceil(remaining / 1000.0);
 
         ScaledResolution sr = new ScaledResolution(mc);
-        int cx = sr.getScaledWidth()  / 2;
-        int cy = sr.getScaledHeight() / 2;
+        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
 
+        // ── Layout ────────────────────────────────────────────────────────────
         String numStr   = String.valueOf(secsLeft);
-        String labelStr = "TIMER OFF IN";
-        int fontH = mc.fontRendererObj.FONT_HEIGHT;
+        String labelStr = "turning off in";
+        int fontH   = mc.fontRendererObj.FONT_HEIGHT;
+        int labelW  = mc.fontRendererObj.getStringWidth(labelStr);
+        int numW    = mc.fontRendererObj.getStringWidth(numStr) * 2;
+        int cardW   = Math.max(labelW, numW) + 24;
+        int barH    = 2;
+        int cardH   = fontH + 4 + fontH * 2 + 6 + barH + 14;
+        int cardX   = sw / 2 - cardW / 2;
+        int cardY   = sh / 2 + 18;
 
-        // Number is rendered 3x scale
-        int numScaledW  = mc.fontRendererObj.getStringWidth(numStr) * 3;
-        int labelW      = mc.fontRendererObj.getStringWidth(labelStr);
-        int cardW       = Math.max(numScaledW, labelW) + 32;
-        int cardH       = fontH + 6 + fontH * 3 + 20; // label + gap + number(3x) + padding
-        int cardX       = cx - cardW / 2;
-        int cardY       = cy + 14;
-
-        // Pulse: card slightly scales up/down each second
-        float pulse = 1f + (float)Math.sin(secProg * Math.PI) * 0.015f;
-
-        GlStateManager.pushMatrix();
-        GlStateManager.translate(cx, cy + 14 + cardH / 2f, 0);
-        GlStateManager.scale(pulse, pulse, 1f);
-        GlStateManager.translate(-(cx), -(cy + 14 + cardH / 2f), 0);
-
+        // ── GL ────────────────────────────────────────────────────────────────
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.disableTexture2D();
         GlStateManager.disableDepth();
         GlStateManager.disableAlpha();
 
-        // Card bg
-        drawRoundedRect(cardX, cardY, cardW, cardH, 5, applyAlpha(0xEE0D0D14, fadeAlpha));
+        // Dark card
+        drawRect(cardX, cardY, cardW, cardH, 0xDD0C0C10);
 
-        // Top accent bar — color shifts green→yellow→red as countdown progresses
-        float hue = 0.33f - 0.33f * (1f - (float)(totalMs - elapsed) / totalMs);
-        int accentColor = java.awt.Color.HSBtoRGB(hue, 0.9f, 1.0f) | 0xFF000000;
-        drawRoundedRect(cardX + 4, cardY, cardW - 8, 2, 1, applyAlpha(accentColor, fadeAlpha));
+        // Progress bar at bottom — shrinks as time runs out, green→red
+        float hue = 0.33f * (1f - progress);
+        int barCol = java.awt.Color.HSBtoRGB(hue, 0.85f, 1.0f) | 0xFF000000;
+        int fillW  = (int)((1f - progress) * cardW);
+        if (fillW > 0) drawRect(cardX, cardY + cardH - barH, fillW, barH, barCol);
+        // bar track
+        drawRect(cardX + fillW, cardY + cardH - barH, cardW - fillW, barH, 0x33FFFFFF);
 
         GlStateManager.enableTexture2D();
         GlStateManager.enableDepth();
         GlStateManager.enableAlpha();
         GlStateManager.color(1f, 1f, 1f, 1f);
 
-        // "TIMER OFF IN" label
+        // "turning off in" — muted
         mc.fontRendererObj.drawString(labelStr,
                 cardX + (cardW - labelW) / 2f,
-                cardY + 10,
-                applyAlpha(0xFFAAAAAA, fadeAlpha), false);
+                cardY + 8,
+                0xFF888888, false);
 
-        // Big number — 3x scale, centered
+        // Big number — 2x, colored same as bar
         GlStateManager.pushMatrix();
-        float numX = cardX + (cardW - numScaledW) / 2f;
-        float numY = cardY + 10 + fontH + 6;
-        GlStateManager.translate(numX, numY, 0);
-        GlStateManager.scale(3f, 3f, 1f);
-        // Color: green when plenty of time, shifts to red
-        int numColor = applyAlpha(accentColor, fadeAlpha);
-        mc.fontRendererObj.drawString(numStr, 0, 0, numColor, false);
+        GlStateManager.translate(cardX + (cardW - numW) / 2f, cardY + 8 + fontH + 4, 0);
+        GlStateManager.scale(2f, 2f, 1f);
+        mc.fontRendererObj.drawString(numStr, 0, 0, barCol, false);
         GlStateManager.popMatrix();
 
-        GlStateManager.popMatrix();
         GlStateManager.disableBlend();
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private int applyAlpha(int color, float a) {
-        int orig = (color >>> 24) & 0xFF;
-        return ((int)(orig * a) << 24) | (color & 0x00FFFFFF);
-    }
-
-    private void drawRoundedRect(int x, int y, int w, int h, int r, int color) {
-        r = Math.min(r, Math.min(w, h) / 2);
-        drawQuad(x+r, y,     x+w-r, y+h,   color);
-        drawQuad(x,   y+r,   x+r,   y+h-r, color);
-        drawQuad(x+w-r, y+r, x+w,   y+h-r, color);
-        drawArc(x+r,   y+r,   r, 180, 270, color);
-        drawArc(x+w-r, y+r,   r, 270, 360, color);
-        drawArc(x+r,   y+h-r, r,  90, 180, color);
-        drawArc(x+w-r, y+h-r, r,   0,  90, color);
-    }
-
-    private void drawQuad(int x1, int y1, int x2, int y2, int color) {
+    private void drawRect(int x, int y, int w, int h, int color) {
         float[] c = unpack(color);
-        Tessellator t = Tessellator.getInstance(); WorldRenderer wr = t.getWorldRenderer();
+        Tessellator t = Tessellator.getInstance();
+        WorldRenderer wr = t.getWorldRenderer();
         wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-        wr.pos(x1,y1,0).color(c[0],c[1],c[2],c[3]).endVertex();
-        wr.pos(x1,y2,0).color(c[0],c[1],c[2],c[3]).endVertex();
-        wr.pos(x2,y2,0).color(c[0],c[1],c[2],c[3]).endVertex();
-        wr.pos(x2,y1,0).color(c[0],c[1],c[2],c[3]).endVertex();
-        t.draw();
-    }
-
-    private void drawArc(int cx, int cy, int r, int s, int e, int color) {
-        float[] c = unpack(color);
-        Tessellator t = Tessellator.getInstance(); WorldRenderer wr = t.getWorldRenderer();
-        wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
-        wr.pos(cx,cy,0).color(c[0],c[1],c[2],c[3]).endVertex();
-        for (int deg = s; deg <= e; deg += 3) {
-            double rad = Math.toRadians(deg);
-            wr.pos(cx + Math.cos(rad)*r, cy + Math.sin(rad)*r, 0).color(c[0],c[1],c[2],c[3]).endVertex();
-        }
+        wr.pos(x,   y,   0).color(c[0],c[1],c[2],c[3]).endVertex();
+        wr.pos(x,   y+h, 0).color(c[0],c[1],c[2],c[3]).endVertex();
+        wr.pos(x+w, y+h, 0).color(c[0],c[1],c[2],c[3]).endVertex();
+        wr.pos(x+w, y,   0).color(c[0],c[1],c[2],c[3]).endVertex();
         t.draw();
     }
 
@@ -275,6 +254,10 @@ public class Timer extends Module {
 
     @Override
     public String[] getSuffix() {
+        if (pendingOff) {
+            long rem = Math.max(0, offAt - System.currentTimeMillis());
+            return new String[]{ "off in " + (rem < 1000 ? rem + "ms" : String.format("%.1fs", rem/1000.0)) };
+        }
         if (paused) return new String[]{ "paused" };
         return new String[]{ String.format("%.2fx", speed.getValue()) };
     }
