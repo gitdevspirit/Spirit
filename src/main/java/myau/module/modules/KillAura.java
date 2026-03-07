@@ -44,7 +44,6 @@ import myau.util.TimerUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityOtherPlayerMP;
 import net.minecraft.client.gui.inventory.GuiContainer;
-import net.minecraft.entity.DataWatcher;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.boss.EntityDragon;
@@ -66,7 +65,6 @@ import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
 import net.minecraft.network.play.client.C09PacketHeldItemChange;
 import net.minecraft.network.play.client.C02PacketUseEntity.Action;
 import net.minecraft.network.play.server.S06PacketUpdateHealth;
-import net.minecraft.network.play.server.S1CPacketEntityMetadata;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
@@ -711,24 +709,10 @@ public class KillAura extends Module {
       }
       if ((Integer)this.debugLog.getValue() == 1 && this.isAttackAllowed()) {
          if (event.getPacket() instanceof S06PacketUpdateHealth) {
-            float diff = ((S06PacketUpdateHealth)event.getPacket()).getTotalHealth() - mc.thePlayer.getHealth();
+            float diff = ((S06PacketUpdateHealth)event.getPacket()).getHealth() - mc.thePlayer.getHealth();
             if (diff != 0.0F && this.lastTickProcessed != mc.thePlayer.ticksExisted) {
                this.lastTickProcessed = mc.thePlayer.ticksExisted;
                ChatUtil.sendFormatted(String.format("%sHealth: %s&l%s&r (&otick: %d&r)&r", Myau.clientName, diff > 0.0F ? "&a" : "&c", df.format(diff), mc.thePlayer.ticksExisted));
-            }
-         }
-         if (event.getPacket() instanceof S1CPacketEntityMetadata) {
-            S1CPacketEntityMetadata pkt = (S1CPacketEntityMetadata)event.getPacket();
-            if (pkt.func_149375_d() == mc.thePlayer.getEntityId()) {
-               for (DataWatcher.WatchableObject wo : pkt.func_149376_c()) {
-                  if (wo.func_75672_a() == 6) {
-                     float diff = (Float)wo.func_75669_b() - mc.thePlayer.getHealth();
-                     if (diff != 0.0F && this.lastTickProcessed != mc.thePlayer.ticksExisted) {
-                        this.lastTickProcessed = mc.thePlayer.ticksExisted;
-                        ChatUtil.sendFormatted(String.format("%sHealth: %s&l%s&r (&otick: %d&r)&r", Myau.clientName, diff > 0.0F ? "&a" : "&c", df.format(diff), mc.thePlayer.ticksExisted));
-                     }
-                  }
-               }
             }
          }
       }
