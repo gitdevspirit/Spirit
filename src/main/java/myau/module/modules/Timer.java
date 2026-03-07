@@ -35,10 +35,17 @@ public class Timer extends Module {
     @Override
     public void setEnabled(boolean enabled) {
         if (!enabled && isEnabled() && (long) offDelay.getValue() > 0) {
-            // Don't actually disable yet — start the countdown
+            if (pendingDisable) {
+                // Already counting down — second press = instant off
+                pendingDisable = false;
+                countdownEnd   = -1;
+                super.setEnabled(false);
+                return;
+            }
+            // Start countdown
             countdownEnd   = System.currentTimeMillis() + (long) offDelay.getValue();
             pendingDisable = true;
-            return; // skip super.setEnabled(false)
+            return;
         }
         super.setEnabled(enabled);
     }
