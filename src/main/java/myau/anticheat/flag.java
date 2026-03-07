@@ -15,7 +15,6 @@ import java.util.Map;
 public class flag {
     private static final String CHEAT_AUTOBLOCK = "AutoBlock";
     private static final String CHEAT_NOSLOW = "Noslow";
-    private static final String CHEAT_KILLAURA = "KillAura";
     private static final String CHEAT_SCAFFOLD = "Scaffold";
     private static final Minecraft mc = Minecraft.getMinecraft();
     public static boolean acflag = true;
@@ -25,7 +24,7 @@ public class flag {
     public static void receiveSignal(String playerName, String cheatName) {
         if (!acflag) return;
         if (whitelist.contains(playerName)) return;
-        if (!(cheatName.equals(CHEAT_AUTOBLOCK) || cheatName.equals(CHEAT_NOSLOW) || cheatName.equals(CHEAT_KILLAURA) || cheatName.equals(CHEAT_SCAFFOLD))) return;
+        if (!(cheatName.equals(CHEAT_AUTOBLOCK) || cheatName.equals(CHEAT_NOSLOW) || cheatName.equals(CHEAT_SCAFFOLD))) return;
 
         int[] flagData = flagMap.getOrDefault(playerName, new int[]{0, (int) (Minecraft.getMinecraft().theWorld.getTotalWorldTime() / 20)});
 
@@ -36,7 +35,6 @@ public class flag {
         int MAX_FLAG_COUNT = 2;
         if (cheatName.equals(CHEAT_AUTOBLOCK)) MAX_FLAG_COUNT = 5;
         if (cheatName.equals(CHEAT_NOSLOW)) MAX_FLAG_COUNT = 3;
-        if (cheatName.equals(CHEAT_KILLAURA)) MAX_FLAG_COUNT = 4;
         if (cheatName.equals(CHEAT_SCAFFOLD)) MAX_FLAG_COUNT = 4;
 
         if (flagData[0] >= MAX_FLAG_COUNT) {
