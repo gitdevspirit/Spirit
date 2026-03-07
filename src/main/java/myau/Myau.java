@@ -136,6 +136,7 @@ public class Myau {
         moduleManager.modules.put(HitBox.class,          new HitBox());
         moduleManager.modules.put(LagRange.class,        new LagRange());
         moduleManager.modules.put(LightningTracker.class,new LightningTracker());
+        moduleManager.modules.put(KillAura.class, new KillAura());
         moduleManager.modules.put(LongJump.class,        new LongJump());
         moduleManager.modules.put(MCF.class,             new MCF());
         moduleManager.modules.put(NameTags.class,        new NameTags());
