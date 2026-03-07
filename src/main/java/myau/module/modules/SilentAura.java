@@ -6,7 +6,6 @@ import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.*;
 import myau.management.RotationState;
-import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
@@ -14,7 +13,6 @@ import myau.module.SliderSetting;
 import myau.util.*;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.play.client.C02PacketUseEntity;
 import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
@@ -106,15 +104,15 @@ public class SilentAura extends Module {
             if (dist > range.getValue() + extraSwing.getValue()) return;
             Autoblock autoblock = (Autoblock) Myau.moduleManager.modules.get(Autoblock.class);
             if (autoblock != null && autoblock.isEnabled() && autoblock.isPlayerBlocking()) return;
-            // Ensure position/look packet precedes attack (fixes PacketOrderB)
+            // Ensure a look/position packet precedes attack in this tick (fixes PacketOrderB)
             if (!positionSentTick) {
                 PacketUtil.sendPacket(new C03PacketPlayer.C05PacketPlayerLook(
                         silentYaw, silentPitch, mc.thePlayer.onGround));
             }
             attackingThisTick = true;
-            EventManager.call(new AttackEvent(currentTarget));
-            ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-            PacketUtil.sendPacket(new C02PacketUseEntity(currentTarget, C02PacketUseEntity.Action.ATTACK));
+            // Use full vanilla attackEntity path — same as AimAssist silent mode
+            // attackEntity: syncCurrentPlayItem → AttackEvent (via mixin) → C02 ATTACK
+            mc.playerController.attackEntity(mc.thePlayer, currentTarget);
             mc.thePlayer.swingItem();
             attackingTarget = currentTarget;
             scheduleNextAttack();
@@ -146,20 +144,10 @@ public class SilentAura extends Module {
             return;
         }
 
-        // Choose aim base yaw
-        float baseYaw, basePitch;
-        if (!ignoreManualAim.getValue()) {
-            float[] directRot = calcRotation(currentTarget, event.getYaw(), event.getPitch());
-            float manualDiff  = getAngleDiff(mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, directRot[0], directRot[1]);
-            float silentDiff  = getAngleDiff(silentYaw, silentPitch, directRot[0], directRot[1]);
-            baseYaw   = (manualDiff < silentDiff) ? mc.thePlayer.rotationYaw : silentYaw;
-            basePitch = (manualDiff < silentDiff) ? mc.thePlayer.rotationPitch : silentPitch;
-        } else {
-            baseYaw   = silentYaw;
-            basePitch = silentPitch;
-        }
-
-        float[] rot = calcRotation(currentTarget, baseYaw, basePitch);
+        // Smooth from last REPORTED yaw toward target — same as Raven AimAssist Silent.
+        // event.getYaw() = lastReportedYaw = what the server last confirmed.
+        // This is the authoritative base; camera is irrelevant for silent mode.
+        float[] rot = calcRotation(currentTarget, event.getYaw(), event.getPitch());
         if (getAngleDiff(rot[0], rot[1]) > maxAngle.getValue()) {
             currentTarget = null;
             return;
@@ -168,12 +156,9 @@ public class SilentAura extends Module {
         silentYaw   = rot[0];
         silentPitch = rot[1];
 
-        RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
+        // Mixin will call RotationState.applyState after this returns using event values
         event.setRotation(silentYaw, silentPitch, 10);
 
-        // Always set prevRotation = silentYaw so moveFlying computes velocity
-        // along silentYaw direction — matches Grim's simulation, fixes Simulation flag.
-        event.setPervRotation(silentYaw, 10);
 
     }
 
