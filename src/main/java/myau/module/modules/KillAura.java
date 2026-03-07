@@ -24,12 +24,10 @@ import myau.events.TickEvent;
 import myau.events.UpdateEvent;
 import myau.management.RotationState;
 import myau.mixin.IAccessorPlayerControllerMP;
+import myau.module.BooleanSetting;
+import myau.module.DropdownSetting;
 import myau.module.Module;
-import myau.property.properties.BooleanProperty;
-import myau.property.properties.FloatProperty;
-import myau.property.properties.IntProperty;
-import myau.property.properties.ModeProperty;
-import myau.property.properties.PercentProperty;
+import myau.module.SliderSetting;
 import myau.util.ChatUtil;
 import myau.util.ItemUtil;
 import myau.util.KeyBindUtil;
@@ -90,53 +88,69 @@ public class KillAura extends Module {
    private int lastTickProcessed = 0;
    public static int attackCooldownTicks = 0;
 
-   public final ModeProperty mode = new ModeProperty("mode", 0, new String[]{"SINGLE", "SWITCH"});
-   public final ModeProperty sort = new ModeProperty("sort", 0, new String[]{"DISTANCE", "HEALTH", "HURT_TIME", "FOV"});
-   public final ModeProperty autoBlock = new ModeProperty("auto-block", 3, new String[]{"NONE", "VANILLA", "SPOOF", "Grim", "BLINK", "INTERACT", "SWAP", "LEGIT", "FAKE", "NEW", "blinkLESS", "Rise", "Opal"});
-   public final BooleanProperty autoBlockRequirePress = new BooleanProperty("auto-block-require-press", false);
-   public final FloatProperty autoBlockCPS = new FloatProperty("auto-block-aps", 10.0F, 1.0F, 20.0F);
-   public final FloatProperty autoBlockRange = new FloatProperty("auto-block-range", 6.0F, 3.0F, 8.0F);
-   public final FloatProperty swingRange = new FloatProperty("swing-range", 3.5F, 3.0F, 6.0F);
-   public final FloatProperty attackRange = new FloatProperty("attack-range", 3.0F, 3.0F, 6.0F);
-   public final IntProperty fov = new IntProperty("fov", 360, 30, 360);
-   public final IntProperty minCPS = new IntProperty("min-aps", 14, 1, 20);
-   public final IntProperty maxCPS = new IntProperty("max-aps", 14, 1, 20);
-   public final IntProperty switchDelay = new IntProperty("switch-delay", 150, 0, 1000);
-   public final ModeProperty rotations = new ModeProperty("rotations", 2, new String[]{"NONE", "LEGIT", "SILENT", "LOCK_VIEW"});
-   public final ModeProperty moveFix = new ModeProperty("move-fix", 1, new String[]{"NONE", "SILENT", "STRICT"});
-   public final PercentProperty smoothing = new PercentProperty("smoothing", 0);
-   public final IntProperty angleStep = new IntProperty("angle-step", 90, 30, 180);
-   public final BooleanProperty throughWalls = new BooleanProperty("through-walls", true);
-   public final BooleanProperty requirePress = new BooleanProperty("require-press", false);
-   public final BooleanProperty allowMining = new BooleanProperty("allow-mining", true);
-   public final BooleanProperty weaponsOnly = new BooleanProperty("weapons-only", true);
-   public final BooleanProperty allowTools;
-   public final BooleanProperty inventoryCheck;
-   public final BooleanProperty botCheck;
-   public final BooleanProperty players;
-   public final BooleanProperty bosses;
-   public final BooleanProperty mobs;
-   public final BooleanProperty animals;
-   public final BooleanProperty golems;
-   public final BooleanProperty silverfish;
-   public final BooleanProperty teams;
-   public final ModeProperty showTarget;
-   public final ModeProperty debugLog;
+   // ── Attack ────────────────────────────────────────────────────────────────
+   public final DropdownSetting mode       = register(new DropdownSetting("Mode", 0, "Single", "Switch"));
+   public final DropdownSetting sort       = register(new DropdownSetting("Sort", 0, "Distance", "Health", "Hurt Time", "FOV"));
+   public final SliderSetting   attackRange= register(new SliderSetting("Attack Range",  3.0, 3.0, 6.0, 0.1));
+   public final SliderSetting   swingRange = register(new SliderSetting("Swing Range",   3.5, 3.0, 6.0, 0.1));
+   public final SliderSetting   minCPS     = register(new SliderSetting("Min APS",       14,  1,   20,  1));
+   public final SliderSetting   maxCPS     = register(new SliderSetting("Max APS",       14,  1,   20,  1));
+   public final SliderSetting   switchDelay= register(new SliderSetting("Switch Delay",  150, 0,   1000,1));
+   public final SliderSetting   fov        = register(new SliderSetting("FOV",           360, 30,  360, 1));
+
+   // ── Rotation ──────────────────────────────────────────────────────────────
+   public final DropdownSetting rotations  = register(new DropdownSetting("Rotations", 2, "None", "Legit", "Silent", "Lock View"));
+   public final DropdownSetting moveFix    = register(new DropdownSetting("Move Fix",  1, "None", "Silent", "Strict"));
+   public final SliderSetting   smoothing  = register(new SliderSetting("Smoothing",   0,   0,   100, 1));
+   public final SliderSetting   angleStep  = register(new SliderSetting("Angle Step",  90,  30,  180, 1));
+
+   // ── Auto Block ────────────────────────────────────────────────────────────
+   public final DropdownSetting autoBlock  = register(new DropdownSetting("Auto Block", 3,
+           "None", "Vanilla", "Spoof", "Grim", "Blink", "Interact", "Swap", "Legit", "Fake", "New", "BlinkLess", "Rise", "Opal"));
+   public final BooleanSetting  autoBlockRequirePress = register(new BooleanSetting("AB Require Press", false));
+   public final SliderSetting   autoBlockCPS   = register(new SliderSetting("AB APS",   10.0, 1.0, 20.0, 0.1));
+   public final SliderSetting   autoBlockRange = register(new SliderSetting("AB Range",  6.0, 3.0, 8.0,  0.1));
+
+   // ── Filters ───────────────────────────────────────────────────────────────
+   public final BooleanSetting throughWalls  = register(new BooleanSetting("Through Walls", true));
+   public final BooleanSetting requirePress  = register(new BooleanSetting("Require Press",  false));
+   public final BooleanSetting allowMining   = register(new BooleanSetting("Allow Mining",   true));
+   public final BooleanSetting weaponsOnly   = register(new BooleanSetting("Weapons Only",   true));
+   public final BooleanSetting allowTools    = register(new BooleanSetting("Allow Tools",     false));
+   public final BooleanSetting inventoryCheck= register(new BooleanSetting("Inventory Check", true));
+   public final BooleanSetting botCheck      = register(new BooleanSetting("Bot Check",       true));
+
+   // ── Targets ───────────────────────────────────────────────────────────────
+   public final BooleanSetting players    = register(new BooleanSetting("Players",    true));
+   public final BooleanSetting bosses     = register(new BooleanSetting("Bosses",     false));
+   public final BooleanSetting mobs       = register(new BooleanSetting("Mobs",       false));
+   public final BooleanSetting animals    = register(new BooleanSetting("Animals",    false));
+   public final BooleanSetting golems     = register(new BooleanSetting("Golems",     false));
+   public final BooleanSetting silverfish = register(new BooleanSetting("Silverfish", false));
+   public final BooleanSetting teams      = register(new BooleanSetting("Teams",      true));
+
+   // ── Display ───────────────────────────────────────────────────────────────
+   public final DropdownSetting showTarget = register(new DropdownSetting("Show Target", 0, "None", "Default", "HUD"));
+   public final DropdownSetting debugLog   = register(new DropdownSetting("Debug Log",   0, "None", "Health"));
+
+   public KillAura() {
+      super("KillAura", false);
+   }
 
    private long getAttackDelay() {
-      return this.isBlocking ? (long)(1000.0F / (Float)this.autoBlockCPS.getValue()) : 1000L / RandomUtil.nextLong((long)(Integer)this.minCPS.getValue(), (long)(Integer)this.maxCPS.getValue());
+      return this.isBlocking ? (long)(1000.0F / (double)this.autoBlockCPS.getValue()) : 1000L / RandomUtil.nextLong((long)this.minCPS.getValue(), (long)this.maxCPS.getValue());
    }
 
    private boolean performAttack(float yaw, float pitch) {
       if (!Myau.playerStateManager.digging && !Myau.playerStateManager.placing) {
-         if (this.isPlayerBlocking() && (Integer)this.autoBlock.getValue() != 1) {
+         if (this.isPlayerBlocking() && (int)(double)this.autoBlock.getIndex() != 1) {
             return false;
          } else if (this.attackDelayMS > 0L) {
             return false;
          } else {
             this.attackDelayMS += this.getAttackDelay();
             mc.thePlayer.swingItem();
-            if (((Integer)this.rotations.getValue() != 0 || !this.isBoxInAttackRange(this.target.getBox())) && RotationUtil.rayTrace(this.target.getBox(), yaw, pitch, (double)(Float)this.attackRange.getValue()) == null) {
+            if (((int)(double)this.rotations.getIndex() != 0 || !this.isBoxInAttackRange(this.target.getBox())) && RotationUtil.rayTrace(this.target.getBox(), yaw, pitch, this.attackRange.getValue()) == null) {
                return false;
             } else {
                AttackEvent event = new AttackEvent(this.target.getEntity());
@@ -190,9 +204,9 @@ public class KillAura extends Module {
       if (mc.currentScreen != null && !(mc.currentScreen instanceof net.minecraft.client.gui.GuiChat)) {
          return false;
       }
-      if ((Boolean)this.inventoryCheck.getValue() && mc.currentScreen instanceof GuiContainer) {
+      if (this.inventoryCheck.getValue() && mc.currentScreen instanceof GuiContainer) {
          return false;
-      } else if (!(Boolean)this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant() || (Boolean)this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
+      } else if (!this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant() || this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
          if (((IAccessorPlayerControllerMP)mc.playerController).getIsHittingBlock()) {
             return false;
          } else if ((ItemUtil.isEating() || ItemUtil.isUsingBow()) && PlayerUtil.isUsingItem()) {
@@ -207,10 +221,10 @@ public class KillAura extends Module {
                   return false;
                } else if (((Module)Myau.moduleManager.modules.get(Scaffold.class)).isEnabled()) {
                   return false;
-               } else if ((Boolean)this.requirePress.getValue()) {
+               } else if (this.requirePress.getValue()) {
                   return PlayerUtil.isAttacking();
                } else {
-                  return !(Boolean)this.allowMining.getValue() || !mc.objectMouseOver.typeOfHit.equals(MovingObjectType.BLOCK) || !PlayerUtil.isAttacking();
+                  return !this.allowMining.getValue() || !mc.objectMouseOver.typeOfHit.equals(MovingObjectType.BLOCK) || !PlayerUtil.isAttacking();
                }
             }
          }
@@ -223,7 +237,7 @@ public class KillAura extends Module {
       if (!ItemUtil.isHoldingSword()) {
          return false;
       } else {
-         return !(Boolean)this.autoBlockRequirePress.getValue() || PlayerUtil.isUsingItem();
+         return !this.autoBlockRequirePress.getValue() || PlayerUtil.isUsingItem();
       }
    }
 
@@ -240,27 +254,27 @@ public class KillAura extends Module {
          return false;
       } else if (e.hurtResistantTime > 0) {
          return false;
-      } else if (RotationUtil.angleToEntity(e) > ((Integer)this.fov.getValue()).floatValue()) {
+      } else if (RotationUtil.angleToEntity(e) > (float)(double)this.fov.getValue()) {
          return false;
-      } else if (!(Boolean)this.throughWalls.getValue() && RotationUtil.rayTrace(e) != null) {
+      } else if (!this.throughWalls.getValue() && RotationUtil.rayTrace(e) != null) {
          return false;
       } else if (e instanceof EntityOtherPlayerMP) {
-         if (!(Boolean)this.players.getValue()) return false;
+         if (!this.players.getValue()) return false;
          if (TeamUtil.isFriend((EntityPlayer)e)) return false;
-         return (!(Boolean)this.teams.getValue() || !TeamUtil.isSameTeam((EntityPlayer)e))
-             && (!(Boolean)this.botCheck.getValue() || !TeamUtil.isBot((EntityPlayer)e));
+         return (!this.teams.getValue() || !TeamUtil.isSameTeam((EntityPlayer)e))
+             && (!this.botCheck.getValue() || !TeamUtil.isBot((EntityPlayer)e));
       } else if (e instanceof EntityDragon || e instanceof EntityWither) {
-         return (Boolean)this.bosses.getValue();
+         return this.bosses.getValue();
       } else if (e instanceof EntityMob || e instanceof EntitySlime) {
          if (e instanceof EntitySilverfish)
-            return (Boolean)this.silverfish.getValue() && (!(Boolean)this.teams.getValue() || !TeamUtil.hasTeamColor(e));
-         return (Boolean)this.mobs.getValue();
+            return this.silverfish.getValue() && (!this.teams.getValue() || !TeamUtil.hasTeamColor(e));
+         return this.mobs.getValue();
       } else if (e instanceof EntityAnimal || e instanceof EntityBat || e instanceof EntitySquid || e instanceof EntityVillager) {
-         return (Boolean)this.animals.getValue();
+         return this.animals.getValue();
       } else if (e instanceof EntityIronGolem) {
          return false;
       } else {
-         return (Boolean)this.golems.getValue() && (!(Boolean)this.teams.getValue() || !TeamUtil.hasTeamColor(e));
+         return this.golems.getValue() && (!this.teams.getValue() || !TeamUtil.hasTeamColor(e));
       }
    }
 
@@ -269,23 +283,23 @@ public class KillAura extends Module {
    }
 
    private boolean isInBlockRange(EntityLivingBase e) {
-      return RotationUtil.distanceToEntity(e) <= (double)(Float)this.autoBlockRange.getValue();
+      return RotationUtil.distanceToEntity(e) <= this.autoBlockRange.getValue();
    }
 
    private boolean isInSwingRange(EntityLivingBase e) {
-      return RotationUtil.distanceToEntity(e) <= (double)(Float)this.swingRange.getValue();
+      return RotationUtil.distanceToEntity(e) <= this.swingRange.getValue();
    }
 
    private boolean isBoxInSwingRange(AxisAlignedBB box) {
-      return RotationUtil.distanceToBox(box) <= (double)(Float)this.swingRange.getValue();
+      return RotationUtil.distanceToBox(box) <= this.swingRange.getValue();
    }
 
    private boolean isInAttackRange(EntityLivingBase e) {
-      return RotationUtil.distanceToEntity(e) <= (double)(Float)this.attackRange.getValue();
+      return RotationUtil.distanceToEntity(e) <= this.attackRange.getValue();
    }
 
    private boolean isBoxInAttackRange(AxisAlignedBB box) {
-      return RotationUtil.distanceToBox(box) <= (double)(Float)this.attackRange.getValue();
+      return RotationUtil.distanceToBox(box) <= this.attackRange.getValue();
    }
 
    private boolean isPlayerTarget(EntityLivingBase e) {
@@ -315,25 +329,6 @@ public class KillAura extends Module {
       return -1;
    }
 
-   public KillAura() {
-      super("KillAura", false);
-      Boolean var10004 = false;
-      BooleanProperty var10005 = this.weaponsOnly;
-      var10005.getClass();
-      this.allowTools = new BooleanProperty("allow-tools", var10004, var10005::getValue);
-      this.inventoryCheck = new BooleanProperty("inventory-check", true);
-      this.botCheck = new BooleanProperty("bot-check", true);
-      this.players = new BooleanProperty("players", true);
-      this.bosses = new BooleanProperty("bosses", false);
-      this.mobs = new BooleanProperty("mobs", false);
-      this.animals = new BooleanProperty("animals", false);
-      this.golems = new BooleanProperty("golems", false);
-      this.silverfish = new BooleanProperty("silverfish", false);
-      this.teams = new BooleanProperty("teams", true);
-      this.showTarget = new ModeProperty("show-target", 0, new String[]{"NONE", "DEFAULT", "HUD"});
-      this.debugLog = new ModeProperty("debug-log", 0, new String[]{"NONE", "HEALTH"});
-   }
-
    public EntityLivingBase getTarget() {
       return this.target != null ? this.target.getEntity() : null;
    }
@@ -341,15 +336,15 @@ public class KillAura extends Module {
    public boolean isAttackAllowed() {
       Scaffold scaffold = (Scaffold)Myau.moduleManager.modules.get(Scaffold.class);
       if (scaffold.isEnabled()) return false;
-      if (!(Boolean)this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant() || (Boolean)this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
-         return !(Boolean)this.requirePress.getValue() || KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode());
+      if (!this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant() || this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
+         return !this.requirePress.getValue() || KeyBindUtil.isKeyDown(mc.gameSettings.keyBindAttack.getKeyCode());
       }
       return false;
    }
 
    public boolean shouldAutoBlock() {
       if (this.isPlayerBlocking() && this.isBlocking) {
-         int ab = (Integer)this.autoBlock.getValue();
+         int ab = this.autoBlock.getIndex();
          return !mc.thePlayer.isInWater() && !mc.thePlayer.isOnLadder() && (ab == 3 || ab == 4 || ab == 5 || ab == 6 || ab == 7);
       }
       return false;
@@ -389,7 +384,7 @@ public class KillAura extends Module {
       boolean swap = false;
       boolean blocked = false;
       if (block) {
-         switch ((Integer)this.autoBlock.getValue()) {
+         switch (this.autoBlock.getIndex()) {
             case 0:
                if (PlayerUtil.isUsingItem()) {
                   this.isBlocking = true;
@@ -631,15 +626,15 @@ public class KillAura extends Module {
 
       boolean attacked = false;
       if (this.isBoxInSwingRange(this.target.getBox())) {
-         if ((Integer)this.rotations.getValue() == 2 || (Integer)this.rotations.getValue() == 3) {
+         if (this.rotations.getIndex() == 2 || this.rotations.getIndex() == 3) {
             float[] rots = RotationUtil.getRotationsToBox(this.target.getBox(), event.getYaw(), event.getPitch(),
-                    (float)(Integer)this.angleStep.getValue() + RandomUtil.nextFloat(-5.0F, 5.0F),
-                    (float)(Integer)this.smoothing.getValue() / 100.0F);
+                    (float)this.angleStep.getValue() + RandomUtil.nextFloat(-5.0F, 5.0F),
+                    (float)this.smoothing.getValue() / 100.0F);
             event.setRotation(rots[0], rots[1], 1);
-            if ((Integer)this.rotations.getValue() == 3) {
+            if (this.rotations.getIndex() == 3) {
                Myau.rotationManager.setRotation(rots[0], rots[1], 1, true);
             }
-            if ((Integer)this.moveFix.getValue() != 0 || (Integer)this.rotations.getValue() == 3) {
+            if (this.moveFix.getIndex() != 0 || this.rotations.getIndex() == 3) {
                event.setPervRotation(rots[0], 1);
             }
          }
@@ -662,7 +657,7 @@ public class KillAura extends Module {
       if (!this.isEnabled() || mc.currentScreen != null) return;
       switch (event.getType()) {
          case PRE:
-            if (this.target == null || !this.isValidTarget(this.target.getEntity()) || !this.isBoxInAttackRange(this.target.getBox()) || !this.isBoxInSwingRange(this.target.getBox()) || this.timer.hasTimeElapsed((long)(Integer)this.switchDelay.getValue())) {
+            if (this.target == null || !this.isValidTarget(this.target.getEntity()) || !this.isBoxInAttackRange(this.target.getBox()) || !this.isBoxInSwingRange(this.target.getBox()) || this.timer.hasTimeElapsed((long)this.switchDelay.getValue())) {
                this.timer.reset();
                ArrayList<EntityLivingBase> targets = new ArrayList<>();
                for (Entity entity : mc.theWorld.loadedEntityList) {
@@ -677,15 +672,15 @@ public class KillAura extends Module {
                   if (targets.stream().anyMatch(this::isPlayerTarget)) targets.removeIf(e -> !this.isPlayerTarget(e));
                   targets.sort((a, b) -> {
                      int s = 0;
-                     switch ((Integer)this.sort.getValue()) {
+                     switch (this.sort.getIndex()) {
                         case 1: s = Float.compare(TeamUtil.getHealthScore(a), TeamUtil.getHealthScore(b)); break;
                         case 2: s = Integer.compare(a.hurtResistantTime, b.hurtResistantTime); break;
                         case 3: s = Float.compare(RotationUtil.angleToEntity(a), RotationUtil.angleToEntity(b)); break;
                      }
                      return s != 0 ? s : Double.compare(RotationUtil.distanceToEntity(a), RotationUtil.distanceToEntity(b));
                   });
-                  if ((Integer)this.mode.getValue() == 1 && this.hitRegistered) { this.hitRegistered = false; ++this.switchTick; }
-                  if ((Integer)this.mode.getValue() == 0 || this.switchTick >= targets.size()) this.switchTick = 0;
+                  if (this.mode.getIndex() == 1 && this.hitRegistered) { this.hitRegistered = false; ++this.switchTick; }
+                  if (this.mode.getIndex() == 0 || this.switchTick >= targets.size()) this.switchTick = 0;
                   this.target = new AttackData(targets.get(this.switchTick));
                }
             }
@@ -710,7 +705,7 @@ public class KillAura extends Module {
          this.blockingState = false;
          if (this.isBlocking) mc.thePlayer.stopUsingItem();
       }
-      if ((Integer)this.debugLog.getValue() == 1 && this.isAttackAllowed()) {
+      if (this.debugLog.getIndex() == 1 && this.isAttackAllowed()) {
          if (event.getPacket() instanceof S06PacketUpdateHealth) {
             float diff = ((S06PacketUpdateHealth)event.getPacket()).getHealth() - mc.thePlayer.getHealth();
             if (diff != 0.0F && this.lastTickProcessed != mc.thePlayer.ticksExisted) {
@@ -724,7 +719,7 @@ public class KillAura extends Module {
    @EventTarget
    public void onMove(MoveInputEvent event) {
       if (!this.isEnabled()) return;
-      if ((Integer)this.moveFix.getValue() == 1 && (Integer)this.rotations.getValue() != 3 && RotationState.isActived() && RotationState.getPriority() == 1.0F && MoveUtil.isForwardPressed()) {
+      if (this.moveFix.getIndex() == 1 && this.rotations.getIndex() != 3 && RotationState.isActived() && RotationState.getPriority() == 1.0F && MoveUtil.isForwardPressed()) {
          MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
       }
       if (this.shouldAutoBlock()) {
@@ -734,9 +729,9 @@ public class KillAura extends Module {
 
    @EventTarget
    public void onRender(Render3DEvent event) {
-      if (!this.isEnabled() || this.target == null || (Integer)this.showTarget.getValue() == 0 || !TeamUtil.isEntityLoaded(this.target.getEntity()) || !this.isAttackAllowed()) return;
+      if (!this.isEnabled() || this.target == null || this.showTarget.getIndex() == 0 || !TeamUtil.isEntityLoaded(this.target.getEntity()) || !this.isAttackAllowed()) return;
       Color color;
-      switch ((Integer)this.showTarget.getValue()) {
+      switch (this.showTarget.getIndex()) {
          case 1: color = this.target.getEntity().hurtTime > 0 ? new Color(0xFF5555) : new Color(0x55FF55); break;
          case 2: color = ((HUD)Myau.moduleManager.modules.get(HUD.class)).getColor(System.currentTimeMillis()); break;
          default: color = new Color(-1);
@@ -779,26 +774,8 @@ public class KillAura extends Module {
    }
 
    @Override
-   public void verifyValue(String mode) {
-      if (!this.autoBlock.getName().equals(mode) && !this.autoBlockCPS.getName().equals(mode)) {
-         if (this.swingRange.getName().equals(mode)) {
-            if ((Float)this.swingRange.getValue() < (Float)this.attackRange.getValue()) this.attackRange.setValue(this.swingRange.getValue());
-         } else if (this.attackRange.getName().equals(mode)) {
-            if ((Float)this.swingRange.getValue() < (Float)this.attackRange.getValue()) this.swingRange.setValue(this.attackRange.getValue());
-         } else if (this.minCPS.getName().equals(mode)) {
-            if ((Integer)this.minCPS.getValue() > (Integer)this.maxCPS.getValue()) this.maxCPS.setValue(this.minCPS.getValue());
-         } else if (this.maxCPS.getName().equals(mode) && (Integer)this.minCPS.getValue() > (Integer)this.maxCPS.getValue()) {
-            this.minCPS.setValue(this.maxCPS.getValue());
-         }
-      } else {
-         boolean badCps = (Integer)this.autoBlock.getValue() >= 2 && (Integer)this.autoBlock.getValue() <= 11;
-         if (badCps && (Float)this.autoBlockCPS.getValue() > 10.0F) this.autoBlockCPS.setValue(10.0F);
-      }
-   }
-
-   @Override
    public String[] getSuffix() {
-      return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getModeString())};
+      return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getCurrentOption())};
    }
 
    public boolean hasTarget() { return this.target != null; }
