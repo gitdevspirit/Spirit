@@ -123,7 +123,7 @@ public class Rise6ClickGui extends GuiScreen {
         modulePanel.keyTyped(c, keyCode);
     }
 
-    @Override public boolean doesGuiPauseGame() { return false; }
+    @Override public boolean doesGuiPauseGame() { return true; }
 
     private void gl() {
         GL11.glEnable(GL11.GL_TEXTURE_2D);
