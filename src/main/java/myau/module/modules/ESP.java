@@ -11,6 +11,7 @@ import myau.mixin.IAccessorEntityRenderer;
 import myau.mixin.IAccessorRenderManager;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
+import myau.module.SliderSetting;
 import myau.module.Module;
 import myau.util.ColorUtil;
 import myau.util.RenderUtil;
@@ -40,6 +41,8 @@ public class ESP extends Module {
     public final DropdownSetting mode      = new DropdownSetting("Mode",       2, "NONE", "2D", "3D", "OUTLINE", "FAKECORNER", "FAKE2D");
     public final DropdownSetting colorMode = new DropdownSetting("Color",      0, "DEFAULT", "TEAMS", "HUD");
     public final DropdownSetting healthBar = new DropdownSetting("Health Bar", 0, "NONE", "2D", "RAVEN");
+    public final BooleanSetting  filledBox = new BooleanSetting(" Filled Box", false);
+    public final SliderSetting   fillOpacity = new SliderSetting(" Fill Opacity", 40, 0, 255, 1);
     public final BooleanSetting  players   = new BooleanSetting("Players",  true);
     public final BooleanSetting  friends   = new BooleanSetting("Friends",  true);
     public final BooleanSetting  enemies   = new BooleanSetting("Enemies",  true);
@@ -49,6 +52,7 @@ public class ESP extends Module {
     public ESP() {
         super("ESP", false);
         register(mode); register(colorMode); register(healthBar);
+        register(filledBox); register(fillOpacity);
         register(players); register(friends); register(enemies);
         register(self); register(bots);
     }
@@ -107,6 +111,7 @@ public class ESP extends Module {
             GlStateManager.pushAttrib();
             if (framebuffer == null)
                 framebuffer = new Framebuffer(mc.displayWidth, mc.displayHeight, false);
+            // Clear at the START so previous frame content doesn't bleed through
             framebuffer.framebufferClear();
             framebuffer.bindFramebuffer(false);
             ((IAccessorEntityRenderer) mc.entityRenderer).callSetupCameraTransform(event.getPartialTicks(), 0);
@@ -177,10 +182,6 @@ public class ESP extends Module {
 
         IAccessorRenderManager rm = (IAccessorRenderManager) mc.getRenderManager();
 
-        // Ensure clean GL state before any 3D rendering
-        GlStateManager.pushMatrix();
-        GlStateManager.pushAttrib();
-
         for (EntityPlayer player : getRendered()) {
             double ix = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
             double iy = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks()) - rm.getRenderPosY();
@@ -199,8 +200,13 @@ public class ESP extends Module {
                         bb.maxX - player.posX + ix,
                         bb.maxY - player.posY + iy,
                         bb.maxZ - player.posZ + iz);
+                // Isolated state per player — no bleed between iterations
                 RenderUtil.enableRenderState();
                 RenderUtil.drawBoundingBox(offsetBB, r, g, b, 255, 1.5F);
+                if (filledBox.getValue()) {
+                    int alpha = Math.max(0, Math.min(255, (int) fillOpacity.getValue()));
+                    RenderUtil.drawFilledBox(offsetBB, r, g, b, alpha);
+                }
                 RenderUtil.disableRenderState();
             }
 
@@ -235,8 +241,5 @@ public class ESP extends Module {
                 GlStateManager.popMatrix();
             }
         }
-
-        GlStateManager.popAttrib();
-        GlStateManager.popMatrix();
     }
 }
