@@ -67,7 +67,8 @@ public class TargetHUD extends Module {
     public final BooleanSetting  showWL     = register(new BooleanSetting("Show W/L",     true));
     public final BooleanSetting  animations = register(new BooleanSetting("Animations",   true));
     public final BooleanSetting  shadow     = register(new BooleanSetting("Shadow",        true));
-    public final BooleanSetting  kaOnly     = register(new BooleanSetting("KA Only",       true));
+    public final BooleanSetting  kaOnly       = register(new BooleanSetting("KA Only",       true));
+    public final BooleanSetting  trackTarget  = register(new BooleanSetting("Track Target",  false));
 
     public TargetHUD() { super("TargetHUD", false, true); }
 
