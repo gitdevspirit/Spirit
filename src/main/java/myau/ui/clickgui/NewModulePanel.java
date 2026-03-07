@@ -77,7 +77,7 @@ public class NewModulePanel {
                 renderCard(m, x, y, mx, my);
                 y += CARD_H + CARD_GAP;
 
-                if (expandedModule == m) {
+                if (expandedModule == m && m.getSettings() != null) {
                     int sh = settingsH(m);
                     renderSettingsInline(m, x, y - CARD_GAP, mx, my);
                     y += sh + CARD_GAP;
@@ -138,6 +138,7 @@ public class NewModulePanel {
 
     private void renderSettingsInline(Module m, int x, int y, int mx, int my) {
         int w  = CARD_W;
+        if (m.getSettings() == null) return;
         int sh = settingsH(m);
 
         RoundedUtils.drawRoundedRect(x, y, w, sh, 6, 0xDD0C0C0C);
@@ -240,7 +241,7 @@ public class NewModulePanel {
                 y += CARD_H + CARD_GAP;
 
                 // Settings hit
-                if (expandedModule == m) {
+                if (expandedModule == m && m.getSettings() != null) {
                     int sh = settingsH(m);
                     int settingsY = y - CARD_GAP + 2;
                     if (mx >= x && mx <= x + CARD_W && my >= settingsY && my <= settingsY + sh) {
@@ -324,6 +325,7 @@ public class NewModulePanel {
     }
 
     private int settingsH(Module m) {
+        if (m == null || m.getSettings() == null) return 0;
         int h = 10;
         boolean skip = false;
         for (Setting s : m.getSettings()) {
