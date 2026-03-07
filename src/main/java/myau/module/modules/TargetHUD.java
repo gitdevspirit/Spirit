@@ -61,6 +61,7 @@ public class TargetHUD extends Module {
     public final SliderSetting   offX        = register(new SliderSetting("Offset X",   0, -300, 300, 1));
     public final SliderSetting   offY        = register(new SliderSetting("Offset Y",  40, -300, 300, 1));
     public final SliderSetting   bgAlpha     = register(new SliderSetting("BG Alpha",  85,    0, 100, 1));
+    public final BooleanSetting  trackTarget = register(new BooleanSetting("Track Target", false));
     public final BooleanSetting  showHead    = register(new BooleanSetting("Show Head",   true));
     public final BooleanSetting  showArmor   = register(new BooleanSetting("Show Armor",  true));
     public final BooleanSetting  showPing    = register(new BooleanSetting("Show Ping",   true));
