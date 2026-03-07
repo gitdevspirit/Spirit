@@ -104,27 +104,21 @@ public class LagRange extends Module {
                         tickIndex = -1;
                     } else {
                         double eyeHeight = mc.thePlayer.getEyeHeight();
-                        Vec3 lagEyePos    = Myau.lagManager.getLastPosition().addVector(0.0, eyeHeight, 0.0);
-                        Vec3 lastTickEye  = new Vec3(mc.thePlayer.lastTickPosX, mc.thePlayer.lastTickPosY + eyeHeight, mc.thePlayer.lastTickPosZ);
-                        Vec3 currentEye   = new Vec3(mc.thePlayer.posX,         mc.thePlayer.posY + eyeHeight,         mc.thePlayer.posZ);
+                        Vec3 currentEye  = new Vec3(mc.thePlayer.posX, mc.thePlayer.posY + eyeHeight, mc.thePlayer.posZ);
 
                         for (EntityPlayer player : players) {
-                            double dist     = RotationUtil.distanceToBox(player, currentEye);
+                            double dist = RotationUtil.distanceToBox(player, currentEye);
                             if (dist > range.getValue()) continue;
 
-                            double lagDist  = RotationUtil.distanceToBox(player, lagEyePos);
-                            double tickDist = RotationUtil.distanceToBox(player, lastTickEye);
-
-                            if (dist < tickDist || dist < lagDist) {
-                                if (tickIndex < 0) {
-                                    tickIndex = 0;
-                                    for (delayCounter += (long) delay.getValue(); delayCounter > 0L; delayCounter -= 50)
-                                        tickIndex++;
-                                }
-                                Myau.lagManager.setDelay(tickIndex);
-                                hasTarget = true;
-                                return;
+                            // Target in range — compute tick delay once, then reuse
+                            if (tickIndex < 0) {
+                                tickIndex = 0;
+                                long ms = (long) delay.getValue();
+                                for (; ms > 0L; ms -= 50) tickIndex++;
                             }
+                            Myau.lagManager.setDelay(tickIndex);
+                            hasTarget = true;
+                            return;
                         }
                     }
                 } else {
@@ -153,7 +147,6 @@ public class LagRange extends Module {
     public void onRender3D(Render3DEvent event) {
         if (!isEnabled()) return;
         if (showPosition.getIndex() == 0) return;
-        if (mc.gameSettings.thirdPersonView == 0) return;
         if (!hasTarget || lastPosition == null || currentPosition == null) return;
 
         Color color;
