@@ -69,6 +69,7 @@ public class Myau {
         commandManager.register(new NameProtectCommand());
         commandManager.register(new SpammerCommand());
         commandManager.register(new IntelKeyCommand());
+        commandManager.register(new myau.command.commands.UrchinKeyCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
