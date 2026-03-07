@@ -89,6 +89,12 @@ public class NewModulePanel {
     }
 
     private void renderCard(Module m, int x, int y, int mx, int my) {
+        // ── NULL GUARD ────────────────────────────────────────────────────────
+        if (m == null || m.getName() == null) {
+            System.out.println("[Rise] Skipping null module or null name in renderCard: " + m);
+            return;
+        }
+
         boolean en  = m.isEnabled();
         boolean hov = mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H;
 
@@ -221,6 +227,7 @@ public class NewModulePanel {
 
             for (int i = col; i < list.size(); i += c) {
                 Module m = list.get(i);
+                if (m == null) { y += CARD_H + CARD_GAP; continue; }
 
                 // Card hit
                 if (mx >= x && mx <= x + CARD_W && my >= y && my <= y + CARD_H) {
@@ -231,13 +238,10 @@ public class NewModulePanel {
                 }
                 y += CARD_H + CARD_GAP;
 
-                // Settings hit — settingsY matches renderSettingsInline call site
+                // Settings hit
                 if (expandedModule == m) {
                     int sh = settingsH(m);
-                    int settingsY = y - CARD_GAP; // y was incremented by CARD_H+CARD_GAP, so card bottom = y-CARD_GAP, settings start 2px below that
-                    // render calls renderSettingsInline at cardY+CARD_H+2, click y after increment = cardY+CARD_H+CARD_GAP
-                    // so settingsY for click = y - CARD_GAP + 2
-                    settingsY = y - CARD_GAP + 2;
+                    int settingsY = y - CARD_GAP + 2;
                     if (mx >= x && mx <= x + CARD_W && my >= settingsY && my <= settingsY + sh) {
                         settingClick(m, x, settingsY, CARD_W, mx, my, button);
                         return;
@@ -273,7 +277,6 @@ public class NewModulePanel {
                 boolean hdr = !s.getName().startsWith(" ");
                 if (my >= oy && my <= oy + 16) {
                     if (button == 1 && hdr) {
-                        // Right-click header: toggle collapse
                         if (collapsedHeaders.contains(s)) collapsedHeaders.remove(s);
                         else collapsedHeaders.add(s);
                         Myau.moduleManager.playSound();
@@ -290,7 +293,6 @@ public class NewModulePanel {
                         }
                     }
                 }
-                // Skip collapsed children in click handling too
                 oy += 16;
             } else if (s instanceof KeybindSetting) {
                 KeybindSetting kb = (KeybindSetting) s;
@@ -315,7 +317,7 @@ public class NewModulePanel {
     private List<Module> filtered(String s) {
         if (s == null || s.isEmpty()) return modules;
         return modules.stream()
-                .filter(m -> m.getName().toLowerCase().contains(s.toLowerCase()))
+                .filter(m -> m != null && m.getName() != null && m.getName().toLowerCase().contains(s.toLowerCase()))
                 .collect(Collectors.toList());
     }
 
