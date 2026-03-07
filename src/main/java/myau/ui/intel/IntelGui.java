@@ -22,7 +22,7 @@ public class IntelGui extends GuiScreen {
     private static final int CARD_GAP   = 5;
     private static final int SCROLL_SPD = 14;
 
-    private static final int BG          = 0xF2080810;
+    private static final int BG          = 0xFF080810;
     private static final int PANEL_BG    = 0xFF0D0D18;
     private static final int CARD_BG     = 0xFF111120;
     private static final int CARD_HOV    = 0xFF171728;
@@ -53,7 +53,8 @@ public class IntelGui extends GuiScreen {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
 
-        // Full bg
+        // Full opaque background — no game world bleedthrough
+        fill(0, 0, sw, sh, 0xFF050508);
         fill(0, 0, sw, sh, BG);
 
         int HDR = 42, FTR = 32;
