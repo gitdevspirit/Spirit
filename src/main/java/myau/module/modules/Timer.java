@@ -201,9 +201,6 @@ public class Timer extends Module {
         GlStateManager.disableDepth();
         GlStateManager.disableAlpha();
 
-        // Dark card
-        drawRect(cardX, cardY, cardW, cardH, 0xDD0C0C10);
-
         // Progress bar at bottom — shrinks as time runs out, green→red
         float hue = 0.33f * (1f - progress);
         int barCol = java.awt.Color.HSBtoRGB(hue, 0.85f, 1.0f) | 0xFF000000;
