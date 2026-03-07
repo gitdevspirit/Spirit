@@ -12,6 +12,7 @@ import myau.ui.clickgui.RoundedUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import org.lwjgl.opengl.GL11;
 
 import java.util.List;
 
@@ -97,14 +98,15 @@ public class Notifications extends Module {
                                  : MARGIN + i * (H + GAP);
 
             // ── Background ───────────────────────────────────────────────────
+            GL11.glEnable(GL11.GL_BLEND);
             RoundedUtils.drawRoundedRect(x, y, W, H, r, applyAlpha(bgColor, alpha));
 
             // ── Accent bar ───────────────────────────────────────────────────
             float textX = x + PAD_H;
             if (bar) {
                 int barCol = applyAlpha(0xFF000000 | accentColor, alpha);
+                GL11.glEnable(GL11.GL_BLEND);
                 RoundedUtils.drawRoundedRect(x, y, 3, H, Math.min(r, 3f), barCol);
-                // sharp right edge on bar
                 drawRect(x + 2, y, x + 3, y + H, barCol);
                 textX = x + 3 + PAD_H;
             }
