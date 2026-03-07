@@ -216,7 +216,4 @@ public class Autoblock extends Module {
     }
 
     @Override
-    public String[] getSuffix() {
-        return blockingState ? new String[]{"Blocking"} : new String[0];
-    }
 }
