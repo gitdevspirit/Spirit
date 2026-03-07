@@ -9,6 +9,7 @@ import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
+import myau.ui.clickgui.RoundedUtils;
 import myau.util.RenderUtil;
 import myau.util.TeamUtil;
 import myau.util.TimerUtil;
@@ -114,7 +115,7 @@ public class TargetHUD extends Module {
         float headBlockW = hasHead ? HEAD_S + PAD : 0f;
         float hpNumW     = mc.fontRendererObj.getStringWidth(hpStr);
         float nameW      = mc.fontRendererObj.getStringWidth(nameStr);
-        float minContent = Math.max(nameW + 20, 80 + 4 + hpNumW);
+        float minContent = Math.max(nameW + 40, 80 + 4 + hpNumW + 20);
         float cardW      = PAD + headBlockW + minContent + PAD;
         float cardH      = PAD + fontH + 3 + BAR_H + PAD;
 
@@ -144,8 +145,9 @@ public class TargetHUD extends Module {
         GlStateManager.translate(px, py, 0f);
         GlStateManager.scale(sv, sv, 1f);
 
-        // ── 1. Background — use Gui.drawRect (handles its own GL state) ───────
-        Gui.drawRect(0, 0, (int) cardW, (int) cardH, BG);
+        // ── 1. Background — rounded corners ─────────────────────────────────────
+        RoundedUtils.drawRoundedRect(-2, -2, cardW + 4, cardH + 4, 8, 0x33000000); // shadow
+        RoundedUtils.drawRoundedRect(0, 0, cardW, cardH, 6, BG);
 
         // ── 2. Bar track and fill — Gui.drawRect, zero GL fuss ────────────────
         Gui.drawRect((int) barX0, (int) barY,
