@@ -130,13 +130,13 @@ public class Myau {
         moduleManager.modules.put(AC.class,               new AC());
         moduleManager.modules.put(AutoBedDefence.class,   new AutoBedDefence());
         moduleManager.modules.put(Notifications.class,    new Notifications());
+        moduleManager.modules.put(myau.module.modules.LobbyIntel.class, new myau.module.modules.LobbyIntel());
         moduleManager.modules.put(Session.class,          new Session());
         moduleManager.modules.put(ItemAlerts.class,       new ItemAlerts());
         moduleManager.modules.put(InfoHUD.class,           new InfoHUD());
         moduleManager.modules.put(HitBox.class,          new HitBox());
         moduleManager.modules.put(LagRange.class,        new LagRange());
         moduleManager.modules.put(LightningTracker.class,new LightningTracker());
-        moduleManager.modules.put(KillAura.class, new KillAura());
         moduleManager.modules.put(LongJump.class,        new LongJump());
         moduleManager.modules.put(MCF.class,             new MCF());
         moduleManager.modules.put(NameTags.class,        new NameTags());
