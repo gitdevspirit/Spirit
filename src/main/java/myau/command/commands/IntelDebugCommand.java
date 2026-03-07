@@ -17,6 +17,26 @@ public class IntelDebugCommand extends Command {
         setDescription("Opens a GUI showing the raw Urchin API response for a player.");
     }
 
+    private int lastCode = 0;
+
+    private String fetch(String urlStr) {
+        try {
+            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
+            con.setRequestMethod("GET");
+            con.setConnectTimeout(5000);
+            con.setReadTimeout(5000);
+            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+            lastCode = con.getResponseCode();
+            BufferedReader br = new BufferedReader(new InputStreamReader(
+                    lastCode == 200 ? con.getInputStream() : con.getErrorStream()));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line).append("\n");
+            br.close();
+            return sb.toString();
+        } catch (Exception e) { return null; }
+    }
+
     @Override
     public void execute(String[] args) {
         String name = args.length > 0 ? args[0] : "OFFICER_SPIRIT";
@@ -24,27 +44,31 @@ public class IntelDebugCommand extends Command {
 
         new Thread(() -> {
             try {
+                // Step 1: get UUID from Mojang
+                String mojangUrl = "https://api.mojang.com/users/profiles/minecraft/" + name;
+                String mojangResp = fetch(mojangUrl);
+                String uuid = "";
+                if (mojangResp != null) {
+                    com.google.gson.JsonObject obj = new com.google.gson.JsonParser().parse(mojangResp).getAsJsonObject();
+                    if (obj.has("id")) {
+                        String raw = obj.get("id").getAsString();
+                        uuid = raw.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})","$1-$2-$3-$4-$5");
+                    }
+                }
+
                 String url = "https://urchin.ws/cubelify"
-                        + "?id="
+                        + "?id=" + uuid
                         + "&name=" + java.net.URLEncoder.encode(name, "UTF-8")
                         + "&sources="
                         + "&key=" + IntelManager.urchinApiKey;
 
-                HttpURLConnection con = (HttpURLConnection) new URL(url).openConnection();
-                con.setRequestMethod("GET");
-                con.setConnectTimeout(5000);
-                con.setReadTimeout(5000);
-                con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+                String urchinResp = fetch(url);
+                int code2 = lastCode;
 
-                int code = con.getResponseCode();
-                BufferedReader br = new BufferedReader(new InputStreamReader(
-                        code == 200 ? con.getInputStream() : con.getErrorStream()));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) sb.append(line).append("\n");
-                br.close();
-
-                String result = "URL: " + url + "\nHTTP: " + code + "\n\n" + sb.toString();
+                String result = "Mojang UUID: " + (uuid.isEmpty() ? "not found" : uuid)
+                        + "\nURL: " + url
+                        + "\nHTTP: " + code2
+                        + "\n\n" + (urchinResp != null ? urchinResp : "null");
 
                 Minecraft.getMinecraft().addScheduledTask(() ->
                         Minecraft.getMinecraft().displayGuiScreen(
