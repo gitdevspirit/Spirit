@@ -56,10 +56,8 @@ public class ModuleRegistry {
         movementModules.add(Myau.moduleManager.getModule(Jesus.class));
         movementModules.add(Myau.moduleManager.getModule(Blink.class));
         movementModules.add(Myau.moduleManager.getModule(NoFall.class));
-        movementModules.add(Myau.moduleManager.getModule(NoSlow.class));
         movementModules.add(Myau.moduleManager.getModule(KeepSprint.class));
         movementModules.add(Myau.moduleManager.getModule(Eagle.class));
-        movementModules.add(Myau.moduleManager.getModule(EdgeOffset.class));
         movementModules.add(Myau.moduleManager.getModule(NoJumpDelay.class));
         movementModules.add(Myau.moduleManager.getModule(AntiVoid.class));
         movementModules.sort(comparator);
@@ -91,9 +89,7 @@ public class ModuleRegistry {
         playerModules.add(Myau.moduleManager.getModule(FakeLag.class));
         playerModules.add(Myau.moduleManager.getModule(AutoTool.class));
         playerModules.add(Myau.moduleManager.getModule(ChestStealer.class));
-        playerModules.add(Myau.moduleManager.getModule(InvManager.class));
         playerModules.add(Myau.moduleManager.getModule(InvWalk.class));
-        playerModules.add(Myau.moduleManager.getModule(Scaffold.class));
         playerModules.add(Myau.moduleManager.getModule(AutoBlockIn.class));
         playerModules.add(Myau.moduleManager.getModule(AutoBedDefence.class));
         playerModules.add(Myau.moduleManager.getModule(AutoSwap.class));
@@ -107,7 +103,6 @@ public class ModuleRegistry {
 
         miscModules = new ArrayList<>();
         miscModules.add(Myau.moduleManager.getModule(Spammer.class));
-        miscModules.add(Myau.moduleManager.getModule(BedNuker.class));
         miscModules.add(Myau.moduleManager.getModule(BedTracker.class));
         miscModules.add(Myau.moduleManager.getModule(LightningTracker.class));
         miscModules.add(Myau.moduleManager.getModule(NoRotate.class));
@@ -127,7 +122,12 @@ public class ModuleRegistry {
         miscModules.sort(comparator);
 
         blatantModules = new ArrayList<>();
+        blatantModules.add(Myau.moduleManager.getModule(BedNuker.class));
+        blatantModules.add(Myau.moduleManager.getModule(EdgeOffset.class));
         blatantModules.add(Myau.moduleManager.getModule(KillAura.class));
+        blatantModules.add(Myau.moduleManager.getModule(Scaffold.class));
+        blatantModules.add(Myau.moduleManager.getModule(InvManager.class));
+        blatantModules.add(Myau.moduleManager.getModule(NoSlow.class));
         blatantModules.sort(comparator);
     }
 }
