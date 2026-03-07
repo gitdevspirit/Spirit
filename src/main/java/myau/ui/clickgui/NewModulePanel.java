@@ -74,6 +74,7 @@ public class NewModulePanel {
 
             for (int i = col; i < list.size(); i += c) {
                 Module m = list.get(i);
+                if (m == null) { y += CARD_H + CARD_GAP; continue; }
                 renderCard(m, x, y, mx, my);
                 y += CARD_H + CARD_GAP;
 
@@ -318,6 +319,7 @@ public class NewModulePanel {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private List<Module> filtered(String s) {
+        if (modules == null) return java.util.Collections.emptyList();
         if (s == null || s.isEmpty()) return modules;
         return modules.stream()
                 .filter(m -> m != null && m.getName() != null && m.getName().toLowerCase().contains(s.toLowerCase()))
