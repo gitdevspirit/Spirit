@@ -33,10 +33,8 @@ public class Timer extends Module {
     public final BooleanSetting  pauseOnScroll = register(new BooleanSetting("Pause on Scroll", true));
     public final BooleanSetting  pauseOnRight  = register(new BooleanSetting("Pause on RClick", true));
 
-    // Pause state
-    private boolean paused   = false;
-    private long    pauseEnd = -1;
-    private static final long PAUSE_MS = 200;
+    // Instant 1-tick pause on scroll/rclick
+    private volatile boolean instantPause = false;
 
     // Server-side packet accumulator
     private double packetAccum = 0.0;
@@ -82,9 +80,8 @@ public class Timer extends Module {
         if (timer != null) timer.timerSpeed = 1.0F;
         pendingOff  = false;
         offAt       = -1;
-        paused      = false;
-        pauseEnd    = -1;
-        packetAccum = 0.0;
+        instantPause = false;
+        packetAccum  = 0.0;
     }
 
     private double getSpeed() {
@@ -107,16 +104,18 @@ public class Timer extends Module {
             return;
         }
 
-        if (paused && System.currentTimeMillis() >= pauseEnd) {
-            paused = false; pauseEnd = -1;
-        }
-
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer == null) return;
 
+        if (instantPause) {
+            instantPause = false;
+            timer.timerSpeed = 1.0F;
+            return;
+        }
+
         int s = side.getIndex();
         if (s == 0 || s == 2) {
-            timer.timerSpeed = paused ? 1.0F : (float) getSpeed();
+            timer.timerSpeed = (float) getSpeed();
         } else {
             timer.timerSpeed = 1.0F;
         }
@@ -158,13 +157,13 @@ public class Timer extends Module {
     @EventTarget
     public void onSwapItem(SwapItemEvent event) {
         if (!isEnabled() || !pauseOnScroll.getValue()) return;
-        paused = true; pauseEnd = System.currentTimeMillis() + PAUSE_MS;
+        instantPause = true;
     }
 
     @EventTarget
     public void onRightClick(RightClickMouseEvent event) {
         if (!isEnabled() || !pauseOnRight.getValue()) return;
-        paused = true; pauseEnd = System.currentTimeMillis() + PAUSE_MS;
+        instantPause = true;
     }
 
     // ── HUD: shown while countdown is active (timer still ON) ─────────────────
@@ -255,7 +254,6 @@ public class Timer extends Module {
             long rem = Math.max(0, offAt - System.currentTimeMillis());
             return new String[]{ "off in " + (rem < 1000 ? rem + "ms" : String.format("%.1fs", rem/1000.0)) };
         }
-        if (paused) return new String[]{ "paused" };
-        return new String[]{ String.format("%.2fx", speed.getValue()) };
+return new String[]{ String.format("%.2fx", speed.getValue()) };
     }
 }
