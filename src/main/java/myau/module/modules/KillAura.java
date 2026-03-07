@@ -187,6 +187,9 @@ public class KillAura extends Module {
    }
 
    private boolean canAttack() {
+      if (mc.currentScreen != null && !(mc.currentScreen instanceof net.minecraft.client.gui.GuiChat)) {
+         return false;
+      }
       if ((Boolean)this.inventoryCheck.getValue() && mc.currentScreen instanceof GuiContainer) {
          return false;
       } else if (!(Boolean)this.weaponsOnly.getValue() || ItemUtil.hasRawUnbreakingEnchant() || (Boolean)this.allowTools.getValue() && ItemUtil.isHoldingTool()) {
@@ -656,7 +659,7 @@ public class KillAura extends Module {
 
    @EventTarget
    public void onTick(TickEvent event) {
-      if (!this.isEnabled()) return;
+      if (!this.isEnabled() || mc.currentScreen != null) return;
       switch (event.getType()) {
          case PRE:
             if (this.target == null || !this.isValidTarget(this.target.getEntity()) || !this.isBoxInAttackRange(this.target.getBox()) || !this.isBoxInSwingRange(this.target.getBox()) || this.timer.hasTimeElapsed((long)(Integer)this.switchDelay.getValue())) {
