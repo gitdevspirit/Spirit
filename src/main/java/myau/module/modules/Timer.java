@@ -4,6 +4,7 @@ import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.event.types.Priority;
 import myau.events.*;
+import myau.event.EventTarget;
 import myau.mixin.IAccessorMinecraft;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
@@ -19,15 +20,21 @@ import org.lwjgl.opengl.GL11;
 public class Timer extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   speed       = register(new SliderSetting("Speed",          1.0, 0.01, 10.0, 0.01));
+    public final SliderSetting   speed       = register(new SliderSetting("Speed",          1.2, 0.01, 10.0, 0.01));
     public final DropdownSetting mode        = register(new DropdownSetting("Mode", 0, "CONSTANT", "VARIABLE", "FREEZE"));
     public final SliderSetting   maxSpeed    = register(new SliderSetting("Max (Variable)", 2.0,  1.0,  5.0,  0.1));
-    public final SliderSetting   offDelay    = register(new SliderSetting("Off Delay (ms)", 0,    0,    5000, 100));
-    public final BooleanSetting  showCountdown = register(new BooleanSetting("Show Countdown", true));
+    public final SliderSetting   offDelay    = register(new SliderSetting("Off Delay (ms)", 200,  0,    2000, 50));
+    public final BooleanSetting  showCountdown  = register(new BooleanSetting("Show Countdown", true));
+    public final BooleanSetting  pauseOnScroll  = register(new BooleanSetting("Pause on Scroll", true));
+    public final BooleanSetting  pauseOnRight   = register(new BooleanSetting("Pause on RClick", true));
 
     // Countdown state
-    private long  countdownEnd   = -1;   // -1 = not counting down
+    private long    countdownEnd   = -1;
     private boolean pendingDisable = false;
+    // Pause state (hotbar scroll / right click)
+    private boolean paused         = false;
+    private long    pauseEnd       = -1;
+    private static final long PAUSE_MS = 500; // how long to pause after scroll/rclick
 
     public Timer() { super("Timer", false); }
 
@@ -57,6 +64,8 @@ public class Timer extends Module {
         if (timer != null) timer.timerSpeed = 1.0F;
         countdownEnd   = -1;
         pendingDisable = false;
+        paused         = false;
+        pauseEnd       = -1;
     }
 
     @EventTarget(Priority.HIGHEST)
@@ -74,6 +83,17 @@ public class Timer extends Module {
 
         net.minecraft.util.Timer timer = ((IAccessorMinecraft) mc).getTimer();
         if (timer == null) return;
+
+        // Check pause state
+        if (paused) {
+            if (System.currentTimeMillis() >= pauseEnd) {
+                paused   = false;
+                pauseEnd = -1;
+            } else {
+                timer.timerSpeed = 1.0F;
+                return;
+            }
+        }
 
         double spd;
         switch (mode.getIndex()) {
@@ -173,6 +193,23 @@ public class Timer extends Module {
         wr.pos(x2, y1, 0).color(r, g, b, a).endVertex();
         wr.pos(x1, y1, 0).color(r, g, b, a).endVertex();
         tess.draw();
+    }
+
+    @EventTarget
+    public void onSwapItem(SwapItemEvent event) {
+        if (!isEnabled() || !pauseOnScroll.getValue()) return;
+        triggerPause();
+    }
+
+    @EventTarget
+    public void onRightClick(RightClickMouseEvent event) {
+        if (!isEnabled() || !pauseOnRight.getValue()) return;
+        triggerPause();
+    }
+
+    private void triggerPause() {
+        paused   = true;
+        pauseEnd = System.currentTimeMillis() + PAUSE_MS;
     }
 
     @Override
