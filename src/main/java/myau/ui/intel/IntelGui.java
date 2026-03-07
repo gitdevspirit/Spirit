@@ -53,9 +53,8 @@ public class IntelGui extends GuiScreen {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
 
-        // Full opaque background — no game world bleedthrough
-        fill(0, 0, sw, sh, 0xFF050508);
-        fill(0, 0, sw, sh, BG);
+        // Full opaque background using GuiScreen's drawRect (bypasses blend)
+        drawRect(0, 0, sw, sh, 0xFF050508);
 
         int HDR = 42, FTR = 32;
         int detailW = selected != null ? sw / 3 : 0;
