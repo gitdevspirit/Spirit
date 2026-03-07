@@ -252,8 +252,6 @@ public class KillAura extends Module {
          return false;
       } else if (e == mc.getRenderViewEntity() || e == mc.getRenderViewEntity().ridingEntity) {
          return false;
-      } else if (e.hurtResistantTime > 0) {
-         return false;
       } else if (RotationUtil.angleToEntity(e) > (float)(double)this.fov.getValue()) {
          return false;
       } else if (!this.throughWalls.getValue() && RotationUtil.rayTrace(e) != null) {
