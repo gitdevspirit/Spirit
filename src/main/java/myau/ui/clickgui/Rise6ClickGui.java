@@ -13,7 +13,7 @@ import java.util.List;
 
 public class Rise6ClickGui extends GuiScreen {
 
-    private static final String[] TAB_NAMES = {"Combat", "Movement", "Player", "Render", "Misc"};
+    private static final String[] TAB_NAMES = {"Combat", "Movement", "Player", "Render", "Misc", "Blatant"};
 
     private final List<List<Module>> tabModules = new ArrayList<>();
     private int selectedTab = 0;
@@ -26,9 +26,9 @@ public class Rise6ClickGui extends GuiScreen {
 
     public Rise6ClickGui(
             List<Module> combat, List<Module> movement, List<Module> player,
-            List<Module> render, List<Module> misc) {
+            List<Module> render, List<Module> misc, List<Module> blatant) {
         tabModules.add(combat); tabModules.add(movement); tabModules.add(player);
-        tabModules.add(render); tabModules.add(misc);
+        tabModules.add(render); tabModules.add(misc); tabModules.add(blatant);
         modulePanel = new NewModulePanel(tabModules.get(selectedTab));
         searchBar   = new NewSearchBar();
     }
