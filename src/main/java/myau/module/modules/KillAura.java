@@ -775,7 +775,7 @@ public class KillAura extends Module {
 
    @Override
    public String[] getSuffix() {
-      return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getCurrentOption())};
+      return new String[]{CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, this.mode.getValue().toUpperCase().replace(" ", "_"))};
    }
 
    public boolean hasTarget() { return this.target != null; }
