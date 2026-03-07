@@ -126,7 +126,7 @@ public class Timer extends Module {
         if (!isEnabled() || event.getType() != EventType.SEND) return;
         int s = side.getIndex();
         if (s != 1 && s != 2) return;
-        if (paused) return;
+        if (instantPause) return;
         if (!(event.getPacket() instanceof C03PacketPlayer)) return;
 
         C03PacketPlayer pkt = (C03PacketPlayer) event.getPacket();
