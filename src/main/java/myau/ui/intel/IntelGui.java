@@ -21,22 +21,42 @@ public class IntelGui extends GuiScreen {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    private static final int CARD_H   = 36;
-    private static final int CARD_GAP = 3;
-    private static final int SCROLL_SPD = 16;
+    // Layout
+    private static final int HDR       = 44;
+    private static final int SRCH      = 28;
+    private static final int FTR       = 24;
+    private static final int COL_HDR   = 18;   // column header row height
+    private static final int CARD_H    = 42;
+    private static final int CARD_GAP  = 2;
+    private static final int CARD_PAD  = 6;    // horizontal padding each side
+    private static final int HEAD_SIZE = 20;
+    private static final int SCROLL_SPD = 18;
 
-    // Background — semi-transparent dark, world still faintly visible
-    private static final int BG_OUTER  = 0xBB05050A;
-    private static final int BG_PANEL  = 0xCC0A0A12;
-    private static final int BG_CARD   = 0xDD0D0D18;
-    private static final int BG_HOV    = 0xDD131325;
-    private static final int BG_SEL    = 0xDD16162E;
-    private static final int DIVIDER   = 0x1AFFFFFF;
+    // Column X offsets (relative to card left edge, after padding)
+    // NAME area: 0..260  |  FKDR: 270  |  WLR: 330  |  STREAK: 390  |  THREAT: right-aligned
+    private static final int COL_FKDR   = 265;
+    private static final int COL_WLR    = 335;
+    private static final int COL_STREAK = 405;
+    // THREAT is drawn from right: card right - 60
 
-    private static final int TEXT_DIM    = 0xFF3D3D55;
-    private static final int TEXT_MID    = 0xFF7777AA;
-    private static final int TEXT_BRIGHT = 0xFFDDDDEE;
-    private static final int ACCENT      = GuiColors.ACCENT;  // pink E991B8
+    // Colours
+    private static final int BG_FULL  = 0xBB000008;
+    private static final int BG_HDR   = 0xEE07070E;
+    private static final int BG_SRCH  = 0xEE050509;
+    private static final int BG_LIST  = 0xAA070710;
+    private static final int BG_CARD  = 0xCC0C0C1A;
+    private static final int BG_HOV   = 0xCC121228;
+    private static final int BG_SEL   = 0xCC151535;
+    private static final int BG_DETAIL= 0xEE08080F;
+
+    private static final int COL_DIVIDER  = 0x18FFFFFF;
+    private static final int COL_DIM      = 0xFF404055;
+    private static final int COL_MID      = 0xFF8888BB;
+    private static final int COL_BRIGHT   = 0xFFDDDDEE;
+    private static final int COL_ACCENT   = GuiColors.ACCENT; // E991B8 pink
+    private static final int COL_GOLD     = 0xFFFFCC44;
+    private static final int COL_RED      = 0xFFFF3355;
+    private static final int COL_REDSUB   = 0xAAFF3355;
 
     private static final String[] SORT_LABELS = {"Threat","FKDR","WLR","Streak","Name"};
 
@@ -46,15 +66,17 @@ public class IntelGui extends GuiScreen {
     private IntelPlayer selected = null;
     private List<IntelPlayer> players = new ArrayList<>();
 
-    // Search bar
-    private String searchText  = "";
+    private String  searchText  = "";
     private boolean searchFocus = false;
-    private long searchBlink   = 0;
 
     public void setPlayers(List<IntelPlayer> p) {
         players = new ArrayList<>(p);
         sortPlayers();
         if (selected == null && !players.isEmpty()) selected = players.get(0);
+        else if (selected != null) {
+            // keep selection pointer valid
+            for (IntelPlayer np : players) if (np.name.equals(selected.name)) { selected = np; break; }
+        }
     }
 
     @Override public boolean doesGuiPauseGame() { return false; }
@@ -64,297 +86,339 @@ public class IntelGui extends GuiScreen {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
 
-        // Semi-transparent dark overlay (keeps world faintly visible)
-        fillRect(0, 0, sw, sh, 0xBB000008);
+        fillRect(0, 0, sw, sh, BG_FULL);
 
-        int HDR = 40, FTR = 28, SRCH = 26;
-        int detailW = selected != null ? sw / 3 : 0;
+        int detailW = selected != null ? Math.min(sw / 3, 320) : 0;
         int listW   = sw - detailW;
 
-        drawHeader(sw, HDR, mx, my);
-        drawSearchBar(0, HDR, listW, SRCH, mx, my);
-        drawList(0, HDR + SRCH, listW, sh - HDR - SRCH - FTR, mx, my, sh);
-        if (selected != null) drawDetail(listW, HDR, detailW, sh - HDR - FTR);
-        drawFooter(sw, sh, FTR);
+        drawHeader(sw, mx, my);
+        drawSearchBar(listW, mx, my);
+        drawList(listW, sh, mx, my, sr);
+        if (selected != null) drawDetail(listW, detailW, sh);
+        drawFooter(sw, sh);
 
         super.drawScreen(mx, my, pt);
     }
 
     // ── Header ────────────────────────────────────────────────────────────────
 
-    private void drawHeader(int sw, int hdr, int mx, int my) {
-        fillRect(0, 0, sw, hdr, 0xCC08080F);
-        fillRect(0, hdr - 1, sw, 1, 0x33E991B8);
+    private void drawHeader(int sw, int mx, int my) {
+        fillRect(0, 0, sw, HDR, BG_HDR);
+        // Bottom accent line
+        fillRect(0, HDR - 1, sw, 1, 0x44E991B8);
 
-        gl(); mc.fontRendererObj.drawString("LOBBY INTEL", 14, 8, ACCENT, false);
-        mc.fontRendererObj.drawString(players.size() + " players  •  " +
-                (IntelManager.getInstance().isFetching() ? "fetching..." : "ready"),
-                14, 20, TEXT_DIM, false);
+        // Title
+        gl();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(14, 10, 0);
+        GlStateManager.scale(1.1f, 1.1f, 1f);
+        mc.fontRendererObj.drawString("LOBBY INTEL", 0, 0, COL_ACCENT, false);
+        GlStateManager.popMatrix();
 
-        // Sort tabs
-        int tabW = 52, tabH = 18, tabGap = 3;
+        mc.fontRendererObj.drawString(
+            players.size() + " players  \u2022  " +
+            (IntelManager.getInstance().isFetching() ? "fetching\u2026" : "ready"),
+            14, 26, COL_DIM, false);
+
+        // Sort tabs - centred
+        int tabW = 54, tabH = 20, tabGap = 4;
         int totalW = SORT_LABELS.length * (tabW + tabGap) - tabGap;
         int bx = sw / 2 - totalW / 2;
         for (int i = 0; i < SORT_LABELS.length; i++) {
-            int by = (hdr - tabH) / 2;
+            int by = (HDR - tabH) / 2;
             boolean active = sortMode == i;
             boolean hov = mx >= bx && mx < bx + tabW && my >= by && my < by + tabH;
-            // Unselected = white/dim, selected = pink with outline
-            int bg = active ? 0xCC110D18 : hov ? 0x22FFFFFF : 0x11FFFFFF;
+            int bg = active ? 0xDD100D1C : hov ? 0x22FFFFFF : 0x0DFFFFFF;
             RoundedUtils.drawRoundedRect(bx, by, tabW, tabH, tabH / 2f, bg);
-            if (active) RoundedUtils.drawRoundedOutline(bx, by, tabW, tabH, tabH / 2f, 1.2f, ACCENT);
+            if (active) RoundedUtils.drawRoundedOutline(bx, by, tabW, tabH, tabH / 2f, 1.2f, COL_ACCENT);
             gl();
-            int tc = active ? ACCENT : hov ? TEXT_BRIGHT : 0xFFCCCCCC;
+            int tc = active ? COL_ACCENT : hov ? COL_BRIGHT : COL_MID;
             int lw = mc.fontRendererObj.getStringWidth(SORT_LABELS[i]);
             mc.fontRendererObj.drawString(SORT_LABELS[i], bx + (tabW - lw) / 2f, by + (tabH - 8) / 2f, tc, false);
             bx += tabW + tabGap;
         }
 
-        // Refresh
-        String ref = "R  Refresh";
-        int rw = mc.fontRendererObj.getStringWidth(ref) + 10;
-        int rx = sw - rw - 10, ry = (hdr - 14) / 2;
-        boolean rHov = mx >= rx && mx < rx + rw && my >= ry && my < ry + 14;
-        RoundedUtils.drawRoundedRect(rx, ry, rw, 14, 3, rHov ? 0x33FFFFFF : 0x11FFFFFF);
-        gl(); mc.fontRendererObj.drawString(ref, rx + 5f, ry + 3f, rHov ? TEXT_BRIGHT : TEXT_MID, false);
+        // Refresh button - top right
+        String ref = "\u21BB  Refresh";
+        int rw = mc.fontRendererObj.getStringWidth(ref) + 14;
+        int rx = sw - rw - 10, ry = (HDR - 16) / 2;
+        boolean rHov = mx >= rx && mx < rx + rw && my >= ry && my < ry + 16;
+        RoundedUtils.drawRoundedRect(rx, ry, rw, 16, 4, rHov ? 0x33FFFFFF : 0x11FFFFFF);
+        if (rHov) RoundedUtils.drawRoundedOutline(rx, ry, rw, 16, 4, 1f, 0x33FFFFFF);
+        gl(); mc.fontRendererObj.drawString(ref, rx + 7f, ry + 4f, rHov ? COL_BRIGHT : COL_MID, false);
     }
 
     // ── Search bar ────────────────────────────────────────────────────────────
 
-    private void drawSearchBar(int sx, int sy, int sw, int sh, int mx, int my) {
-        fillRect(sx, sy, sw, sh, 0xAA06060C);
-        fillRect(sx, sy + sh - 1, sw, 1, 0x22FFFFFF);
+    private void drawSearchBar(int lw, int mx, int my) {
+        int sy = HDR;
+        fillRect(0, sy, lw, SRCH, BG_SRCH);
+        fillRect(0, sy + SRCH - 1, lw, 1, COL_DIVIDER);
 
-        int bx = sx + 8, by = sy + 5, bw = 200, bh = sh - 10;
+        // Search icon + input field
+        int bx = 10, by = sy + 5, bw = 220, bh = SRCH - 10;
         boolean hov = mx >= bx && mx < bx + bw && my >= by && my < by + bh;
-        int borderCol = searchFocus ? ACCENT : hov ? 0x55FFFFFF : 0x22FFFFFF;
-        RoundedUtils.drawRoundedRect(bx, by, bw, bh, 3, 0x33000000);
-        RoundedUtils.drawRoundedOutline(bx, by, bw, bh, 3, 1f, borderCol);
+        int border = searchFocus ? COL_ACCENT : hov ? 0x55FFFFFF : 0x22FFFFFF;
+        RoundedUtils.drawRoundedRect(bx, by, bw, bh, 3, 0x22000000);
+        RoundedUtils.drawRoundedOutline(bx, by, bw, bh, 3, 1f, border);
 
         gl();
-        String display = searchText.isEmpty() && !searchFocus
-                ? "Search / add player..."
-                : searchText;
-        int textCol = searchText.isEmpty() ? TEXT_DIM : TEXT_BRIGHT;
+        // Search glyph
+        mc.fontRendererObj.drawString("\u2315", bx + 4f, by + (bh - 8) / 2f, COL_DIM, false);
 
-        // Cursor blink
-        String drawn = display;
-        if (searchFocus && (System.currentTimeMillis() - searchBlink) % 1000 < 500) {
-            drawn = searchText + "|";
-        }
-        mc.fontRendererObj.drawString(drawn, bx + 5f, by + (bh - 8) / 2f, textCol, false);
+        String placeholder = "Search / add player\u2026";
+        String shown = searchText.isEmpty() && !searchFocus ? placeholder : searchText;
+        if (searchFocus && (System.currentTimeMillis() % 1000) < 500) shown = searchText + "|";
+        int tc = searchText.isEmpty() ? COL_DIM : COL_BRIGHT;
+        mc.fontRendererObj.drawString(shown, bx + 14f, by + (bh - 8) / 2f, tc, false);
 
         // Add button
         if (!searchText.isEmpty()) {
-            int abx = bx + bw + 6, abw = mc.fontRendererObj.getStringWidth("+ Add") + 10;
+            int abx = bx + bw + 6;
+            int abw = mc.fontRendererObj.getStringWidth("+ Add") + 12;
             boolean ahov = mx >= abx && mx < abx + abw && my >= by && my < by + bh;
-            RoundedUtils.drawRoundedRect(abx, by, abw, bh, 3, ahov ? 0x44E991B8 : 0x22E991B8);
-            RoundedUtils.drawRoundedOutline(abx, by, abw, bh, 3, 1f, ahov ? ACCENT : 0x44E991B8);
-            gl(); mc.fontRendererObj.drawString("+ Add", abx + 5f, by + (bh - 8) / 2f, ahov ? ACCENT : TEXT_MID, false);
+            RoundedUtils.drawRoundedRect(abx, by, abw, bh, 3, ahov ? 0x55E991B8 : 0x22E991B8);
+            RoundedUtils.drawRoundedOutline(abx, by, abw, bh, 3, 1f, ahov ? COL_ACCENT : 0x33E991B8);
+            gl(); mc.fontRendererObj.drawString("+ Add", abx + 6f, by + (bh - 8) / 2f, ahov ? COL_ACCENT : COL_MID, false);
         }
     }
 
+    // ── List ──────────────────────────────────────────────────────────────────
 
+    private void drawList(int lw, int sh, int mx, int my, ScaledResolution sr) {
+        int ly = HDR + SRCH;
+        int lh = sh - ly - FTR;
+        fillRect(0, ly, lw, lh, BG_LIST);
 
-    private void drawList(int lx, int ly, int lw, int lh, int mx, int my, int sh) {
-        fillRect(lx, ly, lw, lh, 0xAA08080E);
-
-        // Column headers
-        int hY = ly + 5;
+        // Column headers row
+        int hY = ly + 4;
+        fillRect(0, hY, lw, COL_HDR, 0x0AFFFFFF);
         gl();
-        mc.fontRendererObj.drawString("PLAYER",  lx + 46,          hY, TEXT_DIM, false);
-        mc.fontRendererObj.drawString("FKDR",    lx + lw * 36/100, hY, TEXT_DIM, false);
-        mc.fontRendererObj.drawString("WLR",     lx + lw * 50/100, hY, TEXT_DIM, false);
-        mc.fontRendererObj.drawString("STREAK",  lx + lw * 64/100, hY, TEXT_DIM, false);
-        mc.fontRendererObj.drawString("THREAT",  lx + lw - 58,     hY, TEXT_DIM, false);
-        fillRect(lx + 6, hY + 10, lw - 12, 1, 0x22FFFFFF);
+        int nameX = CARD_PAD + HEAD_SIZE + 10;
+        mc.fontRendererObj.drawString("PLAYER",  nameX,          hY + 5, COL_DIM, false);
+        mc.fontRendererObj.drawString("FKDR",    COL_FKDR,       hY + 5, COL_DIM, false);
+        mc.fontRendererObj.drawString("WLR",     COL_WLR,        hY + 5, COL_DIM, false);
+        mc.fontRendererObj.drawString("STREAK",  COL_STREAK,     hY + 5, COL_DIM, false);
+        mc.fontRendererObj.drawString("THREAT",  lw - 66,        hY + 5, COL_DIM, false);
+        fillRect(0, hY + COL_HDR - 1, lw, 1, COL_DIVIDER);
 
-        int cY  = ly + 20;
-        int cH  = lh - 20;
-        int tot = players.size() * (CARD_H + CARD_GAP);
+        int cY = ly + COL_HDR + 4;
+        int cH = lh - COL_HDR - 4;
+        int tot = Math.max(1, players.size() * (CARD_H + CARD_GAP));
         maxScroll = Math.max(0, tot - cH);
         scrollOff = Math.max(0, Math.min(scrollOff, maxScroll));
 
-        ScaledResolution sr = new ScaledResolution(mc);
         int scale = sr.getScaleFactor();
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        GL11.glScissor(lx * scale, (sr.getScaledHeight() - cY - cH) * scale, lw * scale, cH * scale);
+        GL11.glScissor(0, (sr.getScaledHeight() - cY - cH) * scale, lw * scale, cH * scale);
 
         for (int i = 0; i < players.size(); i++) {
             int cy = cY + i * (CARD_H + CARD_GAP) - scrollOff;
             if (cy + CARD_H < cY || cy > cY + cH) continue;
             IntelPlayer p = players.get(i);
-            boolean hov = mx >= lx + 4 && mx < lx + lw - 4 && my >= cy && my < cy + CARD_H;
+            boolean hov = mx >= CARD_PAD && mx < lw - CARD_PAD && my >= cy && my < cy + CARD_H;
             boolean sel = p == selected;
-            drawCard(p, lx + 4, cy, lw - 8, CARD_H, hov, sel, lw);
+            drawCard(p, CARD_PAD, cy, lw - CARD_PAD * 2, CARD_H, hov, sel);
         }
 
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
 
+        // Scrollbar
         if (maxScroll > 0) {
-            int sbH = Math.max(16, cH * cH / tot);
+            int sbH = Math.max(20, cH * cH / tot);
             int sbY = cY + (int)((float) scrollOff / maxScroll * (cH - sbH));
-            fillRect(lx + lw - 4, cY, 2, cH, 0x22FFFFFF);
-            fillRect(lx + lw - 4, sbY, 2, sbH, 0x66E991B8);
+            fillRect(lw - 3, cY, 2, cH, 0x11FFFFFF);
+            fillRect(lw - 3, sbY, 2, sbH, 0x66E991B8);
         }
     }
 
-    private void drawCard(IntelPlayer p, int cx, int cy, int cw, int ch,
-                          boolean hov, boolean sel, int lw) {
+    private void drawCard(IntelPlayer p, int cx, int cy, int cw, int ch, boolean hov, boolean sel) {
         int bg = sel ? BG_SEL : hov ? BG_HOV : BG_CARD;
-        RoundedUtils.drawRoundedRect(cx, cy, cw, ch, 4, bg);
-        if (sel) RoundedUtils.drawRoundedOutline(cx, cy, cw, ch, 4, 1f, 0x88E991B8);
+        RoundedUtils.drawRoundedRect(cx, cy, cw, ch, 5, bg);
+        if (sel) RoundedUtils.drawRoundedOutline(cx, cy, cw, ch, 5, 1f, 0x66E991B8);
 
         int tc = threatCol((int) p.threatScore);
 
-        // Threat strip on left edge
-        RoundedUtils.drawRoundedRect(cx, cy, 2, ch, 1, tc);
+        // Left threat stripe
+        RoundedUtils.drawRoundedRect(cx, cy + 4, 3, ch - 8, 2, tc);
 
-        // Player head (8x8 px from skin, doubled = 16x16 display)
-        int headSize = 16;
-        int headX = cx + 6, headY = cy + (ch - headSize) / 2;
-        drawPlayerHead(p.name, headX, headY, headSize);
+        // Player head
+        int headX = cx + 10, headY = cy + (ch - HEAD_SIZE) / 2;
+        drawPlayerHead(p.name, headX, headY, HEAD_SIZE);
 
         gl();
-        // Name
-        int nameCol = p.cheater ? 0xFFFF4466 : TEXT_BRIGHT;
-        String prefix = p.cheater ? "⚑ " : "";
-        mc.fontRendererObj.drawString(prefix + p.name, cx + 27f, cy + 6f, nameCol, false);
+        int nameX = cx + 10 + HEAD_SIZE + 7;
 
-        // Level small below name
-        mc.fontRendererObj.drawString("✦ " + p.level, cx + 27f, cy + 16f,
-                p.loading ? TEXT_DIM : 0xFFFFCC44, false);
+        // Name line
+        int nameCol = p.cheater ? COL_RED : COL_BRIGHT;
+        String namePrefix = p.cheater ? "\u26D4 " : "";
+        mc.fontRendererObj.drawString(namePrefix + p.name, nameX, cy + 8, nameCol, false);
 
-        // Urchin tag tiny pill
+        // Level below name
+        String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.level;
+        mc.fontRendererObj.drawString(lvlStr, nameX, cy + 19, p.loading ? COL_DIM : COL_GOLD, false);
+
+        // Urchin tag badge below level
         if (p.urchinTag != null) {
-            int tw = mc.fontRendererObj.getStringWidth(p.urchinTag) + 4;
-            RoundedUtils.drawRoundedRect(cx + 27, cy + ch - 10, tw, 8, 2, 0x44FF3344);
-            gl(); mc.fontRendererObj.drawString(p.urchinTag, cx + 29f, cy + ch - 9f, 0xFFFF5566, false);
+            // Truncate long tag for card display
+            String tag = p.urchinTag;
+            if (mc.fontRendererObj.getStringWidth(tag) > 130) {
+                while (tag.length() > 3 && mc.fontRendererObj.getStringWidth(tag + "\u2026") > 130)
+                    tag = tag.substring(0, tag.length() - 1);
+                tag += "\u2026";
+            }
+            int tw = mc.fontRendererObj.getStringWidth(tag) + 6;
+            RoundedUtils.drawRoundedRect(nameX, cy + 30, tw, 8, 2, 0x33FF2244);
+            gl(); mc.fontRendererObj.drawString(tag, nameX + 3f, cy + 31f, COL_RED, false);
         }
 
-        // Team dot
+        // Team colour dot (top right of card)
         if (p.team != null)
-            RoundedUtils.drawRoundedRect(cx + cw - 12, cy + 4, 7, 7, 2, teamCol(p.team));
+            RoundedUtils.drawRoundedRect(cx + cw - 10, cy + 5, 6, 6, 3, teamCol(p.team));
 
-        // Remove button for manually-added players
+        // Remove ✕ for manual players (bottom right)
         if (IntelManager.getInstance().isManual(p)) {
-            int xbx = cx + cw - 12, xby = cy + ch - 13;
-            boolean xhov = false; // drawn only, click handled in mouseClicked
-            gl(); mc.fontRendererObj.drawString("✕", xbx, xby, 0x88FF4466, false);
+            int xbx = cx + cw - 12, xby = cy + ch - 12;
+            boolean xhov = hov; // brightens when card is hovered
+            gl(); mc.fontRendererObj.drawString("\u00D7", xbx, xby, xhov ? COL_RED : COL_REDSUB, false);
         }
 
         if (p.loading) {
-            gl(); mc.fontRendererObj.drawString("—", cx + lw * 36 / 100 - cx, cy + ch / 2 - 4, TEXT_DIM, false);
+            // Show dashes centred in stat columns
+            gl();
+            mc.fontRendererObj.drawString("\u2014", COL_FKDR,   cy + ch/2 - 4, COL_DIM, false);
+            mc.fontRendererObj.drawString("\u2014", COL_WLR,    cy + ch/2 - 4, COL_DIM, false);
+            mc.fontRendererObj.drawString("\u2014", COL_STREAK, cy + ch/2 - 4, COL_DIM, false);
             return;
         }
 
-        // Stats
+        // Stats — vertically centred in card
         int sy = cy + ch / 2 - 4;
         gl();
-        mc.fontRendererObj.drawString(fmt(p.fkdr),   cx + lw*36/100-cx, sy, statCol(p.fkdr,  3, 6),  false);
-        mc.fontRendererObj.drawString(fmt(p.wlr),    cx + lw*50/100-cx, sy, statCol(p.wlr,   1.5,4), false);
-        mc.fontRendererObj.drawString(String.valueOf(p.winstreak), cx+lw*64/100-cx, sy, statCol(p.winstreak,10,30), false);
+        mc.fontRendererObj.drawString(fmt(p.fkdr),              COL_FKDR,   sy, statCol(p.fkdr, 3, 6),        false);
+        mc.fontRendererObj.drawString(fmt(p.wlr),               COL_WLR,    sy, statCol(p.wlr, 1.5, 4),       false);
+        mc.fontRendererObj.drawString(String.valueOf(p.winstreak), COL_STREAK, sy, statCol(p.winstreak, 10, 30), false);
 
-        // Threat bar + number
-        int bx = cx + cw - 54, bw = 36, bh = 3, by = cy + ch / 2 - 1;
-        fillRect(bx, by, bw, bh, 0x22FFFFFF);
-        int fw = (int)(Math.min(1f, p.threatScore / 100f) * bw);
-        if (fw > 0) fillRect(bx, by, fw, bh, tc);
-        mc.fontRendererObj.drawString(String.valueOf((int) p.threatScore), bx + bw + 3f, by - 2f, tc, false);
+        // Threat bar (right side)
+        int barW = 44, barH = 3;
+        int bx = cx + cw - 60, by = sy + 3;
+        fillRect(bx, by, barW, barH, 0x22FFFFFF);
+        int fw = (int)(Math.min(1f, p.threatScore / 100f) * barW);
+        if (fw > 0) fillRect(bx, by, fw, barH, tc);
+        // Score number right of bar
+        String scoreStr = String.valueOf((int) p.threatScore);
+        mc.fontRendererObj.drawString(scoreStr, bx + barW + 4f, sy, tc, false);
     }
 
     // ── Detail panel ──────────────────────────────────────────────────────────
 
-    private void drawDetail(int px, int py, int pw, int ph) {
-        fillRect(px, py, pw, ph, 0xCC0A0A14);
-        fillRect(px, py, 1, ph, 0x33E991B8);
+    private void drawDetail(int px, int pw, int sh) {
+        int py = HDR;
+        int ph = sh - HDR - FTR;
+        fillRect(px, py, pw, ph, BG_DETAIL);
+        // Left border accent
+        fillRect(px, py, 1, ph, 0x44E991B8);
 
         IntelPlayer p = selected;
         if (p == null) return;
 
-        int x = px + 14, y = py + 14;
+        int x = px + 16, y = py + 16;
+        int innerW = pw - 32;
         int tc = threatCol((int) p.threatScore);
 
-        // Head large
-        drawPlayerHead(p.name, x, y, 32);
+        // Large head
+        drawPlayerHead(p.name, x, y, 36);
 
-        // Name + level beside head
+        // Name scaled
         gl();
         GlStateManager.pushMatrix();
-        GlStateManager.translate(x + 38, y + 2, 0);
-        GlStateManager.scale(1.4f, 1.4f, 1f);
-        mc.fontRendererObj.drawString(p.name, 0, 0, p.cheater ? 0xFFFF3344 : TEXT_BRIGHT, false);
+        GlStateManager.translate(x + 44, y + 2, 0);
+        GlStateManager.scale(1.3f, 1.3f, 1f);
+        mc.fontRendererObj.drawString(p.name, 0, 0, p.cheater ? COL_RED : COL_BRIGHT, false);
         GlStateManager.popMatrix();
 
-        mc.fontRendererObj.drawString("✦ " + p.level + (p.team != null ? "  [" + p.team + "]" : ""),
-                x + 38f, y + 20f, 0xFFFFCC44, false);
-        y += 42;
+        // Level + team
+        String sub = "\u2605 " + p.level + (p.team != null ? "   [" + p.team + "]" : "");
+        mc.fontRendererObj.drawString(sub, x + 44f, y + 22f, COL_GOLD, false);
+        y += 48;
 
+        // Urchin tag badge (full text)
         if (p.urchinTag != null) {
-            int tw = mc.fontRendererObj.getStringWidth("⚑ " + p.urchinTag) + 8;
-            RoundedUtils.drawRoundedRect(x, y, tw, 13, 3, 0x44FF3344);
-            RoundedUtils.drawRoundedOutline(x, y, tw, 13, 3, 1f, 0x77FF3344);
-            gl(); mc.fontRendererObj.drawString("⚑ " + p.urchinTag, x + 4f, y + 3f, 0xFFFF5566, false);
-            y += 18;
+            int tw = mc.fontRendererObj.getStringWidth("\u26D4  " + p.urchinTag) + 10;
+            RoundedUtils.drawRoundedRect(x, y, Math.min(tw, innerW), 14, 3, 0x33FF2244);
+            RoundedUtils.drawRoundedOutline(x, y, Math.min(tw, innerW), 14, 3, 1f, 0x55FF2244);
+            gl(); mc.fontRendererObj.drawString("\u26D4  " + p.urchinTag, x + 5f, y + 3f, COL_RED, false);
+            y += 20;
         }
 
+        // Divider
+        fillRect(x, y, innerW, 1, COL_DIVIDER); y += 8;
+
         // Threat bar
-        fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 6;
-        gl(); mc.fontRendererObj.drawString("THREAT", x, y, TEXT_DIM, false);
-        mc.fontRendererObj.drawString((int) p.threatScore + "/100",
-                x + pw - 28 - mc.fontRendererObj.getStringWidth((int)p.threatScore+"/100") - 14, y, tc, false);
+        gl(); mc.fontRendererObj.drawString("THREAT", x, y, COL_DIM, false);
+        String scoreStr = (int) p.threatScore + " / 100";
+        mc.fontRendererObj.drawString(scoreStr,
+            x + innerW - mc.fontRendererObj.getStringWidth(scoreStr), y, tc, false);
         y += 10;
-        fillRect(x, y, pw - 28, 4, 0x22FFFFFF);
-        int fw = (int)(Math.min(1f, p.threatScore / 100f) * (pw - 28));
-        if (fw > 0) fillRect(x, y, fw, 4, tc);
+        fillRect(x, y, innerW, 5, 0x22FFFFFF);
+        int fw = (int)(Math.min(1f, p.threatScore / 100f) * innerW);
+        if (fw > 0) fillRect(x, y, fw, 5, tc);
         y += 12;
 
-        if (p.loading) { gl(); mc.fontRendererObj.drawString("Fetching stats...", x, y, TEXT_DIM, false); return; }
+        if (p.loading) {
+            gl(); mc.fontRendererObj.drawString("Fetching stats\u2026", x, y + 4, COL_DIM, false);
+            return;
+        }
 
-        fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
-        y = dRow(x, y, pw, "Final K/D",    fmt(p.fkdr),                statCol(p.fkdr,  3,  6));
-        y = dRow(x, y, pw, "Win/Loss",     fmt(p.wlr),                 statCol(p.wlr,   1.5,4));
-        y = dRow(x, y, pw, "Streak",       String.valueOf(p.winstreak), statCol(p.winstreak,10,30));
-        y = dRow(x, y, pw, "Final Kills",  String.valueOf(p.finalKills),  TEXT_BRIGHT);
-        y = dRow(x, y, pw, "Beds Broken",  String.valueOf(p.bedsBroken),  TEXT_BRIGHT);
-        y = dRow(x, y, pw, "Total Wins",   String.valueOf(p.wins),        TEXT_BRIGHT);
+        fillRect(x, y, innerW, 1, COL_DIVIDER); y += 8;
 
-        y += 4; fillRect(x, y, pw - 28, 1, 0x22FFFFFF); y += 8;
-        gl(); mc.fontRendererObj.drawString("INTEL", x, y, TEXT_DIM, false); y += 12;
-        for (String line : wrap(recommend(p), pw - 28)) {
-            gl(); mc.fontRendererObj.drawString(line, x, y, TEXT_MID, false); y += 11;
+        // Stats rows
+        y = dRow(x, y, innerW, "Final K/D",   fmt(p.fkdr),                  statCol(p.fkdr, 3, 6));
+        y = dRow(x, y, innerW, "Win/Loss",     fmt(p.wlr),                   statCol(p.wlr, 1.5, 4));
+        y = dRow(x, y, innerW, "Win Streak",   String.valueOf(p.winstreak),   statCol(p.winstreak, 10, 30));
+        y = dRow(x, y, innerW, "Final Kills",  String.valueOf(p.finalKills),  COL_BRIGHT);
+        y = dRow(x, y, innerW, "Beds Broken",  String.valueOf(p.bedsBroken),  COL_BRIGHT);
+        y = dRow(x, y, innerW, "Total Wins",   String.valueOf(p.wins),        COL_BRIGHT);
+
+        y += 4; fillRect(x, y, innerW, 1, COL_DIVIDER); y += 8;
+
+        // Intel recommendation
+        gl(); mc.fontRendererObj.drawString("INTEL", x, y, COL_DIM, false); y += 12;
+        for (String line : wrap(recommend(p), innerW)) {
+            gl(); mc.fontRendererObj.drawString(line, x, y, COL_MID, false); y += 11;
         }
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
 
-    private void drawFooter(int sw, int sh, int ftr) {
-        int fy = sh - ftr;
-        fillRect(0, fy, sw, ftr, 0xCC08080F);
-        fillRect(0, fy, sw, 1, 0x22E991B8);
-        gl(); mc.fontRendererObj.drawString(
-                "ESC  close    SCROLL  navigate    CLICK  inspect player    R  refresh",
-                14, fy + (ftr - 8) / 2f, TEXT_DIM, false);
+    private void drawFooter(int sw, int sh) {
+        int fy = sh - FTR;
+        fillRect(0, fy, sw, FTR, BG_HDR);
+        fillRect(0, fy, sw, 1, COL_DIVIDER);
+        gl();
+        String hint = "ESC  close    SCROLL  navigate    CLICK  inspect    R  refresh    ENTER  add player";
+        mc.fontRendererObj.drawString(hint, 12, fy + (FTR - 8) / 2f, COL_DIM, false);
     }
 
     // ── Player head ───────────────────────────────────────────────────────────
 
     private void drawPlayerHead(String name, int x, int y, int size) {
         try {
-            if (mc.getNetHandler() == null) return;
-            NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfoMap().stream()
-                    .filter(i -> i.getGameProfile().getName().equals(name))
-                    .findFirst().orElse(null);
-            if (info == null) return;
-            ResourceLocation skin = info.getLocationSkin();
-            if (skin == null) return;
+            ResourceLocation skin = null;
+            if (mc.getNetHandler() != null) {
+                for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
+                    if (info.getGameProfile().getName().equals(name)) {
+                        skin = info.getLocationSkin(); break;
+                    }
+                }
+            }
+            // Fallback: default Steve skin
+            if (skin == null) skin = new ResourceLocation("textures/entity/steve.png");
 
             GlStateManager.enableBlend();
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
-            // Base layer (8,8 on 64x64 skin)
             Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
-            // Hat layer (40,8)
             Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
             GlStateManager.color(1f, 1f, 1f, 1f);
         } catch (Exception ignored) {}
@@ -374,12 +438,11 @@ public class IntelGui extends GuiScreen {
     protected void mouseClicked(int mx, int my, int button) throws IOException {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int HDR = 40, FTR = 28, SRCH = 26;
-        int detailW = selected != null ? sw / 3 : 0;
+        int detailW = selected != null ? Math.min(sw / 3, 320) : 0;
         int listW   = sw - detailW;
 
         // Sort tabs
-        int tabW = 52, tabH = 18, tabGap = 3;
+        int tabW = 54, tabH = 20, tabGap = 4;
         int totalW = SORT_LABELS.length * (tabW + tabGap) - tabGap;
         int bx = sw / 2 - totalW / 2;
         for (int i = 0; i < SORT_LABELS.length; i++) {
@@ -390,39 +453,39 @@ public class IntelGui extends GuiScreen {
             bx += tabW + tabGap;
         }
 
-        // Refresh
-        String ref = "R  Refresh";
-        int rw = mc.fontRendererObj.getStringWidth(ref) + 10;
-        int rx = sw - rw - 10, ry = (HDR - 14) / 2;
-        if (mx >= rx && mx < rx + rw && my >= ry && my < ry + 14) {
+        // Refresh button
+        String ref = "\u21BB  Refresh";
+        int rw = mc.fontRendererObj.getStringWidth(ref) + 14;
+        int rx = sw - rw - 10, ry = (HDR - 16) / 2;
+        if (mx >= rx && mx < rx + rw && my >= ry && my < ry + 16) {
             IntelManager.getInstance().refresh(); return;
         }
 
         // Search bar focus
-        int sbx = 8, sby = HDR + 5, sbw = 200, sbh = SRCH - 10;
+        int sbx = 10, sby = HDR + 5, sbw = 220, sbh = SRCH - 10;
         searchFocus = mx >= sbx && mx < sbx + sbw && my >= sby && my < sby + sbh;
 
-        // Add button click
+        // Add button
         if (!searchText.isEmpty()) {
-            int abx = sbx + sbw + 6, abw = mc.fontRendererObj.getStringWidth("+ Add") + 10;
+            int abx = sbx + sbw + 6, abw = mc.fontRendererObj.getStringWidth("+ Add") + 12;
             if (mx >= abx && mx < abx + abw && my >= sby && my < sby + sbh) {
                 IntelManager.getInstance().addManualPlayer(searchText.trim());
-                searchText = "";
-                return;
+                searchText = ""; return;
             }
         }
 
-        // Card click + X remove
-        int cY = HDR + SRCH + 20;
+        // Cards
+        int cY = HDR + SRCH + COL_HDR + 4;
         for (int i = 0; i < players.size(); i++) {
             int cy = cY + i * (CARD_H + CARD_GAP) - scrollOff;
-            if (my < cy || my >= cy + CARD_H || mx < 4 || mx >= listW - 4) continue;
+            if (my < cy || my >= cy + CARD_H || mx < CARD_PAD || mx >= listW - CARD_PAD) continue;
             IntelPlayer p = players.get(i);
-            // Check ✕ button (manual players only)
+            int cw = listW - CARD_PAD * 2;
+            // X button (manual)
             if (IntelManager.getInstance().isManual(p)) {
-                int xbx = 4 + (listW - 8) - 12;
-                int xby = cy + CARD_H - 13;
-                if (mx >= xbx && mx < xbx + 9 && my >= xby && my < xby + 9) {
+                int xbx = CARD_PAD + cw - 12;
+                int xby = cy + CARD_H - 12;
+                if (mx >= xbx && mx < xbx + 10 && my >= xby && my < xby + 10) {
                     IntelManager.getInstance().removeManualPlayer(p.name);
                     if (selected == p) selected = null;
                     return;
@@ -437,23 +500,10 @@ public class IntelGui extends GuiScreen {
     @Override
     protected void keyTyped(char c, int key) throws IOException {
         if (searchFocus) {
-            if (key == 14) { // Backspace
-                if (!searchText.isEmpty()) searchText = searchText.substring(0, searchText.length() - 1);
-                return;
-            }
-            if (key == 28) { // Enter — add player
-                if (!searchText.isEmpty()) {
-                    IntelManager.getInstance().addManualPlayer(searchText.trim());
-                    searchText = "";
-                }
-                return;
-            }
-            if (key == 1) { // ESC — unfocus first, then close on second press
-                searchFocus = false; return;
-            }
-            if (Character.isLetterOrDigit(c) || c == '_' || c == '-') {
-                if (searchText.length() < 16) searchText += c;
-            }
+            if (key == 14) { if (!searchText.isEmpty()) searchText = searchText.substring(0, searchText.length()-1); return; }
+            if (key == 28) { if (!searchText.isEmpty()) { IntelManager.getInstance().addManualPlayer(searchText.trim()); searchText = ""; } return; }
+            if (key == 1)  { searchFocus = false; return; }
+            if (Character.isLetterOrDigit(c) || c == '_' || c == '-') { if (searchText.length() < 16) searchText += c; }
             return;
         }
         if (key == 19) { IntelManager.getInstance().refresh(); return; }
@@ -465,19 +515,19 @@ public class IntelGui extends GuiScreen {
 
     private void sortPlayers() {
         switch (sortMode) {
-            case 0: players.sort((a,b)->Double.compare(b.threatScore,a.threatScore));  break;
-            case 1: players.sort((a,b)->Double.compare(b.fkdr,a.fkdr));               break;
-            case 2: players.sort((a,b)->Double.compare(b.wlr,a.wlr));                 break;
-            case 3: players.sort((a,b)->Integer.compare(b.winstreak,a.winstreak));     break;
-            case 4: players.sort(Comparator.comparing(p->p.name));                     break;
+            case 0: players.sort((a,b) -> Double.compare(b.threatScore, a.threatScore)); break;
+            case 1: players.sort((a,b) -> Double.compare(b.fkdr, a.fkdr));              break;
+            case 2: players.sort((a,b) -> Double.compare(b.wlr, a.wlr));                break;
+            case 3: players.sort((a,b) -> Integer.compare(b.winstreak, a.winstreak));   break;
+            case 4: players.sort(Comparator.comparing(p -> p.name));                     break;
         }
     }
 
-    private int dRow(int x, int y, int pw, String label, String val, int col) {
+    private int dRow(int x, int y, int innerW, String label, String val, int col) {
         gl();
-        mc.fontRendererObj.drawString(label, x, y, TEXT_DIM, false);
-        mc.fontRendererObj.drawString(val, x + pw - 28 - mc.fontRendererObj.getStringWidth(val) - 14, y, col, false);
-        return y + 12;
+        mc.fontRendererObj.drawString(label, x, y, COL_DIM, false);
+        mc.fontRendererObj.drawString(val, x + innerW - mc.fontRendererObj.getStringWidth(val), y, col, false);
+        return y + 13;
     }
 
     private int threatCol(int s) {
@@ -508,36 +558,27 @@ public class IntelGui extends GuiScreen {
     }
 
     private String fmt(double v) {
-        if (v < 0) return "—";
+        if (v < 0) return "\u2014";
         return v == (long) v ? String.valueOf((long) v) : String.format("%.2f", v);
     }
 
     private String recommend(IntelPlayer p) {
         if (p.cheater && p.urchinTag != null) {
             String tag = p.urchinTag.toLowerCase();
-            // Keyword-based intel
-            if (containsAny(tag, "scaffold", "legitscaff", "bridg", "eagle")) {
+            if (containsAny(tag, "scaffold", "legitscaff", "bridg", "eagle"))
                 return "Flagged for scaffolding. Expect fast bridges and aerial angles. Destroy their bridge routes early.";
-            }
-            if (containsAny(tag, "autoblock", "auto block", "autoclick", "cps")) {
+            if (containsAny(tag, "autoblock", "auto block", "autoclick", "cps"))
                 return "Flagged for autoclicker or autoblock. Expect high CPS bursts. Keep distance and don't trade hits.";
-            }
-            if (containsAny(tag, "visual", "esp", "x-ray", "xray", "wallhack")) {
+            if (containsAny(tag, "visual", "esp", "x-ray", "xray", "wallhack"))
                 return "Flagged for visuals/ESP. Assume they know your bed layout. Build covered defences.";
-            }
-            if (containsAny(tag, "killaura", "kill aura", "aimbot", "aim assist", "reach")) {
+            if (containsAny(tag, "killaura", "kill aura", "aimbot", "aim assist", "reach"))
                 return "Flagged for KillAura or aimbot. Don't fight directly. Bait with traps and rush bed instead.";
-            }
-            if (containsAny(tag, "velocity", "anti-kb", "antikb", "kb")) {
+            if (containsAny(tag, "velocity", "anti-kb", "antikb", "kb"))
                 return "Flagged for anti-knockback. Void traps won't work. Focus bed destruction over PvP.";
-            }
-            if (containsAny(tag, "fly", "speed", "movement", "bhop", "bunnyhop")) {
+            if (containsAny(tag, "fly", "speed", "movement", "bhop", "bunnyhop"))
                 return "Flagged for movement hacks. Expect rapid rushes. Fortify bed early and camp mid.";
-            }
-            if (containsAny(tag, "sniper", "crossbow")) {
+            if (containsAny(tag, "sniper", "crossbow"))
                 return "Flagged as sniper. Avoid open areas. Use tunnels and stay behind cover when exposed.";
-            }
-            // Generic cheater
             return "Flagged by Urchin. Expect unusual movement or combat. Avoid and focus bed defense.";
         }
         if (p.threatScore >= 75) return "High priority. Rush their bed before they scale. Don't engage alone.";
