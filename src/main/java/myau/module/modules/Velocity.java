@@ -12,7 +12,6 @@ import myau.util.MoveUtil;
 import myau.util.PacketUtil;
 import myau.util.RandomUtil;
 import myau.util.TimerUtil;
-import myau.util.rotation.Rotation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.settings.GameSettings;
@@ -91,8 +90,7 @@ public class Velocity extends Module {
     @Override
     public void onDisabled() {
         if (mc.thePlayer != null)
-            ((IAccessorEntityPlayer) mc.thePlayer).setSpeedInAir(0.02f);
-        ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0f;
+                    ((IAccessorMinecraft) mc).getTimer().timerSpeed = 1.0f;
         timerTicks = 0; limitUntilJump = 0;
         chanceCounter = 0; allowNext = true;
         shouldRotate = false; attackTimer = -1;
@@ -158,8 +156,8 @@ public class Velocity extends Module {
                         if (!p.onGround) {
                             if ((Boolean) onLook.getValue()) {
                                 KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                                Entity target = aura != null && aura.target != null ? aura.target.getEntity() : null;
-                                if (target != null && getRotDiff(new Rotation(p.rotationYaw, p.rotationPitch), getRotations(target)) > (float) maxAngle.getValue())
+                                Entity target = aura != null ? aura.getTarget() : null;
+                                if (target != null && getRotDiff(p.rotationYaw, getTargetYaw(target)) > (float) maxAngle.getValue())
                                     return;
                             }
                             MoveUtil.setSpeed(MoveUtil.getSpeed() * (double)(float) reverseStrength.getValue());
@@ -169,18 +167,14 @@ public class Velocity extends Module {
                 case 6:
                     if (hasReceivedVelocity) {
                         KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                        Entity target = aura != null && aura.target != null ? aura.target.getEntity() : null;
+                        Entity target = aura != null ? aura.getTarget() : null;
                         if (target == null) {
-                            ((IAccessorEntityPlayer) p).setSpeedInAir(0.02f);
-                        } else if ((Boolean) onLook.getValue() && getRotDiff(new Rotation(p.rotationYaw, p.rotationPitch), getRotations(target)) > (float) maxAngle.getValue()) {
+                                                    } else if ((Boolean) onLook.getValue() && getRotDiff(p.rotationYaw, getTargetYaw(target)) > (float) maxAngle.getValue()) {
                             hasReceivedVelocity = false;
-                            ((IAccessorEntityPlayer) p).setSpeedInAir(0.02f);
-                        } else if (!p.onGround) {
-                            ((IAccessorEntityPlayer) p).setSpeedInAir((float) smoothRevStrength.getValue());
-                        } else if (velocityTimer.hasTimeElapsed(80L)) {
+                                                    } else if (!p.onGround) {
+                                                    } else if (velocityTimer.hasTimeElapsed(80L)) {
                             hasReceivedVelocity = false;
-                            ((IAccessorEntityPlayer) p).setSpeedInAir(0.02f);
-                        }
+                                                    }
                     }
                     break;
                 case 8:
@@ -196,7 +190,7 @@ public class Velocity extends Module {
                     if (p.hurtTime == 2) {
                         intaveDamageTick++;
                         if (p.onGround && intaveTick % 2 == 0 && intaveDamageTick <= 10) {
-                            if (!((IAccessorEntityLivingBase) p).isJumping()) p.jump();
+                            if (!((IAccessorEntityLivingBase) p).getJumpTicks() > 0) p.jump();
                             intaveTick = 0;
                         }
                         hasReceivedVelocity = false;
@@ -207,7 +201,7 @@ public class Velocity extends Module {
                     break;
                 case 16:
                     if (hasReceivedVelocity) {
-                        if (p.onGround && !((IAccessorEntityLivingBase) p).isJumping()) p.jump();
+                        if (p.onGround && !((IAccessorEntityLivingBase) p).getJumpTicks() > 0) p.jump();
                         hasReceivedVelocity = false;
                     }
                     break;
@@ -219,7 +213,7 @@ public class Velocity extends Module {
                     break;
                 case 22:
                     if (p.hurtTime > 0) {
-                        boolean fwd = ((IAccessorKeyBinding) mc.gameSettings.keyBindForward).getPressed();
+                        boolean fwd = net.minecraft.client.settings.KeyBinding.isKeyDown(mc.gameSettings.keyBindForward);
                         if ((Boolean) smartJumpBack.getValue()) {
                             if (p.hurtTime > 1) {
                                 ((IAccessorKeyBinding) mc.gameSettings.keyBindForward).setPressed(false);
@@ -258,7 +252,7 @@ public class Velocity extends Module {
                     int ht = p.hurtTime;
                     if (ht > lastHurtTime) {
                         KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                        EntityLivingBase target = aura != null && aura.isEnabled() && aura.target != null ? aura.target.getEntity() : null;
+                        EntityLivingBase target = aura != null && aura.isEnabled() ? aura.getTarget() : null;
                         if (target == null) {
                             if (shouldRotate) {
                                 float diff = MathHelper.wrapAngleTo180_float(reduceYaw - p.rotationYaw);
@@ -274,7 +268,7 @@ public class Velocity extends Module {
                     }
                     if (attackTimer == 0) {
                         KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                        EntityLivingBase target = aura != null && aura.isEnabled() && aura.target != null ? aura.target.getEntity() : null;
+                        EntityLivingBase target = aura != null && aura.isEnabled() ? aura.getTarget() : null;
                         if (target != null && p.getDistanceToEntity(target) <= 3.0f) {
                             p.swingItem();
                             mc.playerController.attackEntity(p, target);
@@ -314,7 +308,7 @@ public class Velocity extends Module {
 
     // ── Packet ────────────────────────────────────────────────────────────────
 
-    @EventTarget(priority = 0)
+    @EventTarget(0)
     public void onPacket(PacketEvent event) {
         if (!isEnabled()) return;
         EntityPlayerSP p = mc.thePlayer;
@@ -322,7 +316,7 @@ public class Velocity extends Module {
 
         if (event.getPacket() instanceof S12PacketEntityVelocity) {
             S12PacketEntityVelocity packet = (S12PacketEntityVelocity) event.getPacket();
-            if (packet.getEntityID() != p.getEntityId()) return;
+            if (packet.func_149412_c() != p.getEntityId()) return;
 
             velocityTimer.reset();
             IAccessorS12PacketEntityVelocity acc = (IAccessorS12PacketEntityVelocity) packet;
@@ -332,11 +326,11 @@ public class Velocity extends Module {
                     event.setCancelled(true);
                     if ((float) horizontal.getValue() == 0.0f && (float) vertical.getValue() == 0.0f) return;
                     if ((float) horizontal.getValue() != 0.0f) {
-                        p.motionX = packet.getMotionX() / 8000.0 * (double)(float) horizontal.getValue();
-                        p.motionZ = packet.getMotionZ() / 8000.0 * (double)(float) horizontal.getValue();
+                        p.motionX = packet.func_149411_d() / 8000.0 * (double)(float) horizontal.getValue();
+                        p.motionZ = packet.func_149409_f() / 8000.0 * (double)(float) horizontal.getValue();
                     }
                     if ((float) vertical.getValue() != 0.0f)
-                        p.motionY = packet.getMotionY() / 8000.0 * (double)(float) vertical.getValue();
+                        p.motionY = packet.func_149410_e() / 8000.0 * (double)(float) vertical.getValue();
                     break;
                 case 1: case 3: case 5: case 6: case 9: case 13: case 19: case 21: case 22: case 23:
                     hasReceivedVelocity = true;
@@ -345,8 +339,8 @@ public class Velocity extends Module {
                     if (jump && p.onGround) jump = false;
                     break;
                 case 7: {
-                    double mx = packet.getMotionX() / 8000.0;
-                    double mz = packet.getMotionZ() / 8000.0;
+                    double mx = packet.func_149411_d() / 8000.0;
+                    double mz = packet.func_149409_f() / 8000.0;
                     if (Math.abs(Math.atan2(mx, mz) - Math.toRadians(p.rotationYaw)) < 2.0)
                         hasReceivedVelocity = true;
                     break;
@@ -360,19 +354,19 @@ public class Velocity extends Module {
                     event.setCancelled(true);
                     break;
                 case 11:
-                    acc.setMotionX((int)(packet.getMotionX() * 0.33));
-                    acc.setMotionZ((int)(packet.getMotionZ() * 0.33));
+                    acc.setMotionX((int)(packet.func_149411_d() * 0.33));
+                    acc.setMotionZ((int)(packet.func_149409_f() * 0.33));
                     if (p.onGround) {
-                        acc.setMotionX((int)(packet.getMotionX() * 0.86));
-                        acc.setMotionZ((int)(packet.getMotionZ() * 0.86));
+                        acc.setMotionX((int)(packet.func_149411_d() * 0.86));
+                        acc.setMotionZ((int)(packet.func_149409_f() * 0.86));
                     }
                     break;
                 case 12:
-                    acc.setMotionX((int)(packet.getMotionX() * -0.33));
-                    acc.setMotionZ((int)(packet.getMotionZ() * -0.33));
+                    acc.setMotionX((int)(packet.func_149411_d() * -0.33));
+                    acc.setMotionZ((int)(packet.func_149409_f() * -0.33));
                     if (p.onGround) {
-                        acc.setMotionX((int)(packet.getMotionX() * 0.86));
-                        acc.setMotionZ((int)(packet.getMotionZ() * 0.86));
+                        acc.setMotionX((int)(packet.func_149411_d() * 0.86));
+                        acc.setMotionZ((int)(packet.func_149409_f() * 0.86));
                     }
                     break;
                 case 14:
@@ -403,8 +397,8 @@ public class Velocity extends Module {
                     break;
                 case 18: {
                     if (p.isDead || p.isPlayerSleeping() || p.isInWater() || p.isInLava()) return;
-                    double hStr = Math.sqrt((double)(packet.getMotionX() * packet.getMotionX()
-                            + packet.getMotionZ() * packet.getMotionZ()));
+                    double hStr = Math.sqrt((double)(packet.func_149411_d() * packet.func_149411_d()
+                            + packet.func_149409_f() * packet.func_149409_f()));
                     if (hStr <= 1000.0) return;
                     Entity target = null;
                     if (mc.objectMouseOver != null && mc.objectMouseOver.entityHit instanceof EntityLivingBase
@@ -412,8 +406,8 @@ public class Velocity extends Module {
                         target = mc.objectMouseOver.entityHit;
                     if (target == null) {
                         KillAura aura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
-                        if (aura != null && aura.target != null && p.getDistanceToEntity(aura.target.getEntity()) <= (float) grimRange.getValue())
-                            target = aura.target.getEntity();
+                        if (aura != null && aura.getTarget() != null && p.getDistanceToEntity(aura.getTarget()) <= (float) grimRange.getValue())
+                            target = aura.getTarget();
                     }
                     if (target != null) {
                         boolean sprinting = p.isSprinting();
@@ -439,8 +433,8 @@ public class Velocity extends Module {
                     acc.setMotionZ(0);
                     break;
                 case 24: {
-                    double x = packet.getMotionX() / 8000.0;
-                    double z = packet.getMotionZ() / 8000.0;
+                    double x = packet.func_149411_d() / 8000.0;
+                    double z = packet.func_149409_f() / 8000.0;
                     if (x != 0.0 || z != 0.0) {
                         reduceYaw = (float)(Math.toDegrees(Math.atan2(-z, -x)) - 90.0);
                         shouldRotate = true;
@@ -455,12 +449,12 @@ public class Velocity extends Module {
                             p.motionZ = z * (double)(float) predictionHoriz.getValue();
                         } else { p.motionX = 0.0; p.motionZ = 0.0; }
                         if ((float) predictionVert.getValue() > 0.0f)
-                            p.motionY = packet.getMotionY() / 8000.0 * (double)(float) predictionVert.getValue();
+                            p.motionY = packet.func_149410_e() / 8000.0 * (double)(float) predictionVert.getValue();
                         else p.motionY = 0.0;
                         if ((Boolean) predDebug.getValue())
                             p.addChatMessage(new ChatComponentText(String.format(
                                     "Velocity (tick: %d, x: %.2f, y: %.2f, z: %.2f)",
-                                    p.ticksExisted, x, packet.getMotionY() / 8000.0, z)));
+                                    p.ticksExisted, x, packet.func_149410_e() / 8000.0, z)));
                     } else event.setCancelled(true);
                     break;
                 }
@@ -485,9 +479,9 @@ public class Velocity extends Module {
                 if ((Boolean) predDebug.getValue())
                     p.addChatMessage(new ChatComponentText(String.format(
                             "Explosion (tick: %d, x: %.2f, y: %.2f, z: %.2f)",
-                            p.ticksExisted, p.motionX + packet.getExplosionStrengthX(),
-                            p.motionY + packet.getExplosionStrengthY(),
-                            p.motionZ + packet.getExplosionStrengthZ())));
+                            p.ticksExisted, p.motionX + packet.func_149149_c(),
+                            p.motionY + packet.func_149144_d(),
+                            p.motionZ + packet.func_149147_e())));
                 if ((float) predictionHoriz.getValue() == 0.0f || (float) predictionVert.getValue() == 0.0f)
                     event.setCancelled(true);
             }
@@ -531,7 +525,7 @@ public class Velocity extends Module {
     @EventTarget
     public void onStrafe(StrafeEvent event) {
         if (mode() == 7 && hasReceivedVelocity) {
-            if (!((IAccessorEntityLivingBase) mc.thePlayer).isJumping()
+            if (!((IAccessorEntityLivingBase) mc.thePlayer).getJumpTicks() > 0
                     && RandomUtil.nextInt(0, 100) < (int) chance.getValue()
                     && limitUntilJump >= (int) ticksUntilJump.getValue()
                     && mc.thePlayer.isSprinting()
@@ -552,17 +546,13 @@ public class Velocity extends Module {
         return new String[]{ CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, mode.getModeString()) };
     }
 
-    private Rotation getRotations(Entity e) {
+    private float getTargetYaw(Entity e) {
         double x = e.posX - mc.thePlayer.posX;
         double z = e.posZ - mc.thePlayer.posZ;
-        double y = e.posY + e.getEyeHeight() - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
-        double dist = MathHelper.sqrt_double(x * x + z * z);
-        float yaw   = (float)(Math.atan2(z, x) * 180.0 / Math.PI) - 90.0f;
-        float pitch = (float)(-(Math.atan2(y, dist) * 180.0 / Math.PI));
-        return new Rotation(yaw, pitch);
+        return (float)(Math.atan2(z, x) * 180.0 / Math.PI) - 90.0f;
     }
 
-    private float getRotDiff(Rotation a, Rotation b) {
-        return Math.abs(MathHelper.wrapAngleTo180_float(a.yaw - b.yaw));
+    private float getRotDiff(float yawA, float yawB) {
+        return Math.abs(MathHelper.wrapAngleTo180_float(yawA - yawB));
     }
 }
