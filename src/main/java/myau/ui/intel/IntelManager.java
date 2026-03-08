@@ -152,81 +152,98 @@ public class IntelManager {
         } catch (Exception e) { return null; }
     }
 
+    // ── Debug log ─────────────────────────────────────────────────────────────
+    public static final java.util.List<String> debugLog = new java.util.ArrayList<>();
+    static void dbg(String msg) {
+        synchronized (debugLog) {
+            debugLog.add(msg);
+            if (debugLog.size() > 200) debugLog.remove(0);
+        }
+    }
+
     private void fetchHypixel(IntelPlayer p) {
-        // Always try the free Plancke scrape first — no API key needed
-        if (!fetchPlancke(p) && !hypixelApiKey.isEmpty()) {
-            fetchHypixelApi(p); // fall back to official API if key is set
+        dbg("[Stats] fetching " + p.name);
+        boolean got = fetchSlothpixel(p);
+        dbg("[Stats] slothpixel=" + got + " fkdr=" + p.fkdr);
+        if (!got) {
+            got = fetchPixelic(p);
+            dbg("[Stats] pixelic=" + got + " fkdr=" + p.fkdr);
+        }
+        if (!got && !hypixelApiKey.isEmpty()) {
+            got = fetchHypixelApi(p);
+            dbg("[Stats] hypixelApi=" + got + " fkdr=" + p.fkdr);
         }
         p.loading = false;
     }
 
-    /** Scrapes stats from Plancke — no API key required */
-    private boolean fetchPlancke(IntelPlayer p) {
-        try {
-            // Plancke returns JSON at this endpoint (used by their own site)
-            String url = "https://plancke.io/hypixel/player/stats/" + p.name;
-            String html = get(url, "Accept", "text/html");
-            if (html == null) return false;
-
-            // Parse star/level from page title pattern: "* 123" or "[123✫]"
-            java.util.regex.Matcher lvlM = java.util.regex.Pattern
-                .compile("\\[(\\d+)(?:\\u265b|\\*|\\u2695)?\\]").matcher(html);
-            if (lvlM.find()) p.level = Integer.parseInt(lvlM.group(1));
-
-            // Plancke embeds stats as a JS object or in meta tags — use the JSON API endpoint
-            // Actually use the Statsify/SkyCrypt public API which scrapes Hypixel openly
-            return fetchStatsify(p);
-        } catch (Exception e) { return false; }
-    }
-
-    /** Fetches from Statsify public API — no key required, scrapes Hypixel */
-    private boolean fetchStatsify(IntelPlayer p) {
+    /** Slothpixel — free public Hypixel wrapper, no key needed */
+    private boolean fetchSlothpixel(IntelPlayer p) {
         try {
             String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) return false;
-
-            // Statsify open API: https://api.statsify.net/player?uuid=<uuid>
-            String json = get("https://api.statsify.net/player?uuid=" + uuid.replace("-",""),
-                    "Accept", "application/json");
+            if (uuid == null) { dbg("[Sloth] no uuid for " + p.name); return false; }
+            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
+            dbg("[Sloth] response null=" + (json == null) + (json != null ? " len=" + json.length() : ""));
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
 
-            // Statsify wraps data under "player"
-            JsonObject player = root.has("player") ? root.getAsJsonObject("player") : root;
+            // Level
+            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
 
-            if (player.has("networkLevel")) {
-                p.level = (int) player.get("networkLevel").getAsDouble();
-            }
-
-            // BedWars stats under player.stats.bedwars
-            JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
+            // BedWars nested under stats.Bedwars
             JsonObject bw = null;
-            if (stats != null) {
-                if (stats.has("bedwars"))  bw = stats.getAsJsonObject("bedwars");
-                else if (stats.has("Bedwars")) bw = stats.getAsJsonObject("Bedwars");
+            if (root.has("stats")) {
+                JsonObject stats = root.getAsJsonObject("stats");
+                if (stats.has("Bedwars")) bw = stats.getAsJsonObject("Bedwars");
             }
-            // Statsify may also put bedwars directly on player
-            if (bw == null && player.has("bedwars")) bw = player.getAsJsonObject("bedwars");
+            dbg("[Sloth] bw=" + (bw != null) + (bw != null ? " keys=" + bw.keySet().size() : ""));
+            if (bw == null) return false;
 
-            if (bw != null) {
-                int fk = bwStat(bw, "finalKills",  "final_kills_bedwars",  "finalKillsBedwars");
-                int fd = bwStat(bw, "finalDeaths", "final_deaths_bedwars", "finalDeathsBedwars"); if (fd == 0) fd = 1;
-                int w  = bwStat(bw, "wins",        "wins_bedwars",         "winsBedwars");
-                int l  = bwStat(bw, "losses",      "losses_bedwars",       "lossesBedwars");       if (l  == 0) l  = 1;
-                p.finalKills = fk;
-                p.bedsBroken = bwStat(bw, "bedsBroken", "beds_broken_bedwars", "bedsBrokenBedwars");
-                p.wins       = w;
-                p.winstreak  = bwStat(bw, "winstreak", "winstreak", "currentWinstreak");
-                p.fkdr       = (double) fk / fd;
-                p.wlr        = (double) w  / l;
-                return true;
-            }
-            return false;
-        } catch (Exception e) { return false; }
+            int fk = bwInt(bw, "final_kills_bedwars");
+            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
+            int w  = bwInt(bw, "wins_bedwars");
+            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
+            p.finalKills = fk;
+            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
+            p.wins       = w;
+            p.winstreak  = bwInt(bw, "winstreak");
+            p.fkdr       = (double) fk / fd;
+            p.wlr        = (double) w  / l;
+            return fk > 0 || w > 0;
+        } catch (Exception e) { dbg("[Sloth] exception: " + e.getMessage()); return false; }
     }
 
-    /** Official Hypixel API v2 — used as fallback when API key is set */
+    /** Pixelic — free tier, no key for BedWars stats */
+    private boolean fetchPixelic(IntelPlayer p) {
+        try {
+            String uuid = fetchAndCacheUuid(p.name);
+            if (uuid == null) return false;
+            String uuidRaw = uuid.replace("-", "");
+            String json = get("https://api.pixelic.de/v3/player/" + uuidRaw + "/bedwars",
+                    "X-API-Key", ""); // free tier doesn't need a key
+            dbg("[Pixelic] response null=" + (json == null) + (json != null ? " len=" + json.length() : ""));
+            if (json == null) return false;
+
+            JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+            JsonObject data = root.has("data") ? root.getAsJsonObject("data") : root;
+
+            int fk = bwStat(data, "finalKills",  "final_kills");
+            int fd = bwStat(data, "finalDeaths", "final_deaths"); if (fd == 0) fd = 1;
+            int w  = bwStat(data, "wins");
+            int l  = bwStat(data, "losses");                      if (l  == 0) l  = 1;
+            if (fk == 0 && w == 0) return false;
+            p.finalKills = fk;
+            p.bedsBroken = bwStat(data, "bedsBroken", "beds_broken");
+            p.wins       = w;
+            p.winstreak  = bwStat(data, "winstreak", "currentWinstreak");
+            p.fkdr       = (double) fk / fd;
+            p.wlr        = (double) w  / l;
+            return true;
+        } catch (Exception e) { dbg("[Pixelic] exception: " + e.getMessage()); return false; }
+    }
+
+        /** Official Hypixel API v2 — used as fallback when API key is set */
     private boolean fetchHypixelApi(IntelPlayer p) {
         try {
             hypixelSlots.acquire();
