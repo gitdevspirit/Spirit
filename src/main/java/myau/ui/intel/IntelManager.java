@@ -31,6 +31,7 @@ public class IntelManager {
     private volatile boolean fetching = false;
 
     private final List<IntelPlayer> players = new ArrayList<>();
+    private final List<IntelPlayer> manualPlayers = new ArrayList<>();
     private IntelGui gui;
 
     private IntelManager() {}
@@ -38,6 +39,43 @@ public class IntelManager {
     public boolean isFetching() { return fetching; }
     public void setGui(IntelGui gui) { this.gui = gui; }
     public List<IntelPlayer> getPlayers() { return players; }
+
+    /** Add a player by name manually (search bar). Fetches stats async. */
+    public void addManualPlayer(String name) {
+        for (IntelPlayer p : manualPlayers) {
+            if (p.name.equalsIgnoreCase(name)) return; // already added
+        }
+        IntelPlayer p = new IntelPlayer(name, null);
+        manualPlayers.add(p);
+        if (gui != null) {
+            List<IntelPlayer> combined = combined();
+            gui.setPlayers(combined);
+        }
+        // Fetch stats
+        pool.submit(() -> {
+            fetchUrchinBatch(java.util.Collections.singletonList(p));
+            fetchHypixel(p);
+            p.computeThreat();
+            if (gui != null) gui.setPlayers(combined());
+        });
+    }
+
+    public void removeManualPlayer(String name) {
+        manualPlayers.removeIf(p -> p.name.equalsIgnoreCase(name));
+        if (gui != null) gui.setPlayers(combined());
+    }
+
+    public boolean isManual(IntelPlayer p) { return manualPlayers.contains(p); }
+
+    private List<IntelPlayer> combined() {
+        List<IntelPlayer> all = new ArrayList<>(players);
+        for (IntelPlayer m : manualPlayers) {
+            boolean already = false;
+            for (IntelPlayer p : players) { if (p.name.equalsIgnoreCase(m.name)) { already = true; break; } }
+            if (!already) all.add(m);
+        }
+        return all;
+    }
 
     public void scanLobby() {
         players.clear();
