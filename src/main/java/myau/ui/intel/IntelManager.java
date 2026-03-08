@@ -63,10 +63,15 @@ public class IntelManager {
             List<IntelPlayer> combined = combined();
             gui.setPlayers(combined);
         }
-        // Fetch stats
+        // Fetch UUID immediately so skin can start downloading before Hypixel finishes
+        pool.submit(() -> {
+            fetchAndCacheUuid(p.name); // caches UUID → triggers face download on next GUI render
+            if (gui != null) gui.setPlayers(combined()); // refresh so drawPlayerHead sees the UUID
+        });
+        // Fetch full stats in parallel
         pool.submit(() -> {
             fetchUrchinBatch(java.util.Collections.singletonList(p));
-            fetchHypixel(p);
+            fetchHypixel(p); // reuses cached UUID
             p.computeThreat();
             if (gui != null) gui.setPlayers(combined());
         });
@@ -132,6 +137,21 @@ public class IntelManager {
 
     // ── Hypixel ───────────────────────────────────────────────────────────────
 
+    /** Fetches UUID from Mojang and caches it. Returns the UUID string or null. */
+    private String fetchAndCacheUuid(String name) {
+        synchronized (uuidCache) { String cached = uuidCache.get(name); if (cached != null) return cached; }
+        try {
+            String mojang = get("https://api.mojang.com/users/profiles/minecraft/" + name, null, null);
+            if (mojang == null) return null;
+            JsonObject mObj = new JsonParser().parse(mojang).getAsJsonObject();
+            if (!mObj.has("id")) return null;
+            String raw  = mObj.get("id").getAsString();
+            String uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
+            synchronized (uuidCache) { uuidCache.put(name, uuid); }
+            return uuid;
+        } catch (Exception e) { return null; }
+    }
+
     private void fetchHypixel(IntelPlayer p) {
         if (hypixelApiKey.isEmpty()) { p.loading = false; return; }
         try {
@@ -146,18 +166,9 @@ public class IntelManager {
                 hypixelSlots.release();
             }
 
-            // Step 1: resolve UUID via Mojang (uses cache if already fetched)
-            String uuid;
-            synchronized (uuidCache) { uuid = uuidCache.get(p.name); }
-            if (uuid == null) {
-                String mojang = get("https://api.mojang.com/users/profiles/minecraft/" + p.name, null, null);
-                if (mojang == null) { p.loading = false; return; }
-                JsonObject mObj = new JsonParser().parse(mojang).getAsJsonObject();
-                if (!mObj.has("id")) { p.loading = false; return; }
-                String raw = mObj.get("id").getAsString();
-                uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
-                synchronized (uuidCache) { uuidCache.put(p.name, uuid); }
-            }
+            // Step 1: resolve UUID via Mojang (cached after first call)
+            String uuid = fetchAndCacheUuid(p.name);
+            if (uuid == null) { p.loading = false; return; }
 
             // Step 2: Hypixel v2 — UUID param + API-Key header (key in query no longer works)
             String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid,
