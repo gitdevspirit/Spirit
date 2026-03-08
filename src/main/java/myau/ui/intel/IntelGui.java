@@ -416,7 +416,7 @@ public class IntelGui extends GuiScreen {
                 if (info != null) skin = info.getLocationSkin();
             }
 
-            // For manually-added / non-lobby players: use cached UUID to load skin
+            // For manually-added / non-lobby players: use UUID to look up already-loaded skin
             if (skin == null) {
                 String uuid = IntelManager.getInstance().getCachedUuid(name);
                 if (uuid != null) {
@@ -426,11 +426,15 @@ public class IntelGui extends GuiScreen {
                         java.util.Map<com.mojang.authlib.minecraft.MinecraftProfileTexture.Type,
                                 com.mojang.authlib.minecraft.MinecraftProfileTexture> textures =
                                 mc.getSkinManager().loadSkinFromCache(gp);
-                        if (textures != null && textures.containsKey(
-                                com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN)) {
-                            skin = mc.getSkinManager().loadSkin(
-                                    textures.get(com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN),
-                                    com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
+                        if (textures != null) {
+                            com.mojang.authlib.minecraft.MinecraftProfileTexture tex =
+                                    textures.get(com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
+                            if (tex != null) {
+                                // Build the ResourceLocation the same way SkinManager does internally
+                                String hash = tex.getHash();
+                                skin = new ResourceLocation("skins/" + hash);
+                                // If not yet loaded into texture manager, it'll just show as Steve
+                            }
                         }
                     } catch (Exception ignored2) {}
                 }
