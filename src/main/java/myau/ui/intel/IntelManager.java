@@ -152,19 +152,44 @@ public class IntelManager {
 
     // ── Hypixel ───────────────────────────────────────────────────────────────
 
-    /** Fetches UUID from Mojang and caches it. Returns the UUID string or null. */
+    /** Fetches UUID from Mojang (with playerdb.co fallback) and caches it. */
     private String fetchAndCacheUuid(String name) {
         synchronized (uuidCache) { String cached = uuidCache.get(name); if (cached != null) return cached; }
+        // Try Mojang first
         try {
-            String mojang = get("https://api.mojang.com/users/profiles/minecraft/" + name, null, null);
-            if (mojang == null) return null;
-            JsonObject mObj = new JsonParser().parse(mojang).getAsJsonObject();
-            if (!mObj.has("id")) return null;
-            String raw  = mObj.get("id").getAsString();
-            String uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
-            synchronized (uuidCache) { uuidCache.put(name, uuid); }
-            return uuid;
-        } catch (Exception e) { return null; }
+            String json = get("https://api.mojang.com/users/profiles/minecraft/" + name, null, null);
+            if (json != null) {
+                JsonObject obj = new JsonParser().parse(json).getAsJsonObject();
+                if (obj.has("id")) {
+                    String raw  = obj.get("id").getAsString();
+                    String uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
+                    synchronized (uuidCache) { uuidCache.put(name, uuid); }
+                    dbg("[UUID] Mojang OK: " + uuid);
+                    return uuid;
+                }
+            }
+        } catch (Exception e) { dbg("[UUID] Mojang ex: " + e.getMessage()); }
+        // Fallback: playerdb.co
+        try {
+            String json = get("https://playerdb.co/api/player/minecraft/" + name, null, null);
+            if (json != null) {
+                JsonObject obj = new JsonParser().parse(json).getAsJsonObject();
+                if (obj.has("data")) {
+                    JsonObject data = obj.getAsJsonObject("data");
+                    if (data.has("player")) {
+                        JsonObject player = data.getAsJsonObject("player");
+                        if (player.has("id")) {
+                            String uuid = player.get("id").getAsString(); // already has dashes
+                            synchronized (uuidCache) { uuidCache.put(name, uuid); }
+                            dbg("[UUID] playerdb OK: " + uuid);
+                            return uuid;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) { dbg("[UUID] playerdb ex: " + e.getMessage()); }
+        dbg("[UUID] failed for: " + name);
+        return null;
     }
 
     // ── Debug log ─────────────────────────────────────────────────────────────
@@ -178,121 +203,51 @@ public class IntelManager {
 
     private void fetchHypixel(IntelPlayer p) {
         dbg("[Stats] fetching " + p.name);
-        boolean got = fetchAntisniper(p);
-        dbg("[Stats] antisniper=" + got);
-        if (!got) {
-            got = fetchPlancke(p);
-            dbg("[Stats] plancke=" + got);
-        }
+        boolean got = fetchSlothpixel(p);
+        dbg("[Stats] slothpixel=" + got + " fkdr=" + p.fkdr);
         if (!got && !hypixelApiKey.isEmpty()) {
             got = fetchHypixelApi(p);
-            dbg("[Stats] hypixelApi=" + got);
+            dbg("[Stats] hypixelApi=" + got + " fkdr=" + p.fkdr);
         }
-        dbg("[Stats] final fkdr=" + p.fkdr + " wins=" + p.wins);
         p.loading = false;
     }
 
-    /** Antisniper public API — free, no key, has BW stats */
-    private boolean fetchAntisniper(IntelPlayer p) {
+    /** Slothpixel — free public Hypixel wrapper, no key needed */
+    private boolean fetchSlothpixel(IntelPlayer p) {
         try {
-            // Antisniper v2 player endpoint
-            String url = "https://api.antisniper.net/v2/player/stats?player=" + p.name;
-            String json = get(url, "Antisniper-Api-Key", ""); // public requests work without key
-            dbg("[Antisniper] len=" + (json == null ? "null" : json.length()));
+            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
+            dbg("[Sloth] len=" + (json == null ? "null" : json.length()));
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            dbg("[Antisniper] keys=" + root.entrySet().size());
+            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
 
-            // Try to find bedwars data — structure varies by version
+            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
+
             JsonObject bw = null;
-            if (root.has("player")) {
-                JsonObject player = root.getAsJsonObject("player");
-                if (player.has("bedwars")) bw = player.getAsJsonObject("bedwars");
-                if (bw == null && player.has("stats")) {
-                    JsonObject st = player.getAsJsonObject("stats");
-                    if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
-                    else if (st.has("bedwars")) bw = st.getAsJsonObject("bedwars");
-                }
-                // Level
-                if (player.has("level")) p.level = (int) player.get("level").getAsDouble();
-                else if (player.has("networkLevel")) p.level = (int) player.get("networkLevel").getAsDouble();
+            if (root.has("stats")) {
+                JsonObject st = root.getAsJsonObject("stats");
+                if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
             }
-            if (bw == null && root.has("bedwars")) bw = root.getAsJsonObject("bedwars");
-
-            dbg("[Antisniper] bw=" + (bw != null));
+            dbg("[Sloth] bw=" + (bw != null));
             if (bw == null) return false;
 
-            int fk = bwStat(bw, "final_kills_bedwars", "finalKills",  "final_kills");
-            int fd = bwStat(bw, "final_deaths_bedwars","finalDeaths", "final_deaths"); if (fd==0) fd=1;
-            int w  = bwStat(bw, "wins_bedwars",        "wins");
-            int l  = bwStat(bw, "losses_bedwars",      "losses");                      if (l==0) l=1;
+            int fk = bwInt(bw, "final_kills_bedwars");
+            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
+            int w  = bwInt(bw, "wins_bedwars");
+            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
             p.finalKills = fk;
-            p.bedsBroken = bwStat(bw, "beds_broken_bedwars", "bedsBroken", "beds_broken");
+            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
             p.wins       = w;
-            p.winstreak  = bwStat(bw, "winstreak", "currentWinstreak");
+            p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
-            p.wlr        = (double) w / l;
+            p.wlr        = (double) w  / l;
+            dbg("[Sloth] fk=" + fk + " w=" + w);
             return fk > 0 || w > 0;
-        } catch (Exception e) { dbg("[Antisniper] ex: " + e); return false; }
+        } catch (Exception e) { dbg("[Sloth] ex: " + e); return false; }
     }
 
-    /** Plancke HTML scrape — parses stat values from page HTML, no key needed */
-    private boolean fetchPlancke(IntelPlayer p) {
-        try {
-            String html = get("https://plancke.io/hypixel/player/stats/" + p.name, "Accept", "text/html,*/*");
-            dbg("[Plancke] len=" + (html == null ? "null" : html.length()));
-            if (html == null || html.length() < 100) return false;
-
-            // Plancke embeds stats in the page. Pattern: stat name in one element, value in next
-            // e.g. Final Kills</p>
-<p ...>12345
-            // Use regex to find bedwars section then extract values
-            java.util.regex.Pattern p1 = java.util.regex.Pattern.compile(
-                "(?i)final.kills.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern p2 = java.util.regex.Pattern.compile(
-                "(?i)final.deaths.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern p3 = java.util.regex.Pattern.compile(
-                "(?i)wins.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern p4 = java.util.regex.Pattern.compile(
-                "(?i)losses.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern p5 = java.util.regex.Pattern.compile(
-                "(?i)win.streak.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern p6 = java.util.regex.Pattern.compile(
-                "(?i)beds.broken.*?<[^>]+>(\d[\d,]*)", java.util.regex.Pattern.DOTALL);
-            java.util.regex.Pattern lvlP = java.util.regex.Pattern.compile(
-                "\[(\d+)\s*(?:\u2606|\*|\u265b)?\s*\]");
-
-            java.util.regex.Matcher m;
-
-            m = lvlP.matcher(html);
-            if (m.find()) p.level = Integer.parseInt(m.group(1));
-
-            m = p1.matcher(html);
-            int fk = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 0;
-            m = p2.matcher(html);
-            int fd = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 1; if (fd==0) fd=1;
-            m = p3.matcher(html);
-            int w  = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 0;
-            m = p4.matcher(html);
-            int l  = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 1; if (l==0) l=1;
-            m = p5.matcher(html);
-            int ws = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 0;
-            m = p6.matcher(html);
-            int bb = m.find() ? Integer.parseInt(m.group(1).replace(",","")) : 0;
-
-            dbg("[Plancke] fk=" + fk + " fd=" + fd + " w=" + w + " l=" + l);
-            if (fk == 0 && w == 0) return false;
-
-            p.finalKills = fk; p.bedsBroken = bb;
-            p.wins = w; p.winstreak = ws;
-            p.fkdr = (double) fk / fd;
-            p.wlr  = (double) w / l;
-            return true;
-        } catch (Exception e) { dbg("[Plancke] ex: " + e); return false; }
-    }
-
-        /** Official Hypixel API v2 — used as fallback when API key is set */
+    /** Official Hypixel API v2 — used when API key is configured */
     private boolean fetchHypixelApi(IntelPlayer p) {
         try {
             hypixelSlots.acquire();
@@ -307,6 +262,7 @@ public class IntelManager {
             if (uuid == null) return false;
 
             String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            dbg("[HypixelAPI] len=" + (json == null ? "null" : json.length()));
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
@@ -321,21 +277,20 @@ public class IntelManager {
 
             JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
             JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
-            if (bw != null) {
-                int fk = bwInt(bw, "final_kills_bedwars");
-                int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
-                int w  = bwInt(bw, "wins_bedwars");
-                int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
-                p.finalKills = fk;
-                p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
-                p.wins       = w;
-                p.winstreak  = bwInt(bw, "winstreak");
-                p.fkdr       = (double) fk / fd;
-                p.wlr        = (double) w  / l;
-                return true;
-            }
-            return false;
-        } catch (Exception e) { return false; }
+            if (bw == null) return false;
+
+            int fk = bwInt(bw, "final_kills_bedwars");
+            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
+            int w  = bwInt(bw, "wins_bedwars");
+            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
+            p.finalKills = fk;
+            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
+            p.wins       = w;
+            p.winstreak  = bwInt(bw, "winstreak");
+            p.fkdr       = (double) fk / fd;
+            p.wlr        = (double) w  / l;
+            return fk > 0 || w > 0;
+        } catch (Exception e) { dbg("[HypixelAPI] ex: " + e); return false; }
     }
 
     private int bwStat(JsonObject bw, String... keys) {
@@ -347,12 +302,7 @@ public class IntelManager {
         return bw.has(key) ? bw.get(key).getAsInt() : 0;
     }
 
-        // ── Urchin batch POST ─────────────────────────────────────────────────────
-    // POST https://urchin.ws/player?key=<key>&sources=MANUAL
-    // Body: {"usernames":["name1","name2",...]}
-    // Response: {"players":{"Name":[{"type":"...","reason":"...","added_on":"..."}]}}
-
-    private void fetchUrchinBatch(List<IntelPlayer> batch) {
+        private void fetchUrchinBatch(List<IntelPlayer> batch) {
         if (batch.isEmpty()) return;
         try {
             StringBuilder sb = new StringBuilder("{\"usernames\":[");
