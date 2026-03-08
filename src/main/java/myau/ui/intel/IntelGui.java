@@ -32,12 +32,12 @@ public class IntelGui extends GuiScreen {
     private static final int HEAD_SIZE = 20;
     private static final int SCROLL_SPD = 18;
 
-    // Column centre X positions (used for both headers and card values)
-    // These are absolute screen X - centred under the header labels
-    // FKDR col centre=290, WLR=370, STREAK=460, THREAT right block at listW-70
-    private static final int COL_FKDR_C   = 290;
-    private static final int COL_WLR_C    = 370;
-    private static final int COL_STREAK_C = 455;
+    // Column centres are computed at draw time as % of listW to avoid overlap
+    // See colFkdr(lw), colWlr(lw), colStreak(lw)
+    private int colFkdr(int lw)   { return (int)(lw * 0.52f); }
+    private int colWlr(int lw)    { return (int)(lw * 0.63f); }
+    private int colStreak(int lw) { return (int)(lw * 0.74f); }
+    private int colThreat(int lw) { return (int)(lw * 0.87f); }
 
     // Colours
     private static final int BG_FULL  = 0xBB000008;
@@ -196,10 +196,10 @@ public class IntelGui extends GuiScreen {
         gl();
         int nameX = CARD_PAD + HEAD_SIZE + 10;
         mc.fontRendererObj.drawString("PLAYER", nameX, hY + 5, COL_DIM, false);
-        drawCentred("FKDR",   COL_FKDR_C,   hY + 5, COL_DIM);
-        drawCentred("WLR",    COL_WLR_C,    hY + 5, COL_DIM);
-        drawCentred("STREAK", COL_STREAK_C, hY + 5, COL_DIM);
-        drawCentred("THREAT", lw - 42,      hY + 5, COL_DIM);
+        drawCentred("FKDR",   colFkdr(lw),   hY + 5, COL_DIM);
+        drawCentred("WLR",    colWlr(lw),    hY + 5, COL_DIM);
+        drawCentred("STREAK", colStreak(lw), hY + 5, COL_DIM);
+        drawCentred("THREAT", colThreat(lw), hY + 5, COL_DIM);
         fillRect(0, hY + COL_HDR - 1, lw, 1, COL_DIVIDER);
 
         int cY = ly + COL_HDR + 4;
@@ -285,27 +285,30 @@ public class IntelGui extends GuiScreen {
 
         if (p.loading) {
             gl();
-            drawCentred("\u2014", COL_FKDR_C,   cy + ch/2 - 4, COL_DIM);
-            drawCentred("\u2014", COL_WLR_C,    cy + ch/2 - 4, COL_DIM);
-            drawCentred("\u2014", COL_STREAK_C, cy + ch/2 - 4, COL_DIM);
+            int _lw = cx + cw + CARD_PAD; // approximate listW from card bounds
+            drawCentred("\u2014", colFkdr(_lw),   cy + ch/2 - 4, COL_DIM);
+            drawCentred("\u2014", colWlr(_lw),    cy + ch/2 - 4, COL_DIM);
+            drawCentred("\u2014", colStreak(_lw), cy + ch/2 - 4, COL_DIM);
             return;
         }
 
         // Stats — vertically centred in card, centred under column headers
         int sy = cy + ch / 2 - 4;
+        int _lw2 = cx + cw + CARD_PAD;
         gl();
-        drawCentred(fmt(p.fkdr),                COL_FKDR_C,   sy, statCol(p.fkdr, 3, 6));
-        drawCentred(fmt(p.wlr),                 COL_WLR_C,    sy, statCol(p.wlr, 1.5, 4));
-        drawCentred(String.valueOf(p.winstreak), COL_STREAK_C, sy, statCol(p.winstreak, 10, 30));
+        drawCentred(fmt(p.fkdr),                colFkdr(_lw2),   sy, statCol(p.fkdr, 3, 6));
+        drawCentred(fmt(p.wlr),                 colWlr(_lw2),    sy, statCol(p.wlr, 1.5, 4));
+        drawCentred(String.valueOf(p.winstreak), colStreak(_lw2), sy, statCol(p.winstreak, 10, 30));
 
-        // Threat bar + score (right side, centred under THREAT header)
-        int barW = 40, barH = 3;
-        int bx = cx + cw - barW - 22, by = sy + 3;
+        // Threat bar + score centred under THREAT header
+        int barW = 32, barH = 3;
+        int threatCx = colThreat(_lw2);
+        int bx = threatCx - barW / 2, by = sy + 3;
         fillRect(bx, by, barW, barH, 0x22FFFFFF);
         int fw = (int)(Math.min(1f, p.threatScore / 100f) * barW);
         if (fw > 0) fillRect(bx, by, fw, barH, tc);
         String scoreStr = String.valueOf((int) p.threatScore);
-        drawCentred(scoreStr, cx + cw - barW / 2 - 22, sy, tc);
+        drawCentred(scoreStr, threatCx, sy - 6, tc);
     }
 
     // ── Detail panel ──────────────────────────────────────────────────────────
