@@ -170,7 +170,7 @@ public class IntelManager {
 
             // Parse star/level from page title pattern: "* 123" or "[123✫]"
             java.util.regex.Matcher lvlM = java.util.regex.Pattern
-                .compile("\[(\d+)(?:✫|\*|⁕)?\]").matcher(html);
+                .compile("\\[(\\d+)(?:\\u265b|\\*|\\u2695)?\\]").matcher(html);
             if (lvlM.find()) p.level = Integer.parseInt(lvlM.group(1));
 
             // Plancke embeds stats as a JS object or in meta tags — use the JSON API endpoint
