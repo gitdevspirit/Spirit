@@ -29,7 +29,6 @@ public class IntelManager {
     public static String hypixelApiKey = "";
     public static String urchinApiKey  = "68DE_lQ0UprVJX8q5k7TIeeZV938J2EfDAF08Q_07s0";
 
-    private static final String HYPIXEL_URL = "https://api.hypixel.net/player?key=%s&name=%s";
     private static final String URCHIN_URL  = "https://urchin.ws/player";
 
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
@@ -146,22 +145,30 @@ public class IntelManager {
             } finally {
                 hypixelSlots.release();
             }
-            String json = get(String.format(HYPIXEL_URL, hypixelApiKey, p.name), null, null);
+
+            // Step 1: resolve UUID via Mojang (uses cache if already fetched)
+            String uuid;
+            synchronized (uuidCache) { uuid = uuidCache.get(p.name); }
+            if (uuid == null) {
+                String mojang = get("https://api.mojang.com/users/profiles/minecraft/" + p.name, null, null);
+                if (mojang == null) { p.loading = false; return; }
+                JsonObject mObj = new JsonParser().parse(mojang).getAsJsonObject();
+                if (!mObj.has("id")) { p.loading = false; return; }
+                String raw = mObj.get("id").getAsString();
+                uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
+                synchronized (uuidCache) { uuidCache.put(p.name, uuid); }
+            }
+
+            // Step 2: Hypixel v2 — UUID param + API-Key header (key in query no longer works)
+            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid,
+                    "API-Key", hypixelApiKey);
             if (json == null) { p.loading = false; return; }
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (!root.get("success").getAsBoolean()) { p.loading = false; return; }
-            if (root.get("player").isJsonNull())      { p.loading = false; return; }
+            if (!root.has("success") || !root.get("success").getAsBoolean()) { p.loading = false; return; }
+            if (!root.has("player") || root.get("player").isJsonNull())      { p.loading = false; return; }
 
             JsonObject player = root.getAsJsonObject("player");
-            // Cache UUID for skin lookup
-            if (player.has("uuid")) {
-                String rawUuid = player.get("uuid").getAsString();
-                String formatted = rawUuid.replaceAll(
-                    "^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
-                synchronized (uuidCache) { uuidCache.put(p.name, formatted); }
-                // UUID is now cached — IntelGui will fetch the face texture on next render frame
-            }
 
             if (player.has("networkExp")) {
                 double exp = player.get("networkExp").getAsDouble();
@@ -173,9 +180,9 @@ public class IntelManager {
 
             if (bw != null) {
                 int fk = bwInt(bw, "final_kills_bedwars");
-                int fd = bwInt(bw, "final_deaths_bedwars");  if (fd == 0) fd = 1;
+                int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
                 int w  = bwInt(bw, "wins_bedwars");
-                int l  = bwInt(bw, "losses_bedwars");        if (l  == 0) l  = 1;
+                int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
                 p.finalKills = fk;
                 p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
                 p.wins       = w;
