@@ -412,65 +412,86 @@ public class IntelGui extends GuiScreen {
         try {
             ResourceLocation skin = null;
 
-            // 1. Try live lobby player — always works for players currently in tab
+            // 1. Lobby player — use MC's already-loaded skin (instant, correct)
             if (mc.getNetHandler() != null) {
                 NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
                 if (info != null) skin = info.getLocationSkin();
             }
 
-            // 2. Try cached face texture (downloaded from crafatar)
+            // 2. Check our downloaded texture cache
             if (skin == null) skin = skinCache.get(name);
 
-            // 3. No skin yet — try to kick off a download if we have a UUID
+            // 3. Kick off async download if we have UUID but no skin yet
             if (skin == null) {
                 String uuid = IntelManager.getInstance().getCachedUuid(name);
-                Object fetchState = skinFetchState.get(name);
-                boolean canFetch = !"pending".equals(fetchState) && !"done".equals(fetchState)
-                        && (!(fetchState instanceof Long) || System.currentTimeMillis() - (Long) fetchState > 10_000L);
+                Object state = skinFetchState.get(name);
+                boolean canFetch = !"pending".equals(state) && !"done".equals(state)
+                        && (!(state instanceof Long) || System.currentTimeMillis() - (Long)state > 10_000L);
                 if (uuid != null && canFetch) {
                     skinFetchState.put(name, "pending");
-                    final String uuidFinal = uuid; // keep dashes for crafatar
+                    final String uuidRaw  = uuid.replace("-", ""); // no dashes for session server
                     final String nameFinal = name;
                     new Thread(() -> {
                         try {
-                            // crafatar returns a pre-cropped face PNG — reliable, CDN-backed
-                            // Try 3 URLs in order: crafatar → mc-heads → minotar
-                            String[] urls = {
-                                "https://crafatar.com/avatars/" + uuidFinal + "?size=8&overlay",
-                                "https://mc-heads.net/avatar/" + uuidFinal.replace("-","") + "/8",
-                                "https://minotar.net/avatar/" + nameFinal + "/8"
-                            };
-                            java.io.InputStream imgStream = null;
-                            for (String url : urls) {
-                                try {
-                                    java.net.HttpURLConnection con = (java.net.HttpURLConnection)
-                                            new java.net.URL(url).openConnection();
-                                    con.setConnectTimeout(5000);
-                                    con.setReadTimeout(5000);
-                                    con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-                                    if (con.getResponseCode() == 200) {
-                                        imgStream = con.getInputStream();
+                            // Step A: ask Mojang session server for the skin texture URL
+                            String profileUrl = "https://sessionserver.mojang.com/session/minecraft/profile/" + uuidRaw;
+                            java.net.HttpURLConnection pc = (java.net.HttpURLConnection)
+                                    new java.net.URL(profileUrl).openConnection();
+                            pc.setConnectTimeout(5000); pc.setReadTimeout(5000);
+                            pc.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+                            if (pc.getResponseCode() != 200) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
+
+                            com.google.gson.JsonObject profile = new com.google.gson.JsonParser()
+                                    .parse(IntelManager.readStreamStatic(pc.getInputStream())).getAsJsonObject();
+                            String skinUrl = null;
+                            if (profile.has("properties")) {
+                                for (com.google.gson.JsonElement el : profile.getAsJsonArray("properties")) {
+                                    com.google.gson.JsonObject prop = el.getAsJsonObject();
+                                    if ("textures".equals(prop.get("name").getAsString())) {
+                                        // value is base64-encoded JSON
+                                        String decoded = new String(java.util.Base64.getDecoder()
+                                                .decode(prop.get("value").getAsString()));
+                                        com.google.gson.JsonObject tex = new com.google.gson.JsonParser()
+                                                .parse(decoded).getAsJsonObject();
+                                        skinUrl = tex.getAsJsonObject("textures")
+                                                     .getAsJsonObject("SKIN")
+                                                     .get("url").getAsString();
                                         break;
                                     }
-                                } catch (Exception ignored2) {}
-                            }
-                            if (imgStream != null) {
-                                final java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(imgStream);
-                                imgStream.close();
-                                if (img != null) {
-                                    final net.minecraft.client.renderer.texture.DynamicTexture dt =
-                                            new net.minecraft.client.renderer.texture.DynamicTexture(img);
-                                    net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                                        ResourceLocation loc = mc.getTextureManager()
-                                                .getDynamicTextureLocation("intel_face_" + nameFinal, dt);
-                                        skinCache.put(nameFinal, loc);
-                                        skinFetchState.put(nameFinal, "done");
-                                    });
-                                    return;
                                 }
                             }
-                            // All URLs failed — mark so we stop retrying this session
-                            skinFetchState.put(nameFinal, System.currentTimeMillis());
+                            if (skinUrl == null) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
+
+                            // Step B: download the actual 64x64 skin PNG from Mojang's CDN
+                            java.net.HttpURLConnection sc = (java.net.HttpURLConnection)
+                                    new java.net.URL(skinUrl).openConnection();
+                            sc.setConnectTimeout(5000); sc.setReadTimeout(5000);
+                            sc.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+                            if (sc.getResponseCode() != 200) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
+
+                            java.awt.image.BufferedImage fullSkin = javax.imageio.ImageIO.read(sc.getInputStream());
+                            if (fullSkin == null) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
+
+                            // Step C: crop just the 8x8 face (UV 8,8 on 64x64 sheet) + hat layer (40,8)
+                            int res = 16; // render at 16px internally for crispness
+                            java.awt.image.BufferedImage face = new java.awt.image.BufferedImage(res, res, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                            java.awt.Graphics2D g = face.createGraphics();
+                            // base face layer: pixels 8-15, 8-15 on 64x64 sheet
+                            g.drawImage(fullSkin, 0, 0, res, res, 8, 8, 16, 16, null);
+                            // hat/overlay layer: pixels 40-47, 8-15
+                            g.drawImage(fullSkin, 0, 0, res, res, 40, 8, 48, 16, null);
+                            g.dispose();
+
+                            final net.minecraft.client.renderer.texture.DynamicTexture dt =
+                                    new net.minecraft.client.renderer.texture.DynamicTexture(face);
+
+                            // Step D: register texture on MC main thread
+                            net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+                                ResourceLocation loc = mc.getTextureManager()
+                                        .getDynamicTextureLocation("intel_face_" + nameFinal, dt);
+                                skinCache.put(nameFinal, loc);
+                                skinFetchState.put(nameFinal, "done");
+                            });
                         } catch (Exception e) {
                             skinFetchState.put(nameFinal, System.currentTimeMillis());
                         }
@@ -485,11 +506,11 @@ public class IntelGui extends GuiScreen {
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
 
-            // Downloaded face textures are pre-cropped 8x8 — draw full image
+            // Downloaded face: pre-cropped 16x16 — draw as full image
             if (skinCache.containsKey(name) && skinCache.get(name) == skin) {
-                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 8, 8, size, size, 8f, 8f);
+                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 16, 16, size, size, 16f, 16f);
             } else {
-                // Standard MC skin sheet: base layer + hat overlay
+                // Standard MC skin sheet: base face (8,8) + hat overlay (40,8)
                 Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
                 Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
             }
