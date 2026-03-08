@@ -405,8 +405,8 @@ public class IntelGui extends GuiScreen {
 
     // ── Player head ───────────────────────────────────────────────────────────
 
-    // Tracks in-flight skin downloads: name -> "pending" or "failed"
-    private final java.util.Map<String, String> skinFetchState = new java.util.HashMap<>();
+    // Tracks in-flight skin downloads: name -> "pending", "done", or fail timestamp (ms)
+    private final java.util.Map<String, Object> skinFetchState = new java.util.HashMap<>();
 
     private void drawPlayerHead(String name, int x, int y, int size) {
         try {
@@ -424,9 +424,10 @@ public class IntelGui extends GuiScreen {
             // 3. No skin yet — try to kick off a download if we have a UUID
             if (skin == null) {
                 String uuid = IntelManager.getInstance().getCachedUuid(name);
-                String fetchState = skinFetchState.get(name);
-                // Only start a new download if not already pending and not permanently failed
-                if (uuid != null && !"pending".equals(fetchState) && !"failed".equals(fetchState)) {
+                Object fetchState = skinFetchState.get(name);
+                boolean canFetch = !"pending".equals(fetchState) && !"done".equals(fetchState)
+                        && (!(fetchState instanceof Long) || System.currentTimeMillis() - (Long) fetchState > 10_000L);
+                if (uuid != null && canFetch) {
                     skinFetchState.put(name, "pending");
                     final String uuidFinal = uuid; // keep dashes for crafatar
                     final String nameFinal = name;
@@ -469,9 +470,9 @@ public class IntelGui extends GuiScreen {
                                 }
                             }
                             // All URLs failed — mark so we stop retrying this session
-                            skinFetchState.put(nameFinal, "failed");
+                            skinFetchState.put(nameFinal, System.currentTimeMillis());
                         } catch (Exception e) {
-                            skinFetchState.put(nameFinal, "failed");
+                            skinFetchState.put(nameFinal, System.currentTimeMillis());
                         }
                     }, "IntelFace-" + name).start();
                 }
