@@ -5,78 +5,36 @@ import myau.ui.intel.IntelDebugGui;
 import myau.ui.intel.IntelManager;
 import net.minecraft.client.Minecraft;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 public class IntelDebugCommand extends Command {
 
     public IntelDebugCommand() {
         super("inteldebug", "idebug");
-        setDescription("Opens a GUI showing the raw Urchin API response for a player.");
-    }
-
-    private int lastCode = 0;
-
-    private String fetch(String urlStr) {
-        try {
-            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
-            con.setRequestMethod("GET");
-            con.setConnectTimeout(5000);
-            con.setReadTimeout(5000);
-            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-            lastCode = con.getResponseCode();
-            BufferedReader br = new BufferedReader(new InputStreamReader(
-                    lastCode == 200 ? con.getInputStream() : con.getErrorStream()));
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = br.readLine()) != null) sb.append(line).append("\n");
-            br.close();
-            return sb.toString();
-        } catch (Exception e) { return null; }
+        setDescription("Shows live stat-fetch debug log, or queries a specific player.");
     }
 
     @Override
     public void execute(String[] args) {
-        String name = args.length > 0 ? args[0] : "OFFICER_SPIRIT";
-        reply("&7Querying Urchin for &f" + name + "&7...");
+        if (args.length > 0 && args[0].equals("clear")) {
+            synchronized (IntelManager.debugLog) { IntelManager.debugLog.clear(); }
+            reply("&aDebug log cleared.");
+            return;
+        }
 
-        new Thread(() -> {
-            try {
-                // Step 1: get UUID from Mojang
-                String mojangUrl = "https://api.mojang.com/users/profiles/minecraft/" + name;
-                String mojangResp = fetch(mojangUrl);
-                String uuid = "";
-                if (mojangResp != null) {
-                    com.google.gson.JsonObject obj = new com.google.gson.JsonParser().parse(mojangResp).getAsJsonObject();
-                    if (obj.has("id")) {
-                        String raw = obj.get("id").getAsString();
-                        uuid = raw.replaceFirst("(\\w{8})(\\w{4})(\\w{4})(\\w{4})(\\w{12})","$1-$2-$3-$4-$5");
-                    }
-                }
+        // If a name is given, trigger a fresh fetch for that player so log fills up
+        if (args.length > 0) {
+            String name = args[0];
+            reply("&7Triggering fetch for &f" + name + "&7 — run &f.idebug&7 again in 3s to see results.");
+            IntelManager.getInstance().addManualPlayer(name);
+        }
 
-                String url = "https://urchin.ws/cubelify"
-                        + "?id=" + uuid
-                        + "&name=" + java.net.URLEncoder.encode(name, "UTF-8")
-                        + "&sources="
-                        + "&key=" + IntelManager.urchinApiKey;
-
-                String urchinResp = fetch(url);
-                int code2 = lastCode;
-
-                String result = "Mojang UUID: " + (uuid.isEmpty() ? "not found" : uuid)
-                        + "\nURL: " + url
-                        + "\nHTTP: " + code2
-                        + "\n\n" + (urchinResp != null ? urchinResp : "null");
-
-                Minecraft.getMinecraft().addScheduledTask(() ->
-                        Minecraft.getMinecraft().displayGuiScreen(
-                                new IntelDebugGui("Urchin Debug — " + name, result)));
-
-            } catch (Exception e) {
-                reply("&cError: " + e.getMessage());
-            }
-        }).start();
+        // Show current log contents
+        synchronized (IntelManager.debugLog) {
+            String content = IntelManager.debugLog.isEmpty()
+                    ? "No debug output yet.\nTry: .idebug <playername>"
+                    : String.join("\n", IntelManager.debugLog);
+            Minecraft.getMinecraft().addScheduledTask(() ->
+                    Minecraft.getMinecraft().displayGuiScreen(
+                            new IntelDebugGui("Intel Debug Log", content)));
+        }
     }
 }
