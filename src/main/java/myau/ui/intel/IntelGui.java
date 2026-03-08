@@ -412,52 +412,75 @@ public class IntelGui extends GuiScreen {
 
     // ── Player head ───────────────────────────────────────────────────────────
 
+    // Tracks in-flight skin downloads: name -> "pending" or "failed"
+    private final java.util.Map<String, String> skinFetchState = new java.util.HashMap<>();
+
     private void drawPlayerHead(String name, int x, int y, int size) {
         try {
             ResourceLocation skin = null;
 
-            // 1. Try live lobby player (instant, always correct)
+            // 1. Try live lobby player — always works for players currently in tab
             if (mc.getNetHandler() != null) {
                 NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
                 if (info != null) skin = info.getLocationSkin();
             }
 
-            // 2. Try our local cache (populated by async download below)
+            // 2. Try cached face texture (downloaded from crafatar)
             if (skin == null) skin = skinCache.get(name);
 
-            // 3. If we have a UUID but no cached skin yet, kick off async download
+            // 3. No skin yet — try to kick off a download if we have a UUID
             if (skin == null) {
                 String uuid = IntelManager.getInstance().getCachedUuid(name);
-                if (uuid != null && !skinCache.containsKey(name + "_pending")) {
-                    skinCache.put(name + "_pending", null); // mark as in-flight
-                    final String uuidFinal = uuid.replace("-", "");
+                String fetchState = skinFetchState.get(name);
+                // Only start a new download if not already pending and not permanently failed
+                if (uuid != null && !"pending".equals(fetchState) && !"failed".equals(fetchState)) {
+                    skinFetchState.put(name, "pending");
+                    final String uuidFinal = uuid; // keep dashes for crafatar
                     final String nameFinal = name;
                     new Thread(() -> {
                         try {
-                            // Fetch 8x8 face PNG from mc-heads.net — returns exact face pixels
-                            String url = "https://mc-heads.net/avatar/" + uuidFinal + "/8";
-                            java.net.HttpURLConnection con = (java.net.HttpURLConnection)
-                                    new java.net.URL(url).openConnection();
-                            con.setConnectTimeout(4000);
-                            con.setReadTimeout(4000);
-                            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-                            if (con.getResponseCode() == 200) {
-                                java.io.InputStream is = con.getInputStream();
-                                // Load as dynamic texture
-                                final net.minecraft.client.renderer.texture.DynamicTexture dt =
-                                        new net.minecraft.client.renderer.texture.DynamicTexture(
-                                                javax.imageio.ImageIO.read(is));
-                                is.close();
-                                // Register on main thread
-                                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                                    ResourceLocation loc = mc.getTextureManager()
-                                            .getDynamicTextureLocation("intel_head_" + nameFinal, dt);
-                                    skinCache.put(nameFinal, loc);
-                                    skinCache.remove(nameFinal + "_pending");
-                                });
+                            // crafatar returns a pre-cropped face PNG — reliable, CDN-backed
+                            // Try 3 URLs in order: crafatar → mc-heads → minotar
+                            String[] urls = {
+                                "https://crafatar.com/avatars/" + uuidFinal + "?size=8&overlay",
+                                "https://mc-heads.net/avatar/" + uuidFinal.replace("-","") + "/8",
+                                "https://minotar.net/avatar/" + nameFinal + "/8"
+                            };
+                            java.io.InputStream imgStream = null;
+                            for (String url : urls) {
+                                try {
+                                    java.net.HttpURLConnection con = (java.net.HttpURLConnection)
+                                            new java.net.URL(url).openConnection();
+                                    con.setConnectTimeout(5000);
+                                    con.setReadTimeout(5000);
+                                    con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+                                    if (con.getResponseCode() == 200) {
+                                        imgStream = con.getInputStream();
+                                        break;
+                                    }
+                                } catch (Exception ignored2) {}
                             }
-                        } catch (Exception ignored2) {}
-                    }, "IntelSkin-" + name).start();
+                            if (imgStream != null) {
+                                final java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(imgStream);
+                                imgStream.close();
+                                if (img != null) {
+                                    final net.minecraft.client.renderer.texture.DynamicTexture dt =
+                                            new net.minecraft.client.renderer.texture.DynamicTexture(img);
+                                    net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+                                        ResourceLocation loc = mc.getTextureManager()
+                                                .getDynamicTextureLocation("intel_face_" + nameFinal, dt);
+                                        skinCache.put(nameFinal, loc);
+                                        skinFetchState.put(nameFinal, "done");
+                                    });
+                                    return;
+                                }
+                            }
+                            // All URLs failed — mark so we stop retrying this session
+                            skinFetchState.put(nameFinal, "failed");
+                        } catch (Exception e) {
+                            skinFetchState.put(nameFinal, "failed");
+                        }
+                    }, "IntelFace-" + name).start();
                 }
             }
 
@@ -468,11 +491,11 @@ public class IntelGui extends GuiScreen {
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
 
-            // If it's a cached mc-heads 8px face texture, draw it directly scaled (no UV offset needed)
-            if (skinCache.get(name) == skin) {
+            // Downloaded face textures are pre-cropped 8x8 — draw full image
+            if (skinCache.containsKey(name) && skinCache.get(name) == skin) {
                 Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 8, 8, size, size, 8f, 8f);
             } else {
-                // Standard skin sheet: base face + hat layer
+                // Standard MC skin sheet: base layer + hat overlay
                 Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
                 Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
             }
@@ -618,32 +641,12 @@ public class IntelGui extends GuiScreen {
         return v == (long) v ? String.valueOf((long) v) : String.format("%.2f", v);
     }
 
-    // Returns 0=low, 1=medium, 2=high — checks type then reason with word-boundary safety
+    // Derives 0=low/1=medium/2=high from the averaged threat score already computed
     private int urchinThreatLevel(IntelPlayer p) {
-        String type   = p.urchinType   != null ? p.urchinType   : "";
-        String reason = p.urchinReason != null ? p.urchinReason : "";
-        // Type-based
-        if (type.contains("blatant")) return 2;
-        if (type.contains("confirmed")) return 1;
-        if (type.contains("caution") || type.contains("info")) return 0;
-        // Reason-based (word-boundary safe)
-        if (hasWord(reason, "scaffold") || hasWord(reason, "blatant") || hasWord(reason, "bridg")
-                || hasWord(reason, "ab") || hasWord(reason, "autoblock")
-                || hasWord(reason, "hop") || hasWord(reason, "hopping")
-                || hasWord(reason, "fly") || hasWord(reason, "speed") || hasWord(reason, "bhop")
-                || hasWord(reason, "esp") || hasWord(reason, "visual") || hasWord(reason, "xray")
-                || hasWord(reason, "aimbot")) return 2;
-        if (hasWord(reason, "ka") || hasWord(reason, "killaura") || reason.contains("kill aura")
-                || hasWord(reason, "aa") || reason.contains("aim assist") || reason.contains("aimassist")
-                || hasWord(reason, "reach") || hasWord(reason, "velo") || hasWord(reason, "velocity")
-                || hasWord(reason, "jr") || hasWord(reason, "jrv") || reason.contains("jump reset")
-                || reason.contains("anti-kb") || reason.contains("antikb")
-                || hasWord(reason, "sniper")) return 1;
-        if (hasWord(reason, "ac") || reason.contains("legitscaff") || reason.contains("legitscaf")
-                || hasWord(reason, "eagle")
-                || reason.contains("boosting") || reason.contains("queue")
-                || reason.contains("2q") || reason.contains("3q") || reason.contains("4q")) return 0;
-        return 1;
+        double t = p.threatScore;
+        if (t >= 65) return 2;
+        if (t >= 40) return 1;
+        return 0;
     }
 
     /** Word-boundary safe — "ac" won't match "place" or "black" */
@@ -659,64 +662,103 @@ public class IntelGui extends GuiScreen {
         return false;
     }
 
+    // Severity tiers for cheat detection — higher = reported first
+    private static final Object[][] CHEAT_TIERS = {
+        // {severity, reason_keywords[], type_keywords[], message}
+        {3, new String[]{"scaffold","bridg","blatant scaffold"}, new String[]{"blatant"},
+            "HIGH THREAT | Blatant scaffolder. Near-instant bridges everywhere. Rush their bed before they cross."},
+        {3, new String[]{"ab","autoblock","hopping","full hop"}, new String[]{},
+            "HIGH THREAT | Autoblock / hopping. Near-perfect blocking every hit. Use bow and rush bed — avoid sword fights."},
+        {3, new String[]{"fly","bhop","bunnyhop","speed"}, new String[]{},
+            "HIGH THREAT | Movement hacks. Expect instant rushes. Fortify your bed and defend early."},
+        {3, new String[]{"esp","visual","xray","x-ray","wallhack"}, new String[]{},
+            "HIGH THREAT | ESP / visuals. They see through walls and track you. Cover your bed on all sides."},
+        {3, new String[]{"aimbot"}, new String[]{},
+            "HIGH THREAT | Aimbot. Avoid all direct fights. Rush bed and disengage immediately."},
+        {2, new String[]{"ka","killaura","kill aura"}, new String[]{},
+            "MEDIUM THREAT | KillAura (KA). Auto-targets and attacks. Avoid open 1v1s — use terrain and rush bed."},
+        {2, new String[]{"aa","aim assist","aimassist"}, new String[]{},
+            "MEDIUM THREAT | Aim assist (AA). Improved accuracy. You can outmanoeuvre — don't let them set up shots."},
+        {2, new String[]{"reach"}, new String[]{},
+            "MEDIUM THREAT | Extended reach. They win range trades. Stay point-blank or use a bow."},
+        {2, new String[]{"jr","jrv","jump reset","velo","velocity","anti-kb","antikb"}, new String[]{},
+            "MEDIUM THREAT | Velocity / jump reset (JRV). Takes reduced knockback. Focus bed destruction over PvP."},
+        {2, new String[]{"sniper"}, new String[]{"sniper"},
+            "MEDIUM THREAT | Known sniper. Use covered tunnels and avoid open bridges."},
+        {1, new String[]{"hop"}, new String[]{},
+            "MEDIUM THREAT | Hopping. Reduces knockback taken. Don't rely on void plays — rush bed instead."},
+        {1, new String[]{"ac","autoclick","autoclicker","cps"}, new String[]{},
+            "LOW-MED THREAT | Autoclicker (AC). Higher CPS but no aim advantage. Gap fights and use knockback."},
+        {1, new String[]{"legitscaff","legitscaf","fastplace"}, new String[]{},
+            "LOW-MED THREAT | Legit-scaffold / fastplace. Bridges faster than normal. Cut their routes early."},
+        {1, new String[]{"eagle"}, new String[]{},
+            "LOW-MED THREAT | Eagle bridge. Faster aerial bridging. Play standard and deny their crossing."},
+        {0, new String[]{"2q","3q","4q","boosting","queue"}, new String[]{},
+            "LOW THREAT | Queue sniper / booster. Stats inflated via boosting — don't be misled by numbers."},
+    };
+
+    // Per-cheat advice snippets — scanned in severity order, ALL matches collected
+    private static final Object[][] CHEAT_ADVICE = {
+        // {severity, reason_kws[], type_kws[], short_label, advice}
+        {3, new String[]{"aimbot"},                      new String[]{}, "Aimbot",       "don't fight in the open — rush bed"},
+        {3, new String[]{"blatant scaffold","scaffold","bridg"}, new String[]{"blatant"}, "Blatant scaffold", "rush bed before they bridge across"},
+        {3, new String[]{"ab","autoblock","full hop","hopping"}, new String[]{""},        "Autoblock/hop",    "avoid sword fights, use bow"},
+        {3, new String[]{"hop"},                         new String[]{}, "Hop",          "don't rely on void traps"},
+        {3, new String[]{"fly","bhop","bunnyhop","speed"},new String[]{}, "Movement",    "fortify bed immediately"},
+        {3, new String[]{"esp","visual","xray","x-ray","wallhack"}, new String[]{}, "ESP","cover bed on all sides"},
+        {2, new String[]{"ka","killaura","kill aura"},   new String[]{}, "KillAura",     "avoid open 1v1s, use terrain"},
+        {2, new String[]{"aa","aim assist","aimassist"}, new String[]{}, "Aim assist",   "outmanoeuvre, don't stand still"},
+        {2, new String[]{"reach"},                       new String[]{}, "Reach",        "get point-blank or use a bow"},
+        {2, new String[]{"jr","jrv","jump reset","velo","velocity","anti-kb","antikb"}, new String[]{}, "JR/Velo", "no void traps, focus bed rush"},
+        {2, new String[]{"sniper"},                      new String[]{"sniper"}, "Sniper", "use covered tunnels"},
+        {1, new String[]{"ac","autoclick","autoclicker","cps"}, new String[]{}, "AC",    "gap fights, use knockback"},
+        {1, new String[]{"legitscaff","legitscaf","fastplace"}, new String[]{}, "Legitscaff", "cut their bridge routes"},
+        {1, new String[]{"eagle"},                       new String[]{}, "Eagle",        "deny their crossing"},
+        {0, new String[]{"2q","3q","4q","boosting","queue"}, new String[]{}, "Booster",  "stats are inflated"},
+    };
+
     private String recommend(IntelPlayer p) {
         if (p.cheater && p.urchinTag != null) {
             String type   = p.urchinType   != null ? p.urchinType   : "";
             String reason = p.urchinReason != null ? p.urchinReason : "";
-            int tl = urchinThreatLevel(p);
 
-            // Legit scaffold / eagle
-            if (reason.contains("legitscaff") || reason.contains("legitscaf") || hasWord(reason, "eagle")) {
-                return "LOW THREAT | Legit-scaffold or eagle. Bridges slightly faster than normal. Play standard and cut their routes.";
+            // Collect ALL matching cheat tiers, sorted by severity desc
+            java.util.List<Object[]> matches = new java.util.ArrayList<>();
+            for (Object[] tier : CHEAT_ADVICE) {
+                String[] rWords = (String[]) tier[1];
+                String[] tWords = (String[]) tier[2];
+                boolean matched = false;
+                for (String kw : rWords) {
+                    boolean hit = (kw.contains(" ") || kw.length() > 6)
+                            ? reason.contains(kw) : hasWord(reason, kw);
+                    if (hit) { matched = true; break; }
+                }
+                if (!matched) for (String kw : tWords) if (type.contains(kw)) { matched = true; break; }
+                if (matched) matches.add(tier);
             }
-            // Blatant scaffold
-            if (hasWord(reason, "scaffold") || reason.contains("bridg") || type.contains("blatant")) {
-                return "HIGH THREAT | Blatant scaffolder. Near-instant bridges. Rush their bed before they cross — don't let them set up.";
+
+            if (!matches.isEmpty()) {
+                // Threat header based on averaged score
+                int tl = urchinThreatLevel(p);
+                String header = tl == 2 ? "HIGH THREAT" : tl == 1 ? "MEDIUM THREAT" : "LOW THREAT";
+
+                // List every detected cheat with its advice, highest severity first
+                StringBuilder sb = new StringBuilder(header).append(" | ");
+                java.util.List<String> parts = new java.util.ArrayList<>();
+                for (Object[] m : matches) {
+                    String label  = (String) m[3];
+                    String advice = (String) m[4];
+                    parts.add(label + ": " + advice);
+                }
+                sb.append(String.join(". ", parts)).append(".");
+                return sb.toString();
             }
-            // Autoclicker (ac)
-            if (hasWord(reason, "ac") || reason.contains("autoclick") || reason.contains("autoclicker")) {
-                return "LOW THREAT | Autoclicker (AC). Higher CPS but no aim advantage. Gap fights, use knockback, don't trade hits.";
-            }
-            // Autoblock / hopping (ab, hop)
-            if (hasWord(reason, "ab") || reason.contains("autoblock") || hasWord(reason, "hop") || reason.contains("hopping") || reason.contains("full hop")) {
-                return "HIGH THREAT | Autoblock / hopping. Near-perfect blocking on every hit. Avoid sword fights — use bow and bed rush.";
-            }
-            // Jump Reset Velocity (jr, jrv, velo)
-            if (hasWord(reason, "jr") || hasWord(reason, "jrv") || reason.contains("jump reset") || hasWord(reason, "velo") || reason.contains("velocity") || reason.contains("anti-kb") || reason.contains("antikb")) {
-                return "MEDIUM THREAT | Velocity / jump reset. Takes reduced knockback — void traps won't work. Focus bed destruction over PvP.";
-            }
-            // KillAura (ka)
-            if (hasWord(reason, "ka") || reason.contains("killaura") || reason.contains("kill aura") || reason.contains("aimbot")) {
-                return "MEDIUM THREAT | KillAura (KA). Auto-targets and attacks. Avoid open 1v1s — use terrain and rush bed instead.";
-            }
-            // Aim assist (aa)
-            if (hasWord(reason, "aa") || reason.contains("aim assist") || reason.contains("aimassist")) {
-                return "MEDIUM THREAT | Aim assist (AA). Improved accuracy but not fully automated. You can still outmanoeuvre them.";
-            }
-            // Reach
-            if (hasWord(reason, "reach")) {
-                return "MEDIUM THREAT | Extended reach. They win trades at range. Get close or use a bow — don't mid-range fight.";
-            }
-            // Movement
-            if (hasWord(reason, "fly") || hasWord(reason, "bhop") || reason.contains("bunnyhop") || hasWord(reason, "speed")) {
-                return "HIGH THREAT | Movement hacks. Expect instant rushes across the map. Fortify your bed and defend early.";
-            }
-            // ESP / Visuals
-            if (hasWord(reason, "esp") || reason.contains("visual") || reason.contains("xray") || reason.contains("x-ray") || reason.contains("wallhack")) {
-                return "HIGH THREAT | ESP / visuals. They can see your bed through walls. Cover all sides and use poppers sparingly.";
-            }
-            // Queue / boost tags
-            if (reason.contains("2q") || reason.contains("3q") || reason.contains("4q") || reason.contains("boosting") || reason.contains("queue")) {
-                return "LOW THREAT | Queue sniper / booster. Stats are inflated via boosting. Don't be misled by high numbers.";
-            }
-            // Sniper
-            if (reason.contains("sniper") || type.contains("sniper")) {
-                return "MEDIUM THREAT | Known sniper. Avoid exposed areas and open bridges. Use covered tunnels where possible.";
-            }
-            // Generic fallback by threat level
-            if (tl == 2) return "HIGH THREAT | Blatant cheat detected. Do not engage directly. Rush bed and disengage.";
-            if (tl == 0) return "LOW THREAT | Minor advantage detected. Play normally with extra awareness.";
-            return "MEDIUM THREAT | Cheating detected. Avoid prolonged fights and focus on bed destruction.";
+
+            // Generic fallback
+            int tl = urchinThreatLevel(p);
+            if (tl == 2) return "HIGH THREAT | Blatant cheater. Do not engage. Rush bed and escape.";
+            if (tl == 1) return "MEDIUM THREAT | Confirmed cheater. Avoid prolonged fights. Focus bed destruction.";
+            return "LOW THREAT | Flagged by Urchin. Play with extra awareness.";
         }
         if (p.threatScore >= 75) return "High priority. Rush their bed early before they gear up. Avoid 1v1 without advantage.";
         if (p.threatScore >= 50) return "Solid player. Contest mid early and engage with armor advantage.";
