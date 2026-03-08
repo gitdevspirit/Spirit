@@ -197,7 +197,7 @@ public class IntelManager {
                 JsonObject stats = root.getAsJsonObject("stats");
                 if (stats.has("Bedwars")) bw = stats.getAsJsonObject("Bedwars");
             }
-            dbg("[Sloth] bw=" + (bw != null) + (bw != null ? " keys=" + bw.keySet().size() : ""));
+            dbg("[Sloth] bw=" + (bw != null) + (bw != null ? " keys=" + bw.entrySet().size() : ""));
             if (bw == null) return false;
 
             int fk = bwInt(bw, "final_kills_bedwars");
