@@ -5,12 +5,10 @@
   "refmap": "mixins.myau.refmap.json",
   "minVersion": "0.7",
   "compatibilityLevel": "JAVA_8",
-
   "mixins": [
     "MixinGuiIngame",
     "MixinGuiIngameHUD"
   ],
-
   "client": [
     "MixinAbstractClientPlayer",
     "MixinBlock",
@@ -39,8 +37,9 @@
     "MixinRendererLivingEntity",
     "MixinVisGraph",
     "MixinWorld",
-    "MixinWorldRenderer"
+    "MixinWorldRenderer",
+    "IAccessorS12PacketEntityVelocity",
+    "IAccessorS27PacketExplosion"
   ],
-
   "server": []
 }
