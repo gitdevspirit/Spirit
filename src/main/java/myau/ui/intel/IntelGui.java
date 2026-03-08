@@ -618,86 +618,99 @@ public class IntelGui extends GuiScreen {
         return v == (long) v ? String.valueOf((long) v) : String.format("%.2f", v);
     }
 
-    // Returns 0=low, 1=medium, 2=high threat based on cheat type
-    private int urchinThreatLevel(String tag) {
-        // Low threat — minor / cosmetic advantage
-        if (containsAny(tag,
-                "legitscaff", "legitscaf", "eagle",            // legit scaffold
-                "ac", "autoclicker", "autoclick", "cps",       // autoclicker
-                "jr", "jrv", "jump reset", "jr velo",          // jump reset velocity
-                "info", "caution", "possible_sniper", "legit_sniper",
-                "2q", "3q", "4q", "boosting", "queue"))        // queue/boost tags
-            return 0;
-        // Medium threat — solid PvP advantage
-        if (containsAny(tag,
-                "aa", "aim assist", "aimassist", "aim_assist", // aim assist
-                "ka", "killaura", "kill aura", "kill_aura",    // killaura
-                "reach", "velo", "velocity", "anti-kb", "antikb", "anti kb",
-                "sniper", "confirmed"))
-            return 1;
-        // High threat — blatant / game-breaking
-        if (containsAny(tag,
-                "blatant",
-                "scaffold", "bridg",                           // blatant scaffold
-                "ab", "autoblock", "auto block", "auto_block", // autoblock
-                "hop", "hopping", "full hop",                  // hopping/autoblock alias
-                "fly", "speed", "bhop", "bunnyhop", "movement",
-                "esp", "visual", "xray", "x-ray", "wallhack", "aimbot"))
-            return 2;
+    // Returns 0=low, 1=medium, 2=high — checks type then reason with word-boundary safety
+    private int urchinThreatLevel(IntelPlayer p) {
+        String type   = p.urchinType   != null ? p.urchinType   : "";
+        String reason = p.urchinReason != null ? p.urchinReason : "";
+        // Type-based
+        if (type.contains("blatant")) return 2;
+        if (type.contains("confirmed")) return 1;
+        if (type.contains("caution") || type.contains("info")) return 0;
+        // Reason-based (word-boundary safe)
+        if (hasWord(reason, "scaffold") || hasWord(reason, "blatant") || hasWord(reason, "bridg")
+                || hasWord(reason, "ab") || hasWord(reason, "autoblock")
+                || hasWord(reason, "hop") || hasWord(reason, "hopping")
+                || hasWord(reason, "fly") || hasWord(reason, "speed") || hasWord(reason, "bhop")
+                || hasWord(reason, "esp") || hasWord(reason, "visual") || hasWord(reason, "xray")
+                || hasWord(reason, "aimbot")) return 2;
+        if (hasWord(reason, "ka") || hasWord(reason, "killaura") || reason.contains("kill aura")
+                || hasWord(reason, "aa") || reason.contains("aim assist") || reason.contains("aimassist")
+                || hasWord(reason, "reach") || hasWord(reason, "velo") || hasWord(reason, "velocity")
+                || hasWord(reason, "jr") || hasWord(reason, "jrv") || reason.contains("jump reset")
+                || reason.contains("anti-kb") || reason.contains("antikb")
+                || hasWord(reason, "sniper")) return 1;
+        if (hasWord(reason, "ac") || reason.contains("legitscaff") || reason.contains("legitscaf")
+                || hasWord(reason, "eagle")
+                || reason.contains("boosting") || reason.contains("queue")
+                || reason.contains("2q") || reason.contains("3q") || reason.contains("4q")) return 0;
         return 1;
+    }
+
+    /** Word-boundary safe — "ac" won't match "place" or "black" */
+    private boolean hasWord(String text, String word) {
+        int idx = text.indexOf(word);
+        while (idx >= 0) {
+            boolean pre  = idx == 0 || !Character.isLetterOrDigit(text.charAt(idx - 1));
+            boolean post = idx + word.length() >= text.length()
+                    || !Character.isLetterOrDigit(text.charAt(idx + word.length()));
+            if (pre && post) return true;
+            idx = text.indexOf(word, idx + 1);
+        }
+        return false;
     }
 
     private String recommend(IntelPlayer p) {
         if (p.cheater && p.urchinTag != null) {
-            String tag = p.urchinTag.toLowerCase();
-            int tl = urchinThreatLevel(tag);
+            String type   = p.urchinType   != null ? p.urchinType   : "";
+            String reason = p.urchinReason != null ? p.urchinReason : "";
+            int tl = urchinThreatLevel(p);
 
             // Legit scaffold / eagle
-            if (containsAny(tag, "legitscaff", "legitscaf", "eagle")) {
+            if (reason.contains("legitscaff") || reason.contains("legitscaf") || hasWord(reason, "eagle")) {
                 return "LOW THREAT | Legit-scaffold or eagle. Bridges slightly faster than normal. Play standard and cut their routes.";
             }
             // Blatant scaffold
-            if (containsAny(tag, "blatant scaffold", "scaffold", "bridg")) {
+            if (hasWord(reason, "scaffold") || reason.contains("bridg") || type.contains("blatant")) {
                 return "HIGH THREAT | Blatant scaffolder. Near-instant bridges. Rush their bed before they cross — don't let them set up.";
             }
             // Autoclicker (ac)
-            if (containsAny(tag, "ac", "autoclick", "autoclicker", "cps")) {
+            if (hasWord(reason, "ac") || reason.contains("autoclick") || reason.contains("autoclicker")) {
                 return "LOW THREAT | Autoclicker (AC). Higher CPS but no aim advantage. Gap fights, use knockback, don't trade hits.";
             }
             // Autoblock / hopping (ab, hop)
-            if (containsAny(tag, "ab", "autoblock", "auto block", "auto_block", "hop", "hopping", "full hop")) {
+            if (hasWord(reason, "ab") || reason.contains("autoblock") || hasWord(reason, "hop") || reason.contains("hopping") || reason.contains("full hop")) {
                 return "HIGH THREAT | Autoblock / hopping. Near-perfect blocking on every hit. Avoid sword fights — use bow and bed rush.";
             }
             // Jump Reset Velocity (jr, jrv, velo)
-            if (containsAny(tag, "jr", "jrv", "jump reset", "jr velo", "velo", "velocity", "anti-kb", "antikb", "anti kb")) {
+            if (hasWord(reason, "jr") || hasWord(reason, "jrv") || reason.contains("jump reset") || hasWord(reason, "velo") || reason.contains("velocity") || reason.contains("anti-kb") || reason.contains("antikb")) {
                 return "MEDIUM THREAT | Velocity / jump reset. Takes reduced knockback — void traps won't work. Focus bed destruction over PvP.";
             }
             // KillAura (ka)
-            if (containsAny(tag, "ka", "killaura", "kill aura", "kill_aura", "aimbot")) {
+            if (hasWord(reason, "ka") || reason.contains("killaura") || reason.contains("kill aura") || reason.contains("aimbot")) {
                 return "MEDIUM THREAT | KillAura (KA). Auto-targets and attacks. Avoid open 1v1s — use terrain and rush bed instead.";
             }
             // Aim assist (aa)
-            if (containsAny(tag, "aa", "aim assist", "aimassist", "aim_assist")) {
+            if (hasWord(reason, "aa") || reason.contains("aim assist") || reason.contains("aimassist")) {
                 return "MEDIUM THREAT | Aim assist (AA). Improved accuracy but not fully automated. You can still outmanoeuvre them.";
             }
             // Reach
-            if (containsAny(tag, "reach")) {
+            if (hasWord(reason, "reach")) {
                 return "MEDIUM THREAT | Extended reach. They win trades at range. Get close or use a bow — don't mid-range fight.";
             }
             // Movement
-            if (containsAny(tag, "fly", "bhop", "bunnyhop", "speed", "movement")) {
+            if (hasWord(reason, "fly") || hasWord(reason, "bhop") || reason.contains("bunnyhop") || hasWord(reason, "speed")) {
                 return "HIGH THREAT | Movement hacks. Expect instant rushes across the map. Fortify your bed and defend early.";
             }
             // ESP / Visuals
-            if (containsAny(tag, "esp", "visual", "xray", "x-ray", "wallhack")) {
+            if (hasWord(reason, "esp") || reason.contains("visual") || reason.contains("xray") || reason.contains("x-ray") || reason.contains("wallhack")) {
                 return "HIGH THREAT | ESP / visuals. They can see your bed through walls. Cover all sides and use poppers sparingly.";
             }
             // Queue / boost tags
-            if (containsAny(tag, "2q", "3q", "4q", "boosting", "queue")) {
+            if (reason.contains("2q") || reason.contains("3q") || reason.contains("4q") || reason.contains("boosting") || reason.contains("queue")) {
                 return "LOW THREAT | Queue sniper / booster. Stats are inflated via boosting. Don't be misled by high numbers.";
             }
             // Sniper
-            if (containsAny(tag, "sniper", "crossbow")) {
+            if (reason.contains("sniper") || type.contains("sniper")) {
                 return "MEDIUM THREAT | Known sniper. Avoid exposed areas and open bridges. Use covered tunnels where possible.";
             }
             // Generic fallback by threat level
