@@ -41,16 +41,26 @@ public class IntelPlayer {
 
         if (cheater && urchinTag != null) {
             String tag = urchinTag.toLowerCase();
-            // Boost threat based on cheat severity, but factor in real stats too
             double cheatBoost;
-            if (containsAny(tag, "blatant", "scaffold", "bridg", "autoblock",
-                    "fly", "speed", "bhop", "esp", "visual", "xray", "aimbot"))
-                cheatBoost = 80; // high threat floor
-            else if (containsAny(tag, "killaura", "kill aura", "reach", "velocity",
-                    "anti-kb", "antikb", "confirmed", "sniper"))
-                cheatBoost = 55; // medium threat floor
+            // High threat floor — blatant cheats
+            if (containsAny(tag,
+                    "blatant", "scaffold", "bridg",
+                    "ab", "autoblock", "auto block", "auto_block", "hop", "hopping", "full hop",
+                    "fly", "speed", "bhop", "bunnyhop", "movement",
+                    "esp", "visual", "xray", "x-ray", "wallhack", "aimbot"))
+                cheatBoost = 80;
+            // Medium threat floor
+            else if (containsAny(tag,
+                    "aa", "aim assist", "aimassist", "aim_assist",
+                    "ka", "killaura", "kill aura", "kill_aura",
+                    "reach",
+                    "jr", "jrv", "jump reset", "jr velo", "velo", "velocity",
+                    "anti-kb", "antikb", "anti kb",
+                    "sniper", "confirmed"))
+                cheatBoost = 55;
+            // Low threat floor — minor advantage
             else
-                cheatBoost = 30; // low threat: legitscaff, eagle, autoclicker, info tags
+                cheatBoost = 30; // ac, legitscaff, eagle, queue tags, info/caution
             threatScore = Math.max(cheatBoost, score);
         } else {
             threatScore = score;
