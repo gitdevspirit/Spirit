@@ -433,13 +433,16 @@ public class IntelGui extends GuiScreen {
                     final String nameFinal = name;
                     new Thread(() -> {
                         try {
+                            IntelManager.dbg("[Skin] fetching profile for " + nameFinal + " uuid=" + uuidRaw);
                             // Step A: ask Mojang session server for the skin texture URL
                             String profileUrl = "https://sessionserver.mojang.com/session/minecraft/profile/" + uuidRaw;
                             java.net.HttpURLConnection pc = (java.net.HttpURLConnection)
                                     new java.net.URL(profileUrl).openConnection();
                             pc.setConnectTimeout(5000); pc.setReadTimeout(5000);
                             pc.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-                            if (pc.getResponseCode() != 200) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
+                            int profileCode = pc.getResponseCode();
+                            IntelManager.dbg("[Skin] sessionserver response=" + profileCode);
+                            if (profileCode != 200) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
 
                             com.google.gson.JsonObject profile = new com.google.gson.JsonParser()
                                     .parse(IntelManager.readStreamStatic(pc.getInputStream())).getAsJsonObject();
@@ -460,6 +463,7 @@ public class IntelGui extends GuiScreen {
                                     }
                                 }
                             }
+                            IntelManager.dbg("[Skin] skinUrl=" + skinUrl);
                             if (skinUrl == null) { skinFetchState.put(nameFinal, System.currentTimeMillis()); return; }
 
                             // Step B: download the actual 64x64 skin PNG from Mojang's CDN
