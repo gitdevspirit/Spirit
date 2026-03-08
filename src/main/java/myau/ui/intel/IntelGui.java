@@ -423,10 +423,15 @@ public class IntelGui extends GuiScreen {
                     try {
                         com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
                                 java.util.UUID.fromString(uuid), name);
-                        // Trigger async skin load and get whatever is cached so far
-                        net.minecraft.client.resources.SkinManager sm =
-                                mc.getSkinManager();
-                        skin = sm.loadSkinFromCache(gp);
+                        java.util.Map<com.mojang.authlib.minecraft.MinecraftProfileTexture.Type,
+                                com.mojang.authlib.minecraft.MinecraftProfileTexture> textures =
+                                mc.getSkinManager().loadSkinFromCache(gp);
+                        if (textures != null && textures.containsKey(
+                                com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN)) {
+                            skin = mc.getSkinManager().loadSkin(
+                                    textures.get(com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN),
+                                    com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
+                        }
                     } catch (Exception ignored2) {}
                 }
             }
