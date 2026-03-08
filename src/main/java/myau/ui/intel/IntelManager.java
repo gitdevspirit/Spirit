@@ -160,7 +160,7 @@ public class IntelManager {
                 String formatted = rawUuid.replaceAll(
                     "^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
                 synchronized (uuidCache) { uuidCache.put(p.name, formatted); }
-                // Prefetch skin on main thread so it's ready by render time
+                // Load skin with callback — fires when Mojang CDN delivers the texture
                 final String finalUuid = formatted;
                 final String finalName = p.name;
                 net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
@@ -168,7 +168,11 @@ public class IntelManager {
                         com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
                                 java.util.UUID.fromString(finalUuid), finalName);
                         net.minecraft.client.Minecraft.getMinecraft().getSkinManager()
-                                .loadProfileTextures(gp, null, false);
+                                .loadProfileTextures(gp, (type, location, texture) -> {
+                                    if (type == com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN) {
+                                        if (gui != null) gui.setPlayers(combined());
+                                    }
+                                }, true);
                     } catch (Exception ignored2) {}
                 });
             }
