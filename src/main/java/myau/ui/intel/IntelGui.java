@@ -69,6 +69,9 @@ public class IntelGui extends GuiScreen {
     private String  searchText  = "";
     private boolean searchFocus = false;
 
+    // Skin ResourceLocation cache — keyed by player name
+    private final java.util.Map<String, ResourceLocation> skinCache = new java.util.HashMap<>();
+
     public void setPlayers(List<IntelPlayer> p) {
         players = new ArrayList<>(p);
         sortPlayers();
@@ -413,44 +416,66 @@ public class IntelGui extends GuiScreen {
         try {
             ResourceLocation skin = null;
 
-            // Try live network player first (fastest, always works for lobby players)
+            // 1. Try live lobby player (instant, always correct)
             if (mc.getNetHandler() != null) {
                 NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
                 if (info != null) skin = info.getLocationSkin();
             }
 
-            // For manually-added / non-lobby players: use UUID to look up already-loaded skin
+            // 2. Try our local cache (populated by async download below)
+            if (skin == null) skin = skinCache.get(name);
+
+            // 3. If we have a UUID but no cached skin yet, kick off async download
             if (skin == null) {
                 String uuid = IntelManager.getInstance().getCachedUuid(name);
-                if (uuid != null) {
-                    try {
-                        com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
-                                java.util.UUID.fromString(uuid), name);
-                        java.util.Map<com.mojang.authlib.minecraft.MinecraftProfileTexture.Type,
-                                com.mojang.authlib.minecraft.MinecraftProfileTexture> textures =
-                                mc.getSkinManager().loadSkinFromCache(gp);
-                        if (textures != null) {
-                            com.mojang.authlib.minecraft.MinecraftProfileTexture tex =
-                                    textures.get(com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN);
-                            if (tex != null) {
-                                // Build the ResourceLocation the same way SkinManager does internally
-                                String hash = tex.getHash();
-                                skin = new ResourceLocation("skins/" + hash);
-                                // If not yet loaded into texture manager, it'll just show as Steve
+                if (uuid != null && !skinCache.containsKey(name + "_pending")) {
+                    skinCache.put(name + "_pending", null); // mark as in-flight
+                    final String uuidFinal = uuid.replace("-", "");
+                    final String nameFinal = name;
+                    new Thread(() -> {
+                        try {
+                            // Fetch 8x8 face PNG from mc-heads.net — returns exact face pixels
+                            String url = "https://mc-heads.net/avatar/" + uuidFinal + "/8";
+                            java.net.HttpURLConnection con = (java.net.HttpURLConnection)
+                                    new java.net.URL(url).openConnection();
+                            con.setConnectTimeout(4000);
+                            con.setReadTimeout(4000);
+                            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+                            if (con.getResponseCode() == 200) {
+                                java.io.InputStream is = con.getInputStream();
+                                // Load as dynamic texture
+                                final net.minecraft.client.renderer.texture.DynamicTexture dt =
+                                        new net.minecraft.client.renderer.texture.DynamicTexture(
+                                                javax.imageio.ImageIO.read(is));
+                                is.close();
+                                // Register on main thread
+                                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+                                    ResourceLocation loc = mc.getTextureManager()
+                                            .getDynamicTextureLocation("intel_head_" + nameFinal, dt);
+                                    skinCache.put(nameFinal, loc);
+                                    skinCache.remove(nameFinal + "_pending");
+                                });
                             }
-                        }
-                    } catch (Exception ignored2) {}
+                        } catch (Exception ignored2) {}
+                    }, "IntelSkin-" + name).start();
                 }
             }
 
-            // Final fallback: Steve
+            // 4. Fallback: Steve
             if (skin == null) skin = new ResourceLocation("textures/entity/steve.png");
 
             GlStateManager.enableBlend();
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
-            Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
-            Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
+
+            // If it's a cached mc-heads 8px face texture, draw it directly scaled (no UV offset needed)
+            if (skinCache.get(name) == skin) {
+                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 8, 8, size, size, 8f, 8f);
+            } else {
+                // Standard skin sheet: base face + hat layer
+                Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
+                Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
+            }
             GlStateManager.color(1f, 1f, 1f, 1f);
         } catch (Exception ignored) {}
     }
@@ -595,20 +620,31 @@ public class IntelGui extends GuiScreen {
 
     // Returns 0=low, 1=medium, 2=high threat based on cheat type
     private int urchinThreatLevel(String tag) {
-        // Low threat — cosmetic / minor advantage cheats
-        if (containsAny(tag, "legitscaff", "eagle", "autoclicker", "autoclick", "cps",
-                        "info", "caution", "possible_sniper", "legit_sniper"))
+        // Low threat — minor / cosmetic advantage
+        if (containsAny(tag,
+                "legitscaff", "legitscaf", "eagle",            // legit scaffold
+                "ac", "autoclicker", "autoclick", "cps",       // autoclicker
+                "jr", "jrv", "jump reset", "jr velo",          // jump reset velocity
+                "info", "caution", "possible_sniper", "legit_sniper",
+                "2q", "3q", "4q", "boosting", "queue"))        // queue/boost tags
             return 0;
-        // Medium threat — moderate PvP advantage
-        if (containsAny(tag, "aim assist", "aimassist", "killaura", "kill aura",
-                        "reach", "velocity", "anti-kb", "antikb", "sniper", "confirmed"))
+        // Medium threat — solid PvP advantage
+        if (containsAny(tag,
+                "aa", "aim assist", "aimassist", "aim_assist", // aim assist
+                "ka", "killaura", "kill aura", "kill_aura",    // killaura
+                "reach", "velo", "velocity", "anti-kb", "antikb", "anti kb",
+                "sniper", "confirmed"))
             return 1;
-        // High threat — blatant / game-breaking cheats
-        if (containsAny(tag, "blatant", "scaffold", "bridg", "autoblock", "auto block",
-                        "fly", "speed", "bhop", "movement", "esp", "visual", "xray",
-                        "x-ray", "wallhack", "aimbot"))
+        // High threat — blatant / game-breaking
+        if (containsAny(tag,
+                "blatant",
+                "scaffold", "bridg",                           // blatant scaffold
+                "ab", "autoblock", "auto block", "auto_block", // autoblock
+                "hop", "hopping", "full hop",                  // hopping/autoblock alias
+                "fly", "speed", "bhop", "bunnyhop", "movement",
+                "esp", "visual", "xray", "x-ray", "wallhack", "aimbot"))
             return 2;
-        return 1; // default medium
+        return 1;
     }
 
     private String recommend(IntelPlayer p) {
@@ -616,60 +652,63 @@ public class IntelGui extends GuiScreen {
             String tag = p.urchinTag.toLowerCase();
             int tl = urchinThreatLevel(tag);
 
-            // Scaffold / bridge cheats
-            if (containsAny(tag, "scaffold", "bridg", "blatant scaffold")) {
-                if (tl == 2)
-                    return "HIGH THREAT | Blatant scaffolder. Expect near-instant bridges everywhere. Rush their bed immediately before they cross.";
-                return "LOW THREAT | Uses legitscaff or eagle. Bridges slightly faster than normal. Contest mid early and cut off routes.";
+            // Legit scaffold / eagle
+            if (containsAny(tag, "legitscaff", "legitscaf", "eagle")) {
+                return "LOW THREAT | Legit-scaffold or eagle. Bridges slightly faster than normal. Play standard and cut their routes.";
             }
-            // Autoclicker
-            if (containsAny(tag, "autoclick", "autoclicker", "cps")) {
-                return "LOW THREAT | Higher CPS but no aim advantage. Play defensively, use knockback and gap the fight.";
+            // Blatant scaffold
+            if (containsAny(tag, "blatant scaffold", "scaffold", "bridg")) {
+                return "HIGH THREAT | Blatant scaffolder. Near-instant bridges. Rush their bed before they cross — don't let them set up.";
             }
-            // Autoblock
-            if (containsAny(tag, "autoblock", "auto block")) {
-                return "HIGH THREAT | Autoblock gives near-perfect blocking. Avoid extended fights. Use projectiles and rush bed instead.";
+            // Autoclicker (ac)
+            if (containsAny(tag, "ac", "autoclick", "autoclicker", "cps")) {
+                return "LOW THREAT | Autoclicker (AC). Higher CPS but no aim advantage. Gap fights, use knockback, don't trade hits.";
             }
-            // Eagle
-            if (containsAny(tag, "eagle")) {
-                return "LOW THREAT | Eagle bridges are faster but not instant. Play normal — cut their bridge and keep your bed defended.";
+            // Autoblock / hopping (ab, hop)
+            if (containsAny(tag, "ab", "autoblock", "auto block", "auto_block", "hop", "hopping", "full hop")) {
+                return "HIGH THREAT | Autoblock / hopping. Near-perfect blocking on every hit. Avoid sword fights — use bow and bed rush.";
             }
-            // KillAura / Aim
-            if (containsAny(tag, "killaura", "kill aura", "aimbot")) {
-                return "MEDIUM THREAT | KillAura or aimbot. Avoid 1v1s in open space. Use terrain, walls, and bed rush tactics instead.";
+            // Jump Reset Velocity (jr, jrv, velo)
+            if (containsAny(tag, "jr", "jrv", "jump reset", "jr velo", "velo", "velocity", "anti-kb", "antikb", "anti kb")) {
+                return "MEDIUM THREAT | Velocity / jump reset. Takes reduced knockback — void traps won't work. Focus bed destruction over PvP.";
             }
-            if (containsAny(tag, "aim assist", "aimassist")) {
-                return "MEDIUM THREAT | Aim assist improves accuracy but isn't fully automated. You can still outmanoeuvre them.";
+            // KillAura (ka)
+            if (containsAny(tag, "ka", "killaura", "kill aura", "kill_aura", "aimbot")) {
+                return "MEDIUM THREAT | KillAura (KA). Auto-targets and attacks. Avoid open 1v1s — use terrain and rush bed instead.";
+            }
+            // Aim assist (aa)
+            if (containsAny(tag, "aa", "aim assist", "aimassist", "aim_assist")) {
+                return "MEDIUM THREAT | Aim assist (AA). Improved accuracy but not fully automated. You can still outmanoeuvre them.";
             }
             // Reach
             if (containsAny(tag, "reach")) {
-                return "MEDIUM THREAT | Extended reach means they win trades at distance. Stay at melee range or use a bow.";
-            }
-            // Anti-KB
-            if (containsAny(tag, "velocity", "anti-kb", "antikb")) {
-                return "MEDIUM THREAT | Reduces knockback — void plays won't work. Focus on bed destruction rather than PvP.";
+                return "MEDIUM THREAT | Extended reach. They win trades at range. Get close or use a bow — don't mid-range fight.";
             }
             // Movement
-            if (containsAny(tag, "fly", "bhop", "bunnyhop", "speed")) {
-                return "HIGH THREAT | Movement hacks mean they can rush your base instantly. Fortify your bed and play defensive.";
+            if (containsAny(tag, "fly", "bhop", "bunnyhop", "speed", "movement")) {
+                return "HIGH THREAT | Movement hacks. Expect instant rushes across the map. Fortify your bed and defend early.";
             }
             // ESP / Visuals
             if (containsAny(tag, "esp", "visual", "xray", "x-ray", "wallhack")) {
-                return "HIGH THREAT | Visuals / ESP — they can see through walls and track you. Cover your bed on all sides.";
+                return "HIGH THREAT | ESP / visuals. They can see your bed through walls. Cover all sides and use poppers sparingly.";
             }
-            // Sniper tags
+            // Queue / boost tags
+            if (containsAny(tag, "2q", "3q", "4q", "boosting", "queue")) {
+                return "LOW THREAT | Queue sniper / booster. Stats are inflated via boosting. Don't be misled by high numbers.";
+            }
+            // Sniper
             if (containsAny(tag, "sniper", "crossbow")) {
-                return "MEDIUM THREAT | Known sniper — avoid exposed areas and open bridges. Use covered tunnels where possible.";
+                return "MEDIUM THREAT | Known sniper. Avoid exposed areas and open bridges. Use covered tunnels where possible.";
             }
-            // Generic by threat level
-            if (tl == 2) return "HIGH THREAT | Blatant cheater. Do not engage directly. Rush bed and escape.";
-            if (tl == 0) return "LOW THREAT | Minor cheat advantage. Play normally with extra awareness.";
-            return "MEDIUM THREAT | Cheating detected. Avoid prolonged fights. Focus bed destruction.";
+            // Generic fallback by threat level
+            if (tl == 2) return "HIGH THREAT | Blatant cheat detected. Do not engage directly. Rush bed and disengage.";
+            if (tl == 0) return "LOW THREAT | Minor advantage detected. Play normally with extra awareness.";
+            return "MEDIUM THREAT | Cheating detected. Avoid prolonged fights and focus on bed destruction.";
         }
-        if (p.threatScore >= 75) return "High priority target. Rush their bed early before they gear up. Avoid 1v1 without advantage.";
-        if (p.threatScore >= 50) return "Solid player. Contest mid early and engage only with armor advantage.";
-        if (p.threatScore >= 25) return "Average player. Farm resources first. Safe to deprioritise until mid-game.";
-        return "Low threat. Easy target — rush early for free resources and bed elimination.";
+        if (p.threatScore >= 75) return "High priority. Rush their bed early before they gear up. Avoid 1v1 without advantage.";
+        if (p.threatScore >= 50) return "Solid player. Contest mid early and engage with armor advantage.";
+        if (p.threatScore >= 25) return "Average. Farm first, safe to deprioritise until mid-game.";
+        return "Low threat. Easy target — rush early for free resources and a quick bed.";
     }
 
     private boolean containsAny(String text, String... keywords) {
