@@ -46,6 +46,11 @@ public class IntelGui extends GuiScreen {
     private IntelPlayer selected = null;
     private List<IntelPlayer> players = new ArrayList<>();
 
+    // Search bar
+    private String searchText  = "";
+    private boolean searchFocus = false;
+    private long searchBlink   = 0;
+
     public void setPlayers(List<IntelPlayer> p) {
         players = new ArrayList<>(p);
         sortPlayers();
@@ -62,12 +67,13 @@ public class IntelGui extends GuiScreen {
         // Semi-transparent dark overlay (keeps world faintly visible)
         fillRect(0, 0, sw, sh, 0xBB000008);
 
-        int HDR = 40, FTR = 28;
+        int HDR = 40, FTR = 28, SRCH = 26;
         int detailW = selected != null ? sw / 3 : 0;
         int listW   = sw - detailW;
 
         drawHeader(sw, HDR, mx, my);
-        drawList(0, HDR, listW, sh - HDR - FTR, mx, my, sh);
+        drawSearchBar(0, HDR, listW, SRCH, mx, my);
+        drawList(0, HDR + SRCH, listW, sh - HDR - SRCH - FTR, mx, my, sh);
         if (selected != null) drawDetail(listW, HDR, detailW, sh - HDR - FTR);
         drawFooter(sw, sh, FTR);
 
@@ -113,7 +119,42 @@ public class IntelGui extends GuiScreen {
         gl(); mc.fontRendererObj.drawString(ref, rx + 5f, ry + 3f, rHov ? TEXT_BRIGHT : TEXT_MID, false);
     }
 
-    // ── List ──────────────────────────────────────────────────────────────────
+    // ── Search bar ────────────────────────────────────────────────────────────
+
+    private void drawSearchBar(int sx, int sy, int sw, int sh, int mx, int my) {
+        fillRect(sx, sy, sw, sh, 0xAA06060C);
+        fillRect(sx, sy + sh - 1, sw, 1, 0x22FFFFFF);
+
+        int bx = sx + 8, by = sy + 5, bw = 200, bh = sh - 10;
+        boolean hov = mx >= bx && mx < bx + bw && my >= by && my < by + bh;
+        int borderCol = searchFocus ? ACCENT : hov ? 0x55FFFFFF : 0x22FFFFFF;
+        RoundedUtils.drawRoundedRect(bx, by, bw, bh, 3, 0x33000000);
+        RoundedUtils.drawRoundedOutline(bx, by, bw, bh, 3, 1f, borderCol);
+
+        gl();
+        String display = searchText.isEmpty() && !searchFocus
+                ? "Search / add player..."
+                : searchText;
+        int textCol = searchText.isEmpty() ? TEXT_DIM : TEXT_BRIGHT;
+
+        // Cursor blink
+        String drawn = display;
+        if (searchFocus && (System.currentTimeMillis() - searchBlink) % 1000 < 500) {
+            drawn = searchText + "|";
+        }
+        mc.fontRendererObj.drawString(drawn, bx + 5f, by + (bh - 8) / 2f, textCol, false);
+
+        // Add button
+        if (!searchText.isEmpty()) {
+            int abx = bx + bw + 6, abw = mc.fontRendererObj.getStringWidth("+ Add") + 10;
+            boolean ahov = mx >= abx && mx < abx + abw && my >= by && my < by + bh;
+            RoundedUtils.drawRoundedRect(abx, by, abw, bh, 3, ahov ? 0x44E991B8 : 0x22E991B8);
+            RoundedUtils.drawRoundedOutline(abx, by, abw, bh, 3, 1f, ahov ? ACCENT : 0x44E991B8);
+            gl(); mc.fontRendererObj.drawString("+ Add", abx + 5f, by + (bh - 8) / 2f, ahov ? ACCENT : TEXT_MID, false);
+        }
+    }
+
+
 
     private void drawList(int lx, int ly, int lw, int lh, int mx, int my, int sh) {
         fillRect(lx, ly, lw, lh, 0xAA08080E);
@@ -194,6 +235,13 @@ public class IntelGui extends GuiScreen {
         // Team dot
         if (p.team != null)
             RoundedUtils.drawRoundedRect(cx + cw - 12, cy + 4, 7, 7, 2, teamCol(p.team));
+
+        // Remove button for manually-added players
+        if (IntelManager.getInstance().isManual(p)) {
+            int xbx = cx + cw - 12, xby = cy + ch - 13;
+            boolean xhov = false; // drawn only, click handled in mouseClicked
+            gl(); mc.fontRendererObj.drawString("✕", xbx, xby, 0x88FF4466, false);
+        }
 
         if (p.loading) {
             gl(); mc.fontRendererObj.drawString("—", cx + lw * 36 / 100 - cx, cy + ch / 2 - 4, TEXT_DIM, false);
@@ -326,7 +374,7 @@ public class IntelGui extends GuiScreen {
     protected void mouseClicked(int mx, int my, int button) throws IOException {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int HDR = 40, FTR = 28;
+        int HDR = 40, FTR = 28, SRCH = 26;
         int detailW = selected != null ? sw / 3 : 0;
         int listW   = sw - detailW;
 
@@ -350,13 +398,37 @@ public class IntelGui extends GuiScreen {
             IntelManager.getInstance().refresh(); return;
         }
 
-        // Card click
-        int cY = HDR + 20;
+        // Search bar focus
+        int sbx = 8, sby = HDR + 5, sbw = 200, sbh = SRCH - 10;
+        searchFocus = mx >= sbx && mx < sbx + sbw && my >= sby && my < sby + sbh;
+
+        // Add button click
+        if (!searchText.isEmpty()) {
+            int abx = sbx + sbw + 6, abw = mc.fontRendererObj.getStringWidth("+ Add") + 10;
+            if (mx >= abx && mx < abx + abw && my >= sby && my < sby + sbh) {
+                IntelManager.getInstance().addManualPlayer(searchText.trim());
+                searchText = "";
+                return;
+            }
+        }
+
+        // Card click + X remove
+        int cY = HDR + SRCH + 20;
         for (int i = 0; i < players.size(); i++) {
             int cy = cY + i * (CARD_H + CARD_GAP) - scrollOff;
-            if (my >= cy && my < cy + CARD_H && mx >= 4 && mx < listW - 4) {
-                selected = players.get(i); return;
+            if (my < cy || my >= cy + CARD_H || mx < 4 || mx >= listW - 4) continue;
+            IntelPlayer p = players.get(i);
+            // Check ✕ button (manual players only)
+            if (IntelManager.getInstance().isManual(p)) {
+                int xbx = 4 + (listW - 8) - 12;
+                int xby = cy + CARD_H - 13;
+                if (mx >= xbx && mx < xbx + 9 && my >= xby && my < xby + 9) {
+                    IntelManager.getInstance().removeManualPlayer(p.name);
+                    if (selected == p) selected = null;
+                    return;
+                }
             }
+            selected = p; return;
         }
 
         super.mouseClicked(mx, my, button);
@@ -364,6 +436,26 @@ public class IntelGui extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) throws IOException {
+        if (searchFocus) {
+            if (key == 14) { // Backspace
+                if (!searchText.isEmpty()) searchText = searchText.substring(0, searchText.length() - 1);
+                return;
+            }
+            if (key == 28) { // Enter — add player
+                if (!searchText.isEmpty()) {
+                    IntelManager.getInstance().addManualPlayer(searchText.trim());
+                    searchText = "";
+                }
+                return;
+            }
+            if (key == 1) { // ESC — unfocus first, then close on second press
+                searchFocus = false; return;
+            }
+            if (Character.isLetterOrDigit(c) || c == '_' || c == '-') {
+                if (searchText.length() < 16) searchText += c;
+            }
+            return;
+        }
         if (key == 19) { IntelManager.getInstance().refresh(); return; }
         if (key == 1)  { mc.displayGuiScreen(null); return; }
         super.keyTyped(c, key);
@@ -421,11 +513,42 @@ public class IntelGui extends GuiScreen {
     }
 
     private String recommend(IntelPlayer p) {
-        if (p.cheater)         return "Flagged by Urchin. Expect unusual movement. Avoid and focus bed defense.";
-        if (p.threatScore>=75) return "High priority. Rush their bed before they scale. Don't engage alone.";
-        if (p.threatScore>=50) return "Solid player. Contest mid early. Engage with armor advantage.";
-        if (p.threatScore>=25) return "Average. Farm if convenient. Safe to deprioritise.";
+        if (p.cheater && p.urchinTag != null) {
+            String tag = p.urchinTag.toLowerCase();
+            // Keyword-based intel
+            if (containsAny(tag, "scaffold", "legitscaff", "bridg", "eagle")) {
+                return "Flagged for scaffolding. Expect fast bridges and aerial angles. Destroy their bridge routes early.";
+            }
+            if (containsAny(tag, "autoblock", "auto block", "autoclick", "cps")) {
+                return "Flagged for autoclicker or autoblock. Expect high CPS bursts. Keep distance and don't trade hits.";
+            }
+            if (containsAny(tag, "visual", "esp", "x-ray", "xray", "wallhack")) {
+                return "Flagged for visuals/ESP. Assume they know your bed layout. Build covered defences.";
+            }
+            if (containsAny(tag, "killaura", "kill aura", "aimbot", "aim assist", "reach")) {
+                return "Flagged for KillAura or aimbot. Don't fight directly. Bait with traps and rush bed instead.";
+            }
+            if (containsAny(tag, "velocity", "anti-kb", "antikb", "kb")) {
+                return "Flagged for anti-knockback. Void traps won't work. Focus bed destruction over PvP.";
+            }
+            if (containsAny(tag, "fly", "speed", "movement", "bhop", "bunnyhop")) {
+                return "Flagged for movement hacks. Expect rapid rushes. Fortify bed early and camp mid.";
+            }
+            if (containsAny(tag, "sniper", "crossbow")) {
+                return "Flagged as sniper. Avoid open areas. Use tunnels and stay behind cover when exposed.";
+            }
+            // Generic cheater
+            return "Flagged by Urchin. Expect unusual movement or combat. Avoid and focus bed defense.";
+        }
+        if (p.threatScore >= 75) return "High priority. Rush their bed before they scale. Don't engage alone.";
+        if (p.threatScore >= 50) return "Solid player. Contest mid early. Engage with armor advantage.";
+        if (p.threatScore >= 25) return "Average. Farm if convenient. Safe to deprioritise.";
         return "Low skill. Easy target. Rush early for free resources.";
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String k : keywords) if (text.contains(k)) return true;
+        return false;
     }
 
     private List<String> wrap(String text, int maxW) {
