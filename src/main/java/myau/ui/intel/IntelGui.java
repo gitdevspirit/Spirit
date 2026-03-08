@@ -69,8 +69,17 @@ public class IntelGui extends GuiScreen {
     private String  searchText  = "";
     private boolean searchFocus = false;
 
-    // Skin ResourceLocation cache — keyed by player name
-    private final java.util.Map<String, ResourceLocation> skinCache = new java.util.HashMap<>();
+    // Skin cache — keyed by player name -> ResourceLocation
+    private final java.util.Map<String, ResourceLocation> skinCache     = new java.util.HashMap<>();
+    // true = full 64x64 skin sheet (lobby player), false = pre-cropped 16x16 face (downloaded)
+    private final java.util.Map<String, Boolean>          skinIsSheet   = new java.util.HashMap<>();
+
+    /** Called by IntelManager when lobby tab-list skins are available — instant, no download needed */
+    public void cacheLobbyPlayerSkin(String name, ResourceLocation skin) {
+        skinCache.put(name, skin);
+        skinIsSheet.put(name, true);
+        skinFetchState.put(name, "done");
+    }
 
     public void setPlayers(List<IntelPlayer> p) {
         players = new ArrayList<>(p);
@@ -412,14 +421,17 @@ public class IntelGui extends GuiScreen {
         try {
             ResourceLocation skin = null;
 
-            // 1. Lobby player — use MC's already-loaded skin (instant, correct)
-            if (mc.getNetHandler() != null) {
-                NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
-                if (info != null) skin = info.getLocationSkin();
-            }
+            // 1. Use unified skin cache (pre-populated for lobby players, downloaded for manual)
+            skin = skinCache.get(name);
 
-            // 2. Check our downloaded texture cache
-            if (skin == null) skin = skinCache.get(name);
+            // 1b. Fallback: try live network lookup (catches late-joining players)
+            if (skin == null && mc.getNetHandler() != null) {
+                NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
+                if (info != null) {
+                    skin = info.getLocationSkin();
+                    if (skin != null) { skinCache.put(name, skin); skinIsSheet.put(name, true); skinFetchState.put(name, "done"); }
+                }
+            }
 
             // 3. Kick off async download if we have UUID but no skin yet
             if (skin == null) {
@@ -510,13 +522,14 @@ public class IntelGui extends GuiScreen {
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
 
-            // Downloaded face: pre-cropped 16x16 — draw as full image
-            if (skinCache.containsKey(name) && skinCache.get(name) == skin) {
-                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 16, 16, size, size, 16f, 16f);
-            } else {
-                // Standard MC skin sheet: base face (8,8) + hat overlay (40,8)
+            boolean isSheet = skinIsSheet.getOrDefault(name, false);
+            if (isSheet) {
+                // Full 64x64 skin sheet — draw face region (8,8)+(40,8) with hat overlay
                 Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
                 Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
+            } else {
+                // Pre-cropped 16x16 face texture — draw full image
+                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 16, 16, size, size, 16f, 16f);
             }
             GlStateManager.color(1f, 1f, 1f, 1f);
         } catch (Exception ignored) {}
