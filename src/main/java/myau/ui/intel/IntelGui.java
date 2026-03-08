@@ -303,15 +303,8 @@ public class IntelGui extends GuiScreen {
         drawCentred(fmt(p.wlr),                 colWlr(_lw2),    sy, statCol(p.wlr, 1.5, 4));
         drawCentred(String.valueOf(p.winstreak), colStreak(_lw2), sy, statCol(p.winstreak, 10, 30));
 
-        // Threat bar + score centred under THREAT header
-        int barW = 32, barH = 3;
-        int threatCx = colThreat(_lw2);
-        int bx = threatCx - barW / 2, by = sy + 3;
-        fillRect(bx, by, barW, barH, 0x22FFFFFF);
-        int fw = (int)(Math.min(1f, p.threatScore / 100f) * barW);
-        if (fw > 0) fillRect(bx, by, fw, barH, tc);
-        String scoreStr = String.valueOf((int) p.threatScore);
-        drawCentred(scoreStr, threatCx, sy - 6, tc);
+        // Threat score number only (no bar)
+        drawCentred(String.valueOf((int) p.threatScore), colThreat(_lw2), sy, tc);
     }
 
     // ── Detail panel ──────────────────────────────────────────────────────────
