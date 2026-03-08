@@ -712,7 +712,7 @@ public class IntelGui extends GuiScreen {
         {2, new String[]{"jr","jrv","jump reset","velo","velocity","anti-kb","antikb"}, new String[]{}, "JR/Velo", "no void traps, focus bed rush"},
         {2, new String[]{"sniper"},                      new String[]{"sniper"}, "Sniper", "use covered tunnels"},
         {1, new String[]{"ac","autoclick","autoclicker","cps"}, new String[]{}, "AC",    "gap fights, use knockback"},
-        {1, new String[]{"legitscaff","legitscaf","fastplace"}, new String[]{}, "Legitscaff", "cut their bridge routes"},
+        {1, new String[]{"legitscaff","legitscaf","fastplace"}, new String[]{}, "Legitscaff", "defend your bed and watch for fast bridges"},
         {1, new String[]{"eagle"},                       new String[]{}, "Eagle",        "deny their crossing"},
         {0, new String[]{"2q","3q","4q","boosting","queue"}, new String[]{}, "Booster",  "stats are inflated"},
     };
