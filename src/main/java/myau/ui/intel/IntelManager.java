@@ -105,9 +105,24 @@ public class IntelManager {
             String name = info.getGameProfile().getName();
             if (name == null || name.isEmpty() || name.startsWith("!")) continue;
             players.add(new IntelPlayer(name, detectTeam(info)));
+            // Pre-cache UUID from tab list — avoids a Mojang API call per player later
+            java.util.UUID uid = info.getGameProfile().getId();
+            if (uid != null) {
+                synchronized (uuidCache) { uuidCache.put(name, uid.toString()); }
+            }
         }
 
-        if (gui != null) gui.setPlayers(new ArrayList<>(players));
+        // Pre-populate skin ResourceLocations from tab list so they show instantly
+        if (gui != null) {
+            for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
+                String n = info.getGameProfile().getName();
+                net.minecraft.util.ResourceLocation loc = info.getLocationSkin();
+                if (n != null && loc != null) {
+                    gui.cacheLobbyPlayerSkin(n, loc);
+                }
+            }
+            gui.setPlayers(new ArrayList<>(players));
+        }
 
         // Fetch Urchin for all players in one batch request
         final List<IntelPlayer> batchRef = new ArrayList<>(players);
@@ -176,42 +191,63 @@ public class IntelManager {
         p.loading = false;
     }
 
-    /** Slothpixel — free public Hypixel wrapper, no key needed */
+    /** Tries multiple free stat sources in order until one works */
     private boolean fetchSlothpixel(IntelPlayer p) {
+        // 1. Slothpixel
+        try {
+            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
+            dbg("[Sloth] len=" + (json == null ? "null" : json.length()));
+            if (json != null) {
+                JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+                if (!root.has("error")) {
+                    if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
+                    JsonObject bw = null;
+                    if (root.has("stats")) {
+                        JsonObject st = root.getAsJsonObject("stats");
+                        if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
+                    }
+                    if (bw != null) {
+                        int fk = bwInt(bw, "final_kills_bedwars");
+                        int fd = bwInt(bw, "final_deaths_bedwars"); if (fd==0) fd=1;
+                        int w  = bwInt(bw, "wins_bedwars");
+                        int l  = bwInt(bw, "losses_bedwars");       if (l ==0) l =1;
+                        p.finalKills = fk; p.bedsBroken = bwInt(bw,"beds_broken_bedwars");
+                        p.wins=w; p.winstreak=bwInt(bw,"winstreak");
+                        p.fkdr=(double)fk/fd; p.wlr=(double)w/l;
+                        if (fk > 0 || w > 0) { dbg("[Sloth] OK fk="+fk+" w="+w); return true; }
+                    }
+                    dbg("[Sloth] no bw data");
+                } else { dbg("[Sloth] error: " + root.get("error")); }
+            }
+        } catch (Exception e) { dbg("[Sloth] ex: " + e); }
+
+        // 2. Lilith (api.hystatik.com) — another free Hypixel proxy
         try {
             String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) { dbg("[Sloth] no uuid for " + p.name); return false; }
-            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
-            dbg("[Sloth] response null=" + (json == null) + (json != null ? " len=" + json.length() : ""));
-            if (json == null) return false;
-
-            JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
-
-            // Level
-            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
-
-            // BedWars nested under stats.Bedwars
-            JsonObject bw = null;
-            if (root.has("stats")) {
-                JsonObject stats = root.getAsJsonObject("stats");
-                if (stats.has("Bedwars")) bw = stats.getAsJsonObject("Bedwars");
+            if (uuid != null) {
+                String json = get("https://api.hystatik.com/v1/hypixel/player/" + uuid.replace("-",""),
+                        "User-Agent", "Spirit-Client/1.0");
+                dbg("[Hystatik] len=" + (json==null?"null":json.length()));
+                if (json != null) {
+                    JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+                    JsonObject player = root.has("player") ? root.getAsJsonObject("player") : root;
+                    JsonObject stats  = player.has("stats") ? player.getAsJsonObject("stats") : null;
+                    JsonObject bw     = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
+                    if (bw != null) {
+                        int fk = bwInt(bw,"final_kills_bedwars");
+                        int fd = bwInt(bw,"final_deaths_bedwars"); if(fd==0)fd=1;
+                        int w  = bwInt(bw,"wins_bedwars");
+                        int l  = bwInt(bw,"losses_bedwars");       if(l==0)l=1;
+                        p.finalKills=fk; p.bedsBroken=bwInt(bw,"beds_broken_bedwars");
+                        p.wins=w; p.winstreak=bwInt(bw,"winstreak");
+                        p.fkdr=(double)fk/fd; p.wlr=(double)w/l;
+                        if(fk>0||w>0){dbg("[Hystatik] OK");return true;}
+                    }
+                }
             }
-            dbg("[Sloth] bw=" + (bw != null) + (bw != null ? " keys=" + bw.entrySet().size() : ""));
-            if (bw == null) return false;
+        } catch (Exception e) { dbg("[Hystatik] ex: " + e); }
 
-            int fk = bwInt(bw, "final_kills_bedwars");
-            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
-            int w  = bwInt(bw, "wins_bedwars");
-            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
-            p.finalKills = fk;
-            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
-            p.wins       = w;
-            p.winstreak  = bwInt(bw, "winstreak");
-            p.fkdr       = (double) fk / fd;
-            p.wlr        = (double) w  / l;
-            return fk > 0 || w > 0;
-        } catch (Exception e) { dbg("[Sloth] exception: " + e.getMessage()); return false; }
+        return false;
     }
 
     /** Pixelic — free tier, no key for BedWars stats */
