@@ -25,7 +25,7 @@ public class IntelManager {
     public static String urchinApiKey  = "68DE_lQ0UprVJX8q5k7TIeeZV938J2EfDAF08Q_07s0";
 
     private static final String HYPIXEL_URL = "https://api.hypixel.net/player?key=%s&name=%s";
-    private static final String URCHIN_URL  = "https://urchin.ws/cubelify";
+    private static final String URCHIN_URL  = "https://urchin.ws/player";
 
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
@@ -54,14 +54,23 @@ public class IntelManager {
 
         if (gui != null) gui.setPlayers(new ArrayList<>(players));
 
-        // Fetch Hypixel + Urchin per player
+        // Fetch Urchin for all players in one batch request
+        final List<IntelPlayer> batchRef = new ArrayList<>(players);
+        pool.submit(() -> {
+            fetchUrchinBatch(batchRef);
+            // Notify any cheaters found
+            for (IntelPlayer p : batchRef) {
+                if (p.cheater) notifyCheater(p);
+            }
+            if (gui != null) gui.setPlayers(new ArrayList<>(players));
+        });
+
+        // Fetch Hypixel per player
         for (IntelPlayer p : players) {
             final IntelPlayer fp = p;
             pool.submit(() -> {
                 fetchHypixel(fp);
-                fetchUrchin(fp);
                 fp.computeThreat();
-                if (fp.cheater) notifyCheater(fp);
                 if (gui != null) gui.setPlayers(new ArrayList<>(players));
             });
         }
@@ -171,7 +180,7 @@ public class IntelManager {
         } catch (Exception e) { return null; }
     }
 
-    private String post(String urlStr, String jsonBody, String apiKey) {
+    private String post(String urlStr, String jsonBody) {
         try {
             HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
             con.setRequestMethod("POST");
@@ -180,11 +189,11 @@ public class IntelManager {
             con.setDoOutput(true);
             con.setRequestProperty("Content-Type", "application/json");
             con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-            con.setRequestProperty("Authorization", apiKey);
             try (OutputStream os = con.getOutputStream()) {
                 os.write(jsonBody.getBytes("UTF-8"));
             }
-            if (con.getResponseCode() != 200) return null;
+            int code = con.getResponseCode();
+            if (code != 200) return null;
             return readStream(con.getInputStream());
         } catch (Exception e) { return null; }
     }
