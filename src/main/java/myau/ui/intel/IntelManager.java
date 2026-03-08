@@ -15,6 +15,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
 
 public class IntelManager {
 
@@ -29,6 +34,14 @@ public class IntelManager {
 
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
+
+    // Hypixel rate limiter: max 1 request per 200ms (5/sec, well under 120/min limit)
+    private final Semaphore hypixelSlots = new Semaphore(1);
+    private final AtomicLong lastHypixelRequest = new AtomicLong(0);
+    private static final long HYPIXEL_INTERVAL_MS = 200L;
+
+    // UUID cache for skin lookups of non-lobby players
+    private final Map<String, String> uuidCache = new HashMap<>();
 
     private final List<IntelPlayer> players = new ArrayList<>();
     private final List<IntelPlayer> manualPlayers = new ArrayList<>();
@@ -123,6 +136,16 @@ public class IntelManager {
     private void fetchHypixel(IntelPlayer p) {
         if (hypixelApiKey.isEmpty()) { p.loading = false; return; }
         try {
+            // Rate limit: enforce minimum interval between Hypixel requests
+            hypixelSlots.acquire();
+            try {
+                long now = System.currentTimeMillis();
+                long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
+                if (wait > 0) Thread.sleep(wait);
+                lastHypixelRequest.set(System.currentTimeMillis());
+            } finally {
+                hypixelSlots.release();
+            }
             String json = get(String.format(HYPIXEL_URL, hypixelApiKey, p.name), null, null);
             if (json == null) { p.loading = false; return; }
 
@@ -131,6 +154,13 @@ public class IntelManager {
             if (root.get("player").isJsonNull())      { p.loading = false; return; }
 
             JsonObject player = root.getAsJsonObject("player");
+            // Cache UUID for skin lookup
+            if (player.has("uuid")) {
+                String rawUuid = player.get("uuid").getAsString();
+                String formatted = rawUuid.replaceAll(
+                    "^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
+                synchronized (uuidCache) { uuidCache.put(p.name, formatted); }
+            }
 
             if (player.has("networkExp")) {
                 double exp = player.get("networkExp").getAsDouble();
@@ -210,6 +240,11 @@ public class IntelManager {
     // Single-player wrapper (used by debug command)
     private void fetchUrchin(IntelPlayer p) {
         fetchUrchinBatch(java.util.Collections.singletonList(p));
+    }
+
+    /** Returns cached UUID for a player name, or null if not yet known */
+    public String getCachedUuid(String name) {
+        synchronized (uuidCache) { return uuidCache.get(name); }
     }
 
     // ── Notification ──────────────────────────────────────────────────────────
