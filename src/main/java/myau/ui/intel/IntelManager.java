@@ -244,7 +244,9 @@ public class IntelManager {
                                 ? tag.get("reason").getAsString() : "";
                         String typeFmt = type.replace("_", " ");
                         typeFmt = Character.toUpperCase(typeFmt.charAt(0)) + typeFmt.substring(1);
-                        p.urchinTag = typeFmt + (reason.isEmpty() ? "" : " \u2014 " + reason);
+                        p.urchinTag    = typeFmt + (reason.isEmpty() ? "" : " \u2014 " + reason);
+                        p.urchinType   = type.toLowerCase();   // e.g. "confirmed_cheater"
+                        p.urchinReason = reason.toLowerCase(); // e.g. "ac and legitscaff"
                         break;
                     }
                 }
