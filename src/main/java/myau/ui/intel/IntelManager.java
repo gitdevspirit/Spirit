@@ -122,35 +122,56 @@ public class IntelManager {
         return bw.has(key) ? bw.get(key).getAsInt() : 0;
     }
 
-    // ── Urchin per-player GET ─────────────────────────────────────────────────
+    // ── Urchin batch POST ─────────────────────────────────────────────────────
+    // POST https://urchin.ws/player?key=<key>&sources=MANUAL
+    // Body: {"usernames":["name1","name2",...]}
+    // Response: {"players":{"Name":[{"type":"...","reason":"...","added_on":"..."}]}}
 
-    private void fetchUrchin(IntelPlayer p) {
-        if (urchinApiKey.isEmpty()) return;
+    private void fetchUrchinBatch(List<IntelPlayer> batch) {
+        if (batch.isEmpty()) return;
         try {
-            // GET https://urchin.ws/cubelify?id=<uuid>&name=<name>&sources=&key=<key>
-            // id can be empty if we don't have UUID — name alone is enough
-            // Build URL manually - don't encode the key as it contains safe chars
-            String url = URCHIN_URL
-                    + "?id="
-                    + "&name=" + java.net.URLEncoder.encode(p.name, "UTF-8")
-                    + "&sources="
-                    + "&key=" + urchinApiKey;
+            StringBuilder sb = new StringBuilder("{\"usernames\":[");
+            for (int i = 0; i < batch.size(); i++) {
+                sb.append("\"").append(batch.get(i).name).append("\"");
+                if (i < batch.size() - 1) sb.append(",");
+            }
+            sb.append("]}");
+            String body = sb.toString();
 
-            String json = get(url, null, null);
-            if (json == null) return;
+            String url = URCHIN_URL + "?sources=MANUAL"
+                    + (urchinApiKey.isEmpty() ? "" : "&key=" + urchinApiKey);
 
-            JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+            String response = post(url, body);
+            if (response == null || response.equals("Invalid Key")) return;
 
-            // Response: { "blacklisted": true/false, "tags": [...], "reason": "..." }
-            if (root.has("blacklisted") && root.get("blacklisted").getAsBoolean()) {
-                p.cheater   = true;
-                String tag    = root.has("tags") && root.getAsJsonArray("tags").size() > 0
-                        ? root.getAsJsonArray("tags").get(0).getAsString() : "Blacklisted";
-                String reason = root.has("reason") && !root.get("reason").isJsonNull()
-                        ? root.get("reason").getAsString() : "";
-                p.urchinTag = tag + (reason.isEmpty() ? "" : " — " + reason);
+            JsonObject root = new JsonParser().parse(response).getAsJsonObject();
+            if (!root.has("players")) return;
+
+            JsonObject players = root.getAsJsonObject("players");
+            for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : players.entrySet()) {
+                String name = entry.getKey();
+                com.google.gson.JsonArray tags = entry.getValue().getAsJsonArray();
+                if (tags.size() == 0) continue;
+                for (IntelPlayer p : batch) {
+                    if (p.name.equalsIgnoreCase(name)) {
+                        p.cheater = true;
+                        JsonObject tag = tags.get(0).getAsJsonObject();
+                        String type   = tag.has("type") ? tag.get("type").getAsString() : "flagged";
+                        String reason = tag.has("reason") && !tag.get("reason").isJsonNull()
+                                ? tag.get("reason").getAsString() : "";
+                        String typeFmt = type.replace("_", " ");
+                        typeFmt = Character.toUpperCase(typeFmt.charAt(0)) + typeFmt.substring(1);
+                        p.urchinTag = typeFmt + (reason.isEmpty() ? "" : " \u2014 " + reason);
+                        break;
+                    }
+                }
             }
         } catch (Exception ignored) {}
+    }
+
+    // Single-player wrapper (used by debug command)
+    private void fetchUrchin(IntelPlayer p) {
+        fetchUrchinBatch(java.util.Collections.singletonList(p));
     }
 
     // ── Notification ──────────────────────────────────────────────────────────
