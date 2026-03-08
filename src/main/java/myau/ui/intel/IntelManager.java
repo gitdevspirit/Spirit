@@ -169,7 +169,7 @@ public class IntelManager {
 
     // ── Debug log ─────────────────────────────────────────────────────────────
     public static final java.util.List<String> debugLog = new java.util.ArrayList<>();
-    static void dbg(String msg) {
+    public static void dbg(String msg) {
         synchronized (debugLog) {
             debugLog.add(msg);
             if (debugLog.size() > 200) debugLog.remove(0);
