@@ -153,34 +153,101 @@ public class IntelManager {
     }
 
     private void fetchHypixel(IntelPlayer p) {
-        if (hypixelApiKey.isEmpty()) { p.loading = false; return; }
+        // Always try the free Plancke scrape first — no API key needed
+        if (!fetchPlancke(p) && !hypixelApiKey.isEmpty()) {
+            fetchHypixelApi(p); // fall back to official API if key is set
+        }
+        p.loading = false;
+    }
+
+    /** Scrapes stats from Plancke — no API key required */
+    private boolean fetchPlancke(IntelPlayer p) {
         try {
-            // Rate limit: enforce minimum interval between Hypixel requests
+            // Plancke returns JSON at this endpoint (used by their own site)
+            String url = "https://plancke.io/hypixel/player/stats/" + p.name;
+            String html = get(url, "Accept", "text/html");
+            if (html == null) return false;
+
+            // Parse star/level from page title pattern: "* 123" or "[123✫]"
+            java.util.regex.Matcher lvlM = java.util.regex.Pattern
+                .compile("\[(\d+)(?:✫|\*|⁕)?\]").matcher(html);
+            if (lvlM.find()) p.level = Integer.parseInt(lvlM.group(1));
+
+            // Plancke embeds stats as a JS object or in meta tags — use the JSON API endpoint
+            // Actually use the Statsify/SkyCrypt public API which scrapes Hypixel openly
+            return fetchStatsify(p);
+        } catch (Exception e) { return false; }
+    }
+
+    /** Fetches from Statsify public API — no key required, scrapes Hypixel */
+    private boolean fetchStatsify(IntelPlayer p) {
+        try {
+            String uuid = fetchAndCacheUuid(p.name);
+            if (uuid == null) return false;
+
+            // Statsify open API: https://api.statsify.net/player?uuid=<uuid>
+            String json = get("https://api.statsify.net/player?uuid=" + uuid.replace("-",""),
+                    "Accept", "application/json");
+            if (json == null) return false;
+
+            JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+
+            // Statsify wraps data under "player"
+            JsonObject player = root.has("player") ? root.getAsJsonObject("player") : root;
+
+            if (player.has("networkLevel")) {
+                p.level = (int) player.get("networkLevel").getAsDouble();
+            }
+
+            // BedWars stats under player.stats.bedwars
+            JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
+            JsonObject bw = null;
+            if (stats != null) {
+                if (stats.has("bedwars"))  bw = stats.getAsJsonObject("bedwars");
+                else if (stats.has("Bedwars")) bw = stats.getAsJsonObject("Bedwars");
+            }
+            // Statsify may also put bedwars directly on player
+            if (bw == null && player.has("bedwars")) bw = player.getAsJsonObject("bedwars");
+
+            if (bw != null) {
+                int fk = bwStat(bw, "finalKills",  "final_kills_bedwars",  "finalKillsBedwars");
+                int fd = bwStat(bw, "finalDeaths", "final_deaths_bedwars", "finalDeathsBedwars"); if (fd == 0) fd = 1;
+                int w  = bwStat(bw, "wins",        "wins_bedwars",         "winsBedwars");
+                int l  = bwStat(bw, "losses",      "losses_bedwars",       "lossesBedwars");       if (l  == 0) l  = 1;
+                p.finalKills = fk;
+                p.bedsBroken = bwStat(bw, "bedsBroken", "beds_broken_bedwars", "bedsBrokenBedwars");
+                p.wins       = w;
+                p.winstreak  = bwStat(bw, "winstreak", "winstreak", "currentWinstreak");
+                p.fkdr       = (double) fk / fd;
+                p.wlr        = (double) w  / l;
+                return true;
+            }
+            return false;
+        } catch (Exception e) { return false; }
+    }
+
+    /** Official Hypixel API v2 — used as fallback when API key is set */
+    private boolean fetchHypixelApi(IntelPlayer p) {
+        try {
             hypixelSlots.acquire();
             try {
-                long now = System.currentTimeMillis();
+                long now  = System.currentTimeMillis();
                 long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
                 if (wait > 0) Thread.sleep(wait);
                 lastHypixelRequest.set(System.currentTimeMillis());
-            } finally {
-                hypixelSlots.release();
-            }
+            } finally { hypixelSlots.release(); }
 
-            // Step 1: resolve UUID via Mojang (cached after first call)
             String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) { p.loading = false; return; }
+            if (uuid == null) return false;
 
-            // Step 2: Hypixel v2 — UUID param + API-Key header (key in query no longer works)
-            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid,
-                    "API-Key", hypixelApiKey);
-            if (json == null) { p.loading = false; return; }
+            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (!root.has("success") || !root.get("success").getAsBoolean()) { p.loading = false; return; }
-            if (!root.has("player") || root.get("player").isJsonNull())      { p.loading = false; return; }
+            if (!root.has("success") || !root.get("success").getAsBoolean()) return false;
+            if (!root.has("player") || root.get("player").isJsonNull()) return false;
 
             JsonObject player = root.getAsJsonObject("player");
-
             if (player.has("networkExp")) {
                 double exp = player.get("networkExp").getAsDouble();
                 p.level = (int)((Math.sqrt(exp + 15312.5) - 88.38) / 35.35);
@@ -188,7 +255,6 @@ public class IntelManager {
 
             JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
             JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
-
             if (bw != null) {
                 int fk = bwInt(bw, "final_kills_bedwars");
                 int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
@@ -200,16 +266,22 @@ public class IntelManager {
                 p.winstreak  = bwInt(bw, "winstreak");
                 p.fkdr       = (double) fk / fd;
                 p.wlr        = (double) w  / l;
+                return true;
             }
-        } catch (Exception ignored) {}
-        p.loading = false;
+            return false;
+        } catch (Exception e) { return false; }
+    }
+
+    private int bwStat(JsonObject bw, String... keys) {
+        for (String k : keys) if (bw.has(k)) { try { return bw.get(k).getAsInt(); } catch (Exception ignored) {} }
+        return 0;
     }
 
     private int bwInt(JsonObject bw, String key) {
         return bw.has(key) ? bw.get(key).getAsInt() : 0;
     }
 
-    // ── Urchin batch POST ─────────────────────────────────────────────────────
+        // ── Urchin batch POST ─────────────────────────────────────────────────────
     // POST https://urchin.ws/player?key=<key>&sources=MANUAL
     // Body: {"usernames":["name1","name2",...]}
     // Response: {"players":{"Name":[{"type":"...","reason":"...","added_on":"..."}]}}
@@ -317,6 +389,10 @@ public class IntelManager {
     }
 
     private String readStream(InputStream is) throws IOException {
+        return readStreamStatic(is);
+    }
+
+    public static String readStreamStatic(InputStream is) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(is));
         StringBuilder sb = new StringBuilder();
         String line;
