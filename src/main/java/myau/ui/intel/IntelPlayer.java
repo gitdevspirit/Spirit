@@ -31,14 +31,35 @@ public class IntelPlayer {
 
     /** Called after stats are loaded — compute weighted threat score 0-100 */
     public void computeThreat() {
-        if (cheater) { threatScore = 100; return; }
         double score = 0;
-        score += Math.min(40, fkdr  * 6.0);   // FKDR up to 40pts (maxes at ~6.7 FKDR)
-        score += Math.min(20, wlr   * 5.0);   // WLR up to 20pts
-        score += Math.min(20, winstreak * 0.8); // streak up to 20pts
-        score += Math.min(10, level / 100.0 * 10); // prestige up to 10pts
-        score += Math.min(10, finalKills / 1000.0 * 10); // kills up to 10pts
-        threatScore = Math.min(100, score);
+        score += Math.min(40, fkdr        * 6.0);
+        score += Math.min(20, wlr         * 5.0);
+        score += Math.min(20, winstreak   * 0.8);
+        score += Math.min(10, level       / 100.0 * 10);
+        score += Math.min(10, finalKills  / 1000.0 * 10);
+        score = Math.min(100, score);
+
+        if (cheater && urchinTag != null) {
+            String tag = urchinTag.toLowerCase();
+            // Boost threat based on cheat severity, but factor in real stats too
+            double cheatBoost;
+            if (containsAny(tag, "blatant", "scaffold", "bridg", "autoblock",
+                    "fly", "speed", "bhop", "esp", "visual", "xray", "aimbot"))
+                cheatBoost = 80; // high threat floor
+            else if (containsAny(tag, "killaura", "kill aura", "reach", "velocity",
+                    "anti-kb", "antikb", "confirmed", "sniper"))
+                cheatBoost = 55; // medium threat floor
+            else
+                cheatBoost = 30; // low threat: legitscaff, eagle, autoclicker, info tags
+            threatScore = Math.max(cheatBoost, score);
+        } else {
+            threatScore = score;
+        }
         loading = false;
+    }
+
+    private boolean containsAny(String text, String... keywords) {
+        for (String k : keywords) if (text.contains(k)) return true;
+        return false;
     }
 }
