@@ -160,21 +160,7 @@ public class IntelManager {
                 String formatted = rawUuid.replaceAll(
                     "^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
                 synchronized (uuidCache) { uuidCache.put(p.name, formatted); }
-                // Load skin with callback — fires when Mojang CDN delivers the texture
-                final String finalUuid = formatted;
-                final String finalName = p.name;
-                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-                    try {
-                        com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
-                                java.util.UUID.fromString(finalUuid), finalName);
-                        net.minecraft.client.Minecraft.getMinecraft().getSkinManager()
-                                .loadProfileTextures(gp, (type, location, texture) -> {
-                                    if (type == com.mojang.authlib.minecraft.MinecraftProfileTexture.Type.SKIN) {
-                                        if (gui != null) gui.setPlayers(combined());
-                                    }
-                                }, true);
-                    } catch (Exception ignored2) {}
-                });
+                // UUID is now cached — IntelGui will fetch the face texture on next render frame
             }
 
             if (player.has("networkExp")) {
@@ -247,6 +233,9 @@ public class IntelManager {
                         p.urchinTag    = typeFmt + (reason.isEmpty() ? "" : " \u2014 " + reason);
                         p.urchinType   = type.toLowerCase();   // e.g. "confirmed_cheater"
                         p.urchinReason = reason.toLowerCase(); // e.g. "ac and legitscaff"
+                        p.loading      = false; // show data now; Hypixel will add real stats
+                        p.computeThreat(); // apply cheat floor immediately; recomputed again after Hypixel
+                        p.computeThreat(); // apply cheat floor immediately; Hypixel will recompute with real stats
                         break;
                     }
                 }
