@@ -32,12 +32,12 @@ public class IntelGui extends GuiScreen {
     private static final int HEAD_SIZE = 20;
     private static final int SCROLL_SPD = 18;
 
-    // Column X offsets (relative to card left edge, after padding)
-    // NAME area: 0..260  |  FKDR: 270  |  WLR: 330  |  STREAK: 390  |  THREAT: right-aligned
-    private static final int COL_FKDR   = 265;
-    private static final int COL_WLR    = 335;
-    private static final int COL_STREAK = 405;
-    // THREAT is drawn from right: card right - 60
+    // Column centre X positions (used for both headers and card values)
+    // These are absolute screen X - centred under the header labels
+    // FKDR col centre=290, WLR=370, STREAK=460, THREAT right block at listW-70
+    private static final int COL_FKDR_C   = 290;
+    private static final int COL_WLR_C    = 370;
+    private static final int COL_STREAK_C = 455;
 
     // Colours
     private static final int BG_FULL  = 0xBB000008;
@@ -195,11 +195,11 @@ public class IntelGui extends GuiScreen {
         fillRect(0, hY, lw, COL_HDR, 0x0AFFFFFF);
         gl();
         int nameX = CARD_PAD + HEAD_SIZE + 10;
-        mc.fontRendererObj.drawString("PLAYER",  nameX,          hY + 5, COL_DIM, false);
-        mc.fontRendererObj.drawString("FKDR",    COL_FKDR,       hY + 5, COL_DIM, false);
-        mc.fontRendererObj.drawString("WLR",     COL_WLR,        hY + 5, COL_DIM, false);
-        mc.fontRendererObj.drawString("STREAK",  COL_STREAK,     hY + 5, COL_DIM, false);
-        mc.fontRendererObj.drawString("THREAT",  lw - 66,        hY + 5, COL_DIM, false);
+        mc.fontRendererObj.drawString("PLAYER", nameX, hY + 5, COL_DIM, false);
+        drawCentred("FKDR",   COL_FKDR_C,   hY + 5, COL_DIM);
+        drawCentred("WLR",    COL_WLR_C,    hY + 5, COL_DIM);
+        drawCentred("STREAK", COL_STREAK_C, hY + 5, COL_DIM);
+        drawCentred("THREAT", lw - 42,      hY + 5, COL_DIM);
         fillRect(0, hY + COL_HDR - 1, lw, 1, COL_DIVIDER);
 
         int cY = ly + COL_HDR + 4;
@@ -284,30 +284,28 @@ public class IntelGui extends GuiScreen {
         }
 
         if (p.loading) {
-            // Show dashes centred in stat columns
             gl();
-            mc.fontRendererObj.drawString("\u2014", COL_FKDR,   cy + ch/2 - 4, COL_DIM, false);
-            mc.fontRendererObj.drawString("\u2014", COL_WLR,    cy + ch/2 - 4, COL_DIM, false);
-            mc.fontRendererObj.drawString("\u2014", COL_STREAK, cy + ch/2 - 4, COL_DIM, false);
+            drawCentred("\u2014", COL_FKDR_C,   cy + ch/2 - 4, COL_DIM);
+            drawCentred("\u2014", COL_WLR_C,    cy + ch/2 - 4, COL_DIM);
+            drawCentred("\u2014", COL_STREAK_C, cy + ch/2 - 4, COL_DIM);
             return;
         }
 
-        // Stats — vertically centred in card
+        // Stats — vertically centred in card, centred under column headers
         int sy = cy + ch / 2 - 4;
         gl();
-        mc.fontRendererObj.drawString(fmt(p.fkdr),              COL_FKDR,   sy, statCol(p.fkdr, 3, 6),        false);
-        mc.fontRendererObj.drawString(fmt(p.wlr),               COL_WLR,    sy, statCol(p.wlr, 1.5, 4),       false);
-        mc.fontRendererObj.drawString(String.valueOf(p.winstreak), COL_STREAK, sy, statCol(p.winstreak, 10, 30), false);
+        drawCentred(fmt(p.fkdr),                COL_FKDR_C,   sy, statCol(p.fkdr, 3, 6));
+        drawCentred(fmt(p.wlr),                 COL_WLR_C,    sy, statCol(p.wlr, 1.5, 4));
+        drawCentred(String.valueOf(p.winstreak), COL_STREAK_C, sy, statCol(p.winstreak, 10, 30));
 
-        // Threat bar (right side)
-        int barW = 44, barH = 3;
-        int bx = cx + cw - 60, by = sy + 3;
+        // Threat bar + score (right side, centred under THREAT header)
+        int barW = 40, barH = 3;
+        int bx = cx + cw - barW - 22, by = sy + 3;
         fillRect(bx, by, barW, barH, 0x22FFFFFF);
         int fw = (int)(Math.min(1f, p.threatScore / 100f) * barW);
         if (fw > 0) fillRect(bx, by, fw, barH, tc);
-        // Score number right of bar
         String scoreStr = String.valueOf((int) p.threatScore);
-        mc.fontRendererObj.drawString(scoreStr, bx + barW + 4f, sy, tc, false);
+        drawCentred(scoreStr, cx + cw - barW / 2 - 22, sy, tc);
     }
 
     // ── Detail panel ──────────────────────────────────────────────────────────
@@ -342,13 +340,19 @@ public class IntelGui extends GuiScreen {
         mc.fontRendererObj.drawString(sub, x + 44f, y + 22f, COL_GOLD, false);
         y += 48;
 
-        // Urchin tag badge (full text)
+        // Urchin tag — wrapped lines inside a background box
         if (p.urchinTag != null) {
-            int tw = mc.fontRendererObj.getStringWidth("\u26D4  " + p.urchinTag) + 10;
-            RoundedUtils.drawRoundedRect(x, y, Math.min(tw, innerW), 14, 3, 0x33FF2244);
-            RoundedUtils.drawRoundedOutline(x, y, Math.min(tw, innerW), 14, 3, 1f, 0x55FF2244);
-            gl(); mc.fontRendererObj.drawString("\u26D4  " + p.urchinTag, x + 5f, y + 3f, COL_RED, false);
-            y += 20;
+            List<String> tagLines = wrap("\u26D4  " + p.urchinTag, innerW - 10);
+            int boxH = tagLines.size() * 11 + 6;
+            RoundedUtils.drawRoundedRect(x, y, innerW, boxH, 3, 0x33FF2244);
+            RoundedUtils.drawRoundedOutline(x, y, innerW, boxH, 3, 1f, 0x55FF2244);
+            gl();
+            int ty = y + 4;
+            for (String line : tagLines) {
+                mc.fontRendererObj.drawString(line, x + 5f, ty, COL_RED, false);
+                ty += 11;
+            }
+            y += boxH + 6;
         }
 
         // Divider
@@ -405,14 +409,29 @@ public class IntelGui extends GuiScreen {
     private void drawPlayerHead(String name, int x, int y, int size) {
         try {
             ResourceLocation skin = null;
+
+            // Try live network player first (fastest, always works for lobby players)
             if (mc.getNetHandler() != null) {
-                for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
-                    if (info.getGameProfile().getName().equals(name)) {
-                        skin = info.getLocationSkin(); break;
-                    }
+                NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
+                if (info != null) skin = info.getLocationSkin();
+            }
+
+            // For manually-added / non-lobby players: use cached UUID to load skin
+            if (skin == null) {
+                String uuid = IntelManager.getInstance().getCachedUuid(name);
+                if (uuid != null) {
+                    try {
+                        com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
+                                java.util.UUID.fromString(uuid), name);
+                        // Trigger async skin load and get whatever is cached so far
+                        net.minecraft.client.resources.SkinManager sm =
+                                mc.getSkinManager();
+                        skin = sm.loadSkinFromCache(gp);
+                    } catch (Exception ignored2) {}
                 }
             }
-            // Fallback: default Steve skin
+
+            // Final fallback: Steve
             if (skin == null) skin = new ResourceLocation("textures/entity/steve.png");
 
             GlStateManager.enableBlend();
@@ -562,29 +581,83 @@ public class IntelGui extends GuiScreen {
         return v == (long) v ? String.valueOf((long) v) : String.format("%.2f", v);
     }
 
+    // Returns 0=low, 1=medium, 2=high threat based on cheat type
+    private int urchinThreatLevel(String tag) {
+        // Low threat — cosmetic / minor advantage cheats
+        if (containsAny(tag, "legitscaff", "eagle", "autoclicker", "autoclick", "cps",
+                        "info", "caution", "possible_sniper", "legit_sniper"))
+            return 0;
+        // Medium threat — moderate PvP advantage
+        if (containsAny(tag, "aim assist", "aimassist", "killaura", "kill aura",
+                        "reach", "velocity", "anti-kb", "antikb", "sniper", "confirmed"))
+            return 1;
+        // High threat — blatant / game-breaking cheats
+        if (containsAny(tag, "blatant", "scaffold", "bridg", "autoblock", "auto block",
+                        "fly", "speed", "bhop", "movement", "esp", "visual", "xray",
+                        "x-ray", "wallhack", "aimbot"))
+            return 2;
+        return 1; // default medium
+    }
+
     private String recommend(IntelPlayer p) {
         if (p.cheater && p.urchinTag != null) {
             String tag = p.urchinTag.toLowerCase();
-            if (containsAny(tag, "scaffold", "legitscaff", "bridg", "eagle"))
-                return "Flagged for scaffolding. Expect fast bridges and aerial angles. Destroy their bridge routes early.";
-            if (containsAny(tag, "autoblock", "auto block", "autoclick", "cps"))
-                return "Flagged for autoclicker or autoblock. Expect high CPS bursts. Keep distance and don't trade hits.";
-            if (containsAny(tag, "visual", "esp", "x-ray", "xray", "wallhack"))
-                return "Flagged for visuals/ESP. Assume they know your bed layout. Build covered defences.";
-            if (containsAny(tag, "killaura", "kill aura", "aimbot", "aim assist", "reach"))
-                return "Flagged for KillAura or aimbot. Don't fight directly. Bait with traps and rush bed instead.";
-            if (containsAny(tag, "velocity", "anti-kb", "antikb", "kb"))
-                return "Flagged for anti-knockback. Void traps won't work. Focus bed destruction over PvP.";
-            if (containsAny(tag, "fly", "speed", "movement", "bhop", "bunnyhop"))
-                return "Flagged for movement hacks. Expect rapid rushes. Fortify bed early and camp mid.";
-            if (containsAny(tag, "sniper", "crossbow"))
-                return "Flagged as sniper. Avoid open areas. Use tunnels and stay behind cover when exposed.";
-            return "Flagged by Urchin. Expect unusual movement or combat. Avoid and focus bed defense.";
+            int tl = urchinThreatLevel(tag);
+
+            // Scaffold / bridge cheats
+            if (containsAny(tag, "scaffold", "bridg", "blatant scaffold")) {
+                if (tl == 2)
+                    return "HIGH THREAT | Blatant scaffolder. Expect near-instant bridges everywhere. Rush their bed immediately before they cross.";
+                return "LOW THREAT | Uses legitscaff or eagle. Bridges slightly faster than normal. Contest mid early and cut off routes.";
+            }
+            // Autoclicker
+            if (containsAny(tag, "autoclick", "autoclicker", "cps")) {
+                return "LOW THREAT | Higher CPS but no aim advantage. Play defensively, use knockback and gap the fight.";
+            }
+            // Autoblock
+            if (containsAny(tag, "autoblock", "auto block")) {
+                return "HIGH THREAT | Autoblock gives near-perfect blocking. Avoid extended fights. Use projectiles and rush bed instead.";
+            }
+            // Eagle
+            if (containsAny(tag, "eagle")) {
+                return "LOW THREAT | Eagle bridges are faster but not instant. Play normal — cut their bridge and keep your bed defended.";
+            }
+            // KillAura / Aim
+            if (containsAny(tag, "killaura", "kill aura", "aimbot")) {
+                return "MEDIUM THREAT | KillAura or aimbot. Avoid 1v1s in open space. Use terrain, walls, and bed rush tactics instead.";
+            }
+            if (containsAny(tag, "aim assist", "aimassist")) {
+                return "MEDIUM THREAT | Aim assist improves accuracy but isn't fully automated. You can still outmanoeuvre them.";
+            }
+            // Reach
+            if (containsAny(tag, "reach")) {
+                return "MEDIUM THREAT | Extended reach means they win trades at distance. Stay at melee range or use a bow.";
+            }
+            // Anti-KB
+            if (containsAny(tag, "velocity", "anti-kb", "antikb")) {
+                return "MEDIUM THREAT | Reduces knockback — void plays won't work. Focus on bed destruction rather than PvP.";
+            }
+            // Movement
+            if (containsAny(tag, "fly", "bhop", "bunnyhop", "speed")) {
+                return "HIGH THREAT | Movement hacks mean they can rush your base instantly. Fortify your bed and play defensive.";
+            }
+            // ESP / Visuals
+            if (containsAny(tag, "esp", "visual", "xray", "x-ray", "wallhack")) {
+                return "HIGH THREAT | Visuals / ESP — they can see through walls and track you. Cover your bed on all sides.";
+            }
+            // Sniper tags
+            if (containsAny(tag, "sniper", "crossbow")) {
+                return "MEDIUM THREAT | Known sniper — avoid exposed areas and open bridges. Use covered tunnels where possible.";
+            }
+            // Generic by threat level
+            if (tl == 2) return "HIGH THREAT | Blatant cheater. Do not engage directly. Rush bed and escape.";
+            if (tl == 0) return "LOW THREAT | Minor cheat advantage. Play normally with extra awareness.";
+            return "MEDIUM THREAT | Cheating detected. Avoid prolonged fights. Focus bed destruction.";
         }
-        if (p.threatScore >= 75) return "High priority. Rush their bed before they scale. Don't engage alone.";
-        if (p.threatScore >= 50) return "Solid player. Contest mid early. Engage with armor advantage.";
-        if (p.threatScore >= 25) return "Average. Farm if convenient. Safe to deprioritise.";
-        return "Low skill. Easy target. Rush early for free resources.";
+        if (p.threatScore >= 75) return "High priority target. Rush their bed early before they gear up. Avoid 1v1 without advantage.";
+        if (p.threatScore >= 50) return "Solid player. Contest mid early and engage only with armor advantage.";
+        if (p.threatScore >= 25) return "Average player. Farm resources first. Safe to deprioritise until mid-game.";
+        return "Low threat. Easy target — rush early for free resources and bed elimination.";
     }
 
     private boolean containsAny(String text, String... keywords) {
@@ -603,6 +676,11 @@ public class IntelGui extends GuiScreen {
         }
         if (cur.length() > 0) out.add(cur.toString());
         return out;
+    }
+
+    private void drawCentred(String text, int centreX, int y, int color) {
+        int w = mc.fontRendererObj.getStringWidth(text);
+        gl(); mc.fontRendererObj.drawString(text, centreX - w / 2f, y, color, false);
     }
 
     private void fillRect(int x, int y, int w, int h, int color) {
