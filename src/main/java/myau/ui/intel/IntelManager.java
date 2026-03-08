@@ -160,6 +160,17 @@ public class IntelManager {
                 String formatted = rawUuid.replaceAll(
                     "^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
                 synchronized (uuidCache) { uuidCache.put(p.name, formatted); }
+                // Prefetch skin on main thread so it's ready by render time
+                final String finalUuid = formatted;
+                final String finalName = p.name;
+                net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+                    try {
+                        com.mojang.authlib.GameProfile gp = new com.mojang.authlib.GameProfile(
+                                java.util.UUID.fromString(finalUuid), finalName);
+                        net.minecraft.client.Minecraft.getMinecraft().getSkinManager()
+                                .loadProfileTextures(gp, null, false);
+                    } catch (Exception ignored2) {}
+                });
             }
 
             if (player.has("networkExp")) {
