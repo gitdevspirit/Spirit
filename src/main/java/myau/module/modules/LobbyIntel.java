@@ -1,15 +1,19 @@
 package myau.module.modules;
 
 import myau.event.EventTarget;
+import myau.events.KeyEvent;
 import myau.events.LoadWorldEvent;
 import myau.events.Render2DEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
+import myau.module.SliderSetting;
 import myau.property.properties.TextProperty;
 import myau.ui.intel.IntelGui;
 import myau.ui.intel.IntelHudOverlay;
 import myau.ui.intel.IntelManager;
+import myau.util.ChatUtil;
 import net.minecraft.client.Minecraft;
+import org.lwjgl.input.Keyboard;
 
 import java.io.*;
 import java.util.regex.Matcher;
@@ -20,6 +24,7 @@ public class LobbyIntel extends Module {
 
     public final BooleanSetting autoScan    = register(new BooleanSetting("Auto Scan on Join", true));
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
+    public final SliderSetting  hudKeybind  = register(new SliderSetting("HUD Toggle Key", Keyboard.KEY_H, 0, 255, 1));
 
     // Saved via config, set via .intelpath command
     public final TextProperty logPath = new TextProperty("log-path",
@@ -46,6 +51,16 @@ public class LobbyIntel extends Module {
             gui.setPlayers(IntelManager.getInstance().getPlayers());
         }
         setEnabled(false);
+    }
+
+    @EventTarget
+    public void onKey(KeyEvent event) {
+        if (event.getKey() == hudKeybind.getValue().intValue()) {
+            boolean newState = !hudOverlay.isEnabled();
+            hudOverlay.setEnabled(newState);
+            String status = newState ? "&a&lON" : "&c&lOFF";
+            ChatUtil.sendFormatted("&7[Intel] HUD Overlay: " + status);
+        }
     }
 
     @EventTarget
