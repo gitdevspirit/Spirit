@@ -487,6 +487,7 @@ public class IntelGui extends GuiScreen {
         gl(); mc.fontRendererObj.drawString("DISPLAY", innerX, y, COL_DIM, false); y += 14;
         y = drawSlider(innerX, y, innerW, "Scale", (int)(hud.getScale() * 100), 50, 200, mx, my);
         y = drawSlider(innerX, y, innerW, "Max Players", hud.getMaxPlayers(), 1, 20, mx, my);
+        y = drawSlider(innerX, y, innerW, "Background Opacity", hud.getBgOpacity(), 0, 255, mx, my);
 
         y += 8;
         fillRect(innerX, y, innerW, 1, COL_DIVIDER);
@@ -950,6 +951,15 @@ public class IntelGui extends GuiScreen {
         if (my >= maxSliderY && my < maxSliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
             hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
+            return;
+        }
+        y += 16;
+        
+        // Background Opacity slider
+        int bgOpacitySliderY = y + 10;
+        if (my >= bgOpacitySliderY && my < bgOpacitySliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
+            int val = (int)((mx - settingsX) / (float)settingsW * 255);
+            hud.setBgOpacity(Math.max(0, Math.min(255, val)));
             return;
         }
     }
