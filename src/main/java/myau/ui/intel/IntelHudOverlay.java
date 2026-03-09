@@ -1,0 +1,316 @@
+package myau.ui.intel;
+
+import myau.ui.clickgui.GuiColors;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
+import net.minecraft.client.gui.ScaledResolution;
+import net.minecraft.client.network.NetworkPlayerInfo;
+import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.util.ResourceLocation;
+import org.lwjgl.opengl.GL11;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * HUD overlay that displays Intel player information during gameplay
+ * Renders a compact list of players with their stats and threat levels
+ */
+public class IntelHudOverlay {
+
+    private static final Minecraft mc = Minecraft.getMinecraft();
+    
+    // Layout constants
+    private static final int LINE_HEIGHT = 16;
+    private static final int HEAD_SIZE = 12;
+    private static final int PADDING = 4;
+    private static final int BORDER_RADIUS = 4;
+    
+    // Color scheme - matching Spirit's aesthetic
+    private static final int BG_COLOR = 0xBB07070E;
+    private static final int BG_HOVER = 0xCC151535;
+    private static final int ACCENT = GuiColors.ACCENT; // Pink
+    private static final int TEXT_BRIGHT = 0xFFDDDDEE;
+    private static final int TEXT_DIM = 0xFF888899;
+    
+    // Configuration (loaded from IntelGui settings panel)
+    private boolean enabled = true;
+    private int posX = 10;
+    private int posY = 100;
+    private float scale = 1.0f;
+    private int maxPlayers = 10;
+    private boolean showHeads = true;
+    private boolean showFkdr = true;
+    private boolean showWlr = false;
+    private boolean showStreak = false;
+    private boolean showThreat = true;
+    private boolean showTeamColor = true;
+    private String sortMode = "threat"; // "threat", "fkdr", "name"
+    
+    private List<IntelPlayer> players = new ArrayList<>();
+    
+    // Skin cache shared with IntelGui
+    private final java.util.Map<String, ResourceLocation> skinCache = new java.util.HashMap<>();
+    private final java.util.Map<String, Boolean> skinIsSheet = new java.util.HashMap<>();
+    
+    public IntelHudOverlay() {}
+    
+    // ── Configuration Setters ──────────────────────────────────────────────────
+    
+    public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    public void setPosition(int x, int y) { this.posX = x; this.posY = y; }
+    public void setScale(float scale) { this.scale = Math.max(0.5f, Math.min(2.0f, scale)); }
+    public void setMaxPlayers(int max) { this.maxPlayers = Math.max(1, Math.min(20, max)); }
+    public void setShowHeads(boolean show) { this.showHeads = show; }
+    public void setShowFkdr(boolean show) { this.showFkdr = show; }
+    public void setShowWlr(boolean show) { this.showWlr = show; }
+    public void setShowStreak(boolean show) { this.showStreak = show; }
+    public void setShowThreat(boolean show) { this.showThreat = show; }
+    public void setShowTeamColor(boolean show) { this.showTeamColor = show; }
+    public void setSortMode(String mode) { this.sortMode = mode; }
+    
+    public boolean isEnabled() { return enabled; }
+    public int getPosX() { return posX; }
+    public int getPosY() { return posY; }
+    public float getScale() { return scale; }
+    public int getMaxPlayers() { return maxPlayers; }
+    public boolean getShowHeads() { return showHeads; }
+    public boolean getShowFkdr() { return showFkdr; }
+    public boolean getShowWlr() { return showWlr; }
+    public boolean getShowStreak() { return showStreak; }
+    public boolean getShowThreat() { return showThreat; }
+    public boolean getShowTeamColor() { return showTeamColor; }
+    public String getSortMode() { return sortMode; }
+    
+    // ── Data Management ────────────────────────────────────────────────────────
+    
+    public void setPlayers(List<IntelPlayer> players) {
+        this.players = new ArrayList<>(players);
+        sortPlayers();
+    }
+    
+    public void cacheSkin(String name, ResourceLocation skin, boolean isSheet) {
+        skinCache.put(name, skin);
+        skinIsSheet.put(name, isSheet);
+    }
+    
+    private void sortPlayers() {
+        switch (sortMode) {
+            case "threat":
+                players.sort((a, b) -> Double.compare(b.threatScore, a.threatScore));
+                break;
+            case "fkdr":
+                players.sort((a, b) -> Double.compare(b.fkdr, a.fkdr));
+                break;
+            case "name":
+                players.sort(Comparator.comparing(p -> p.name));
+                break;
+        }
+    }
+    
+    // ── Rendering ──────────────────────────────────────────────────────────────
+    
+    public void render() {
+        if (!enabled || players.isEmpty()) return;
+        
+        ScaledResolution sr = new ScaledResolution(mc);
+        
+        GlStateManager.pushMatrix();
+        GlStateManager.scale(scale, scale, 1.0f);
+        
+        int scaledX = (int)(posX / scale);
+        int scaledY = (int)(posY / scale);
+        
+        // Calculate dimensions
+        int displayCount = Math.min(players.size(), maxPlayers);
+        int width = calculateWidth();
+        int height = (LINE_HEIGHT * displayCount) + (PADDING * 2);
+        
+        // Draw background
+        drawRoundedRect(scaledX, scaledY, scaledX + width, scaledY + height, BORDER_RADIUS, BG_COLOR);
+        
+        // Draw players
+        int y = scaledY + PADDING;
+        for (int i = 0; i < displayCount; i++) {
+            IntelPlayer p = players.get(i);
+            drawPlayerLine(p, scaledX + PADDING, y, width - (PADDING * 2));
+            y += LINE_HEIGHT;
+        }
+        
+        GlStateManager.popMatrix();
+    }
+    
+    private int calculateWidth() {
+        int width = PADDING * 2; // Base padding
+        
+        if (showHeads) width += HEAD_SIZE + 4;
+        width += 100; // Name column (minimum)
+        if (showFkdr) width += 45;
+        if (showWlr) width += 40;
+        if (showStreak) width += 35;
+        if (showThreat) width += 50;
+        
+        return width;
+    }
+    
+    private void drawPlayerLine(IntelPlayer p, int x, int y, int width) {
+        int currentX = x;
+        
+        // Draw player head
+        if (showHeads) {
+            drawPlayerHead(p.name, currentX, y + 2, HEAD_SIZE);
+            currentX += HEAD_SIZE + 4;
+        }
+        
+        // Draw team color indicator
+        if (showTeamColor && p.team != null && !p.team.isEmpty()) {
+            int teamColor = getTeamColor(p.team);
+            fillRect(currentX - 2, y + 2, 2, HEAD_SIZE, teamColor);
+        }
+        
+        // Draw name
+        String displayName = p.name;
+        if (displayName.length() > 12) displayName = displayName.substring(0, 12);
+        
+        int nameColor = p.cheater ? 0xFFFF4444 : TEXT_BRIGHT;
+        if (p.threatScore >= 75) nameColor = ACCENT; // Pink for high threat
+        
+        drawText(displayName, currentX, y + 4, nameColor);
+        currentX += 100;
+        
+        // Draw FKDR
+        if (showFkdr) {
+            String fkdrText = p.fkdr < 0 ? "-" : String.format("%.2f", p.fkdr);
+            int fkdrColor = getStatColor(p.fkdr, 3.0, 6.0);
+            drawText(fkdrText, currentX, y + 4, fkdrColor);
+            currentX += 45;
+        }
+        
+        // Draw WLR
+        if (showWlr) {
+            String wlrText = p.wlr < 0 ? "-" : String.format("%.2f", p.wlr);
+            int wlrColor = getStatColor(p.wlr, 2.0, 4.0);
+            drawText(wlrText, currentX, y + 4, wlrColor);
+            currentX += 40;
+        }
+        
+        // Draw Winstreak
+        if (showStreak) {
+            String wsText = p.winstreak < 0 ? "-" : String.valueOf(p.winstreak);
+            int wsColor = p.winstreak >= 10 ? 0xFFFFCC44 : p.winstreak >= 5 ? 0xFF44DD66 : TEXT_DIM;
+            drawText(wsText, currentX, y + 4, wsColor);
+            currentX += 35;
+        }
+        
+        // Draw threat score
+        if (showThreat) {
+            int threat = (int) p.threatScore;
+            String threatText = String.valueOf(threat);
+            int threatColor = getThreatColor(threat);
+            drawText(threatText, currentX, y + 4, threatColor);
+            
+            // Draw threat bar
+            if (threat > 0) {
+                int barWidth = 30;
+                int barHeight = 3;
+                int barY = y + LINE_HEIGHT - barHeight - 2;
+                
+                // Background
+                fillRect(currentX, barY, barWidth, barHeight, 0x33FFFFFF);
+                
+                // Filled portion
+                int fillWidth = (int) ((threat / 100.0) * barWidth);
+                fillRect(currentX, barY, fillWidth, barHeight, threatColor);
+            }
+        }
+    }
+    
+    private void drawPlayerHead(String name, int x, int y, int size) {
+        try {
+            ResourceLocation skin = skinCache.get(name);
+            
+            // Fallback to network lookup
+            if (skin == null && mc.getNetHandler() != null) {
+                NetworkPlayerInfo info = mc.getNetHandler().getPlayerInfo(name);
+                if (info != null) {
+                    skin = info.getLocationSkin();
+                    if (skin != null) {
+                        skinCache.put(name, skin);
+                        skinIsSheet.put(name, true);
+                    }
+                }
+            }
+            
+            // Fallback to Steve
+            if (skin == null) {
+                skin = new ResourceLocation("textures/entity/steve.png");
+                skinIsSheet.put(name, true);
+            }
+            
+            GlStateManager.enableBlend();
+            GlStateManager.color(1f, 1f, 1f, 1f);
+            mc.getTextureManager().bindTexture(skin);
+            
+            boolean isSheet = skinIsSheet.getOrDefault(name, true);
+            if (isSheet) {
+                // Full 64x64 skin - draw face (8,8) and hat (40,8)
+                Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
+                Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
+            } else {
+                // Pre-cropped 16x16 face
+                Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 16, 16, size, size, 16f, 16f);
+            }
+            
+            GlStateManager.color(1f, 1f, 1f, 1f);
+        } catch (Exception ignored) {}
+    }
+    
+    private int getTeamColor(String team) {
+        switch (team.toLowerCase()) {
+            case "red":    return 0xFFFF4444;
+            case "blue":   return 0xFF4488FF;
+            case "green":  return 0xFF44FF66;
+            case "yellow": return 0xFFFFFF44;
+            case "aqua":   return 0xFF44FFFF;
+            case "white":  return 0xFFEEEEEE;
+            case "pink":   return 0xFFFF88CC;
+            case "gray":   return 0xFF888888;
+            default:       return 0xFF888888;
+        }
+    }
+    
+    private int getThreatColor(int score) {
+        if (score >= 75) return 0xFFFF2244;
+        if (score >= 50) return 0xFFFF7722;
+        if (score >= 25) return 0xFFFFCC22;
+        return 0xFF44DD66;
+    }
+    
+    private int getStatColor(double value, double mid, double high) {
+        if (value < 0) return TEXT_DIM;
+        if (value >= high) return 0xFFFF3344;
+        if (value >= mid) return 0xFFFF9933;
+        if (value >= mid / 2) return 0xFFFFEE44;
+        return 0xFF44CC66;
+    }
+    
+    // ── Utility Methods ────────────────────────────────────────────────────────
+    
+    private void drawText(String text, int x, int y, int color) {
+        GlStateManager.enableTexture2D();
+        GlStateManager.enableBlend();
+        mc.fontRendererObj.drawString(text, x, y, color, true);
+    }
+    
+    private void fillRect(int x, int y, int w, int h, int color) {
+        Gui.drawRect(x, y, x + w, y + h, color);
+    }
+    
+    private void drawRoundedRect(int x, int y, int x2, int y2, int radius, int color) {
+        // Simple rounded rect using filled rects (no actual rounding for now)
+        // For proper rounded corners, you'd need RoundedUtils from ClickGUI
+        // but keeping it simple for HUD overlay
+        fillRect(x, y, x2 - x, y2 - y, color);
+    }
+}
