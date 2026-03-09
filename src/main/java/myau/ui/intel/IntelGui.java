@@ -74,6 +74,8 @@ public class IntelGui extends GuiScreen {
     private static final int SETTINGS_WIDTH = 280;
     private boolean settingsMouseDown = false;
     private int settingsDragTarget = -1; // Which slider is being dragged (-1 = none)
+    private int settingsScrollOff = 0;
+    private int settingsMaxScroll = 0;
 
     // Skin cache — keyed by player name -> ResourceLocation
     private final java.util.Map<String, ResourceLocation> skinCache     = new java.util.HashMap<>();
@@ -427,7 +429,14 @@ public class IntelGui extends GuiScreen {
 
         int innerX = x + 12;
         int innerW = w - 24;
-        int y = 14;
+        int startY = 14;
+        int y = startY - settingsScrollOff;
+
+        // Enable scissor test for clipping
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        ScaledResolution sr = new ScaledResolution(mc);
+        int scale = sr.getScaleFactor();
+        GL11.glScissor(x * scale, 0, w * scale, sh * scale);
 
         // Title
         gl();
@@ -446,16 +455,20 @@ public class IntelGui extends GuiScreen {
             myau.Myau.moduleManager.getModule("LobbyIntel");
         if (lobbyIntel == null) {
             gl(); mc.fontRendererObj.drawString("LobbyIntel module not found", innerX, y, COL_DIM, false);
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
             return;
         }
         IntelHudOverlay hud = lobbyIntel.getHudOverlay();
         if (hud == null) {
             gl(); mc.fontRendererObj.drawString("HUD overlay not initialized", innerX, y, COL_DIM, false);
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
             return;
         }
 
+        int contentStartY = y;
+
         // Enable/Disable toggle
-        y = drawToggle(innerX, y, innerW, "Enabled", hud.isEnabled(), mx, my, () -> hud.setEnabled(!hud.isEnabled()));
+        y = drawToggle(innerX, y, innerW, "Enabled", hud.isEnabled(), mx, my);
 
         y += 8;
         fillRect(innerX, y, innerW, 1, COL_DIVIDER);
@@ -463,8 +476,8 @@ public class IntelGui extends GuiScreen {
 
         // Position section
         gl(); mc.fontRendererObj.drawString("POSITION", innerX, y, COL_DIM, false); y += 14;
-        y = drawSlider(innerX, y, innerW, "X Position", hud.getPosX(), 0, 1920, mx, my, val -> hud.setPosition(val, hud.getPosY()));
-        y = drawSlider(innerX, y, innerW, "Y Position", hud.getPosY(), 0, 1080, mx, my, val -> hud.setPosition(hud.getPosX(), val));
+        y = drawSlider(innerX, y, innerW, "X Position", hud.getPosX(), 0, 1920, mx, my);
+        y = drawSlider(innerX, y, innerW, "Y Position", hud.getPosY(), 0, 1080, mx, my);
 
         y += 8;
         fillRect(innerX, y, innerW, 1, COL_DIVIDER);
@@ -472,8 +485,8 @@ public class IntelGui extends GuiScreen {
 
         // Display section
         gl(); mc.fontRendererObj.drawString("DISPLAY", innerX, y, COL_DIM, false); y += 14;
-        y = drawSlider(innerX, y, innerW, "Scale", (int)(hud.getScale() * 100), 50, 200, mx, my, val -> hud.setScale(val / 100f));
-        y = drawSlider(innerX, y, innerW, "Max Players", hud.getMaxPlayers(), 1, 20, mx, my, hud::setMaxPlayers);
+        y = drawSlider(innerX, y, innerW, "Scale", (int)(hud.getScale() * 100), 50, 200, mx, my);
+        y = drawSlider(innerX, y, innerW, "Max Players", hud.getMaxPlayers(), 1, 20, mx, my);
 
         y += 8;
         fillRect(innerX, y, innerW, 1, COL_DIVIDER);
@@ -481,12 +494,12 @@ public class IntelGui extends GuiScreen {
 
         // Columns section
         gl(); mc.fontRendererObj.drawString("COLUMNS", innerX, y, COL_DIM, false); y += 14;
-        y = drawToggle(innerX, y, innerW, "Player Heads", hud.getShowHeads(), mx, my, () -> hud.setShowHeads(!hud.getShowHeads()));
-        y = drawToggle(innerX, y, innerW, "FKDR", hud.getShowFkdr(), mx, my, () -> hud.setShowFkdr(!hud.getShowFkdr()));
-        y = drawToggle(innerX, y, innerW, "WLR", hud.getShowWlr(), mx, my, () -> hud.setShowWlr(!hud.getShowWlr()));
-        y = drawToggle(innerX, y, innerW, "Winstreak", hud.getShowStreak(), mx, my, () -> hud.setShowStreak(!hud.getShowStreak()));
-        y = drawToggle(innerX, y, innerW, "Threat Score", hud.getShowThreat(), mx, my, () -> hud.setShowThreat(!hud.getShowThreat()));
-        y = drawToggle(innerX, y, innerW, "Team Colors", hud.getShowTeamColor(), mx, my, () -> hud.setShowTeamColor(!hud.getShowTeamColor()));
+        y = drawToggle(innerX, y, innerW, "Player Heads", hud.getShowHeads(), mx, my);
+        y = drawToggle(innerX, y, innerW, "FKDR", hud.getShowFkdr(), mx, my);
+        y = drawToggle(innerX, y, innerW, "WLR", hud.getShowWlr(), mx, my);
+        y = drawToggle(innerX, y, innerW, "Winstreak", hud.getShowStreak(), mx, my);
+        y = drawToggle(innerX, y, innerW, "Threat Score", hud.getShowThreat(), mx, my);
+        y = drawToggle(innerX, y, innerW, "Team Colors", hud.getShowTeamColor(), mx, my);
 
         y += 8;
         fillRect(innerX, y, innerW, 1, COL_DIVIDER);
@@ -497,12 +510,17 @@ public class IntelGui extends GuiScreen {
         String[] sortModes = {"Threat", "FKDR", "Name"};
         String currentMode = hud.getSortMode();
         int modeIndex = currentMode.equals("threat") ? 0 : currentMode.equals("fkdr") ? 1 : 2;
-        y = drawDropdown(innerX, y, innerW, "Sort By", sortModes, modeIndex, mx, my, idx -> {
-            hud.setSortMode(idx == 0 ? "threat" : idx == 1 ? "fkdr" : "name");
-        });
+        y = drawDropdown(innerX, y, innerW, "Sort By", sortModes, modeIndex, mx, my);
+
+        // Calculate max scroll
+        int contentHeight = y - contentStartY;
+        int visibleHeight = sh - (startY + FTR);
+        settingsMaxScroll = Math.max(0, contentHeight - visibleHeight);
+
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
     }
 
-    private int drawToggle(int x, int y, int w, String label, boolean value, int mx, int my, Runnable onClick) {
+    private int drawToggle(int x, int y, int w, String label, boolean value, int mx, int my) {
         boolean hov = mx >= x && mx < x + w && my >= y && my < y + 16;
         
         gl(); mc.fontRendererObj.drawString(label, x, y + 4, hov ? COL_BRIGHT : COL_MID, false);
@@ -524,7 +542,7 @@ public class IntelGui extends GuiScreen {
         return y + 20;
     }
 
-    private int drawSlider(int x, int y, int w, String label, int value, int min, int max, int mx, int my, java.util.function.Consumer<Integer> onChange) {
+    private int drawSlider(int x, int y, int w, String label, int value, int min, int max, int mx, int my) {
         gl(); mc.fontRendererObj.drawString(label, x, y, COL_DIM, false);
         String valStr = String.valueOf(value);
         mc.fontRendererObj.drawString(valStr, x + w - mc.fontRendererObj.getStringWidth(valStr), y, COL_BRIGHT, false);
@@ -549,7 +567,7 @@ public class IntelGui extends GuiScreen {
         return y + 16;
     }
 
-    private int drawDropdown(int x, int y, int w, String label, String[] options, int selected, int mx, int my, java.util.function.Consumer<Integer> onChange) {
+    private int drawDropdown(int x, int y, int w, String label, String[] options, int selected, int mx, int my) {
         gl(); mc.fontRendererObj.drawString(label, x, y, COL_DIM, false);
         y += 10;
         
@@ -714,8 +732,17 @@ public class IntelGui extends GuiScreen {
     public void handleMouseInput() throws IOException {
         super.handleMouseInput();
         int dw = Mouse.getEventDWheel();
-        if (dw != 0) scrollOff -= dw > 0 ? SCROLL_SPD : -SCROLL_SPD;
-        scrollOff = Math.max(0, Math.min(scrollOff, maxScroll));
+        if (dw != 0) {
+            if (showSettings) {
+                // Scroll in settings panel
+                settingsScrollOff -= dw > 0 ? SCROLL_SPD : -SCROLL_SPD;
+                settingsScrollOff = Math.max(0, Math.min(settingsScrollOff, settingsMaxScroll));
+            } else {
+                // Scroll in player list
+                scrollOff -= dw > 0 ? SCROLL_SPD : -SCROLL_SPD;
+                scrollOff = Math.max(0, Math.min(scrollOff, maxScroll));
+            }
+        }
     }
 
     @Override
@@ -763,7 +790,11 @@ public class IntelGui extends GuiScreen {
             if (lobbyIntel != null) {
                 IntelHudOverlay hud = lobbyIntel.getHudOverlay();
                 if (hud != null) {
-                    int y = 14 + 22 + 10; // Start after title
+                    int startY = 14;
+                    int y = startY - settingsScrollOff;
+                    
+                    // Skip title and divider
+                    y += 22 + 10;
                     
                     // Enabled toggle
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
@@ -772,14 +803,24 @@ public class IntelGui extends GuiScreen {
                     }
                     y += 20 + 8 + 10;
                     
-                    // Position sliders (skip - need drag handling)
-                    y += 14 + 16 + 16 + 8 + 10;
+                    // Skip "POSITION" label
+                    y += 14;
+                    // X Position slider - handled by mouseDragged
+                    y += 16;
+                    // Y Position slider - handled by mouseDragged  
+                    y += 16 + 8 + 10;
                     
-                    // Display sliders (skip - need drag handling)
-                    y += 14 + 16 + 16 + 8 + 10;
+                    // Skip "DISPLAY" label
+                    y += 14;
+                    // Scale slider - handled by mouseDragged
+                    y += 16;
+                    // Max Players slider - handled by mouseDragged
+                    y += 16 + 8 + 10;
+                    
+                    // Skip "COLUMNS" label
+                    y += 14;
                     
                     // Columns toggles
-                    y += 14;
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         hud.setShowHeads(!hud.getShowHeads()); return;
                     }
@@ -803,7 +844,10 @@ public class IntelGui extends GuiScreen {
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         hud.setShowTeamColor(!hud.getShowTeamColor()); return;
                     }
-                    y += 20 + 8 + 10 + 14;
+                    y += 20 + 8 + 10;
+                    
+                    // Skip "SORTING" label
+                    y += 14;
                     
                     // Sort dropdown
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y + 10 && my < y + 10 + 18) {
@@ -868,32 +912,45 @@ public class IntelGui extends GuiScreen {
         IntelHudOverlay hud = lobbyIntel.getHudOverlay();
         if (hud == null) return;
         
+        int startY = 14;
+        int y = startY - settingsScrollOff;
+        
+        // Skip title, divider, enabled toggle, divider, "POSITION" label
+        y += 22 + 10 + 20 + 8 + 10 + 14;
+        
         // X Position slider
-        int y1 = 14 + 22 + 10 + 20 + 8 + 10 + 14;
-        if (my >= y1 && my < y1 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+        int xSliderY = y + 10; // After label
+        if (my >= xSliderY && my < xSliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = (int)((mx - settingsX) / (float)settingsW * 1920);
             hud.setPosition(Math.max(0, Math.min(1920, val)), hud.getPosY());
+            return;
         }
+        y += 16;
         
         // Y Position slider
-        int y2 = y1 + 16;
-        if (my >= y2 && my < y2 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+        int ySliderY = y + 10; // After label
+        if (my >= ySliderY && my < ySliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = (int)((mx - settingsX) / (float)settingsW * 1080);
             hud.setPosition(hud.getPosX(), Math.max(0, Math.min(1080, val)));
+            return;
         }
+        y += 16 + 8 + 10 + 14;
         
         // Scale slider
-        int y3 = y2 + 16 + 8 + 10 + 14;
-        if (my >= y3 && my < y3 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+        int scaleSliderY = y + 10;
+        if (my >= scaleSliderY && my < scaleSliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = 50 + (int)((mx - settingsX) / (float)settingsW * 150);
             hud.setScale(Math.max(0.5f, Math.min(2.0f, val / 100f)));
+            return;
         }
+        y += 16;
         
         // Max Players slider
-        int y4 = y3 + 16;
-        if (my >= y4 && my < y4 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+        int maxSliderY = y + 10;
+        if (my >= maxSliderY && my < maxSliderY + 6 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
             hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
+            return;
         }
     }
 
