@@ -45,11 +45,13 @@ public class IntelManager {
     private final List<IntelPlayer> players = new ArrayList<>();
     private final List<IntelPlayer> manualPlayers = new ArrayList<>();
     private IntelGui gui;
+    private IntelHudOverlay hudOverlay;
 
     private IntelManager() {}
 
     public boolean isFetching() { return fetching; }
     public void setGui(IntelGui gui) { this.gui = gui; }
+    public void setHudOverlay(IntelHudOverlay hud) { this.hudOverlay = hud; }
     public List<IntelPlayer> getPlayers() { return players; }
 
     /** Add a player by name manually (search bar). Fetches stats async. */
@@ -59,27 +61,33 @@ public class IntelManager {
         }
         IntelPlayer p = new IntelPlayer(name, null);
         manualPlayers.add(p);
-        if (gui != null) {
-            List<IntelPlayer> combined = combined();
-            gui.setPlayers(combined);
-        }
+        List<IntelPlayer> combined = combined();
+        if (gui != null) gui.setPlayers(combined);
+        if (hudOverlay != null) hudOverlay.setPlayers(combined);
+        
         // Fetch UUID immediately so skin can start downloading before Hypixel finishes
         pool.submit(() -> {
             fetchAndCacheUuid(p.name); // caches UUID → triggers face download on next GUI render
-            if (gui != null) gui.setPlayers(combined()); // refresh so drawPlayerHead sees the UUID
+            List<IntelPlayer> refreshed = combined();
+            if (gui != null) gui.setPlayers(refreshed); // refresh so drawPlayerHead sees the UUID
+            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
         // Fetch full stats in parallel
         pool.submit(() -> {
             fetchUrchinBatch(java.util.Collections.singletonList(p));
             fetchHypixel(p); // reuses cached UUID
             p.computeThreat();
-            if (gui != null) gui.setPlayers(combined());
+            List<IntelPlayer> refreshed = combined();
+            if (gui != null) gui.setPlayers(refreshed);
+            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
     }
 
     public void removeManualPlayer(String name) {
         manualPlayers.removeIf(p -> p.name.equalsIgnoreCase(name));
-        if (gui != null) gui.setPlayers(combined());
+        List<IntelPlayer> combined = combined();
+        if (gui != null) gui.setPlayers(combined);
+        if (hudOverlay != null) hudOverlay.setPlayers(combined);
     }
 
     public boolean isManual(IntelPlayer p) { return manualPlayers.contains(p); }
@@ -119,10 +127,12 @@ public class IntelManager {
                 net.minecraft.util.ResourceLocation loc = info.getLocationSkin();
                 if (n != null && loc != null) {
                     gui.cacheLobbyPlayerSkin(n, loc);
+                    if (hudOverlay != null) hudOverlay.cacheSkin(n, loc, true);
                 }
             }
             gui.setPlayers(new ArrayList<>(players));
         }
+        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>(players));
 
         // Fetch Urchin for all players in one batch request
         final List<IntelPlayer> batchRef = new ArrayList<>(players);
@@ -132,7 +142,9 @@ public class IntelManager {
             for (IntelPlayer p : batchRef) {
                 if (p.cheater) notifyCheater(p);
             }
-            if (gui != null) gui.setPlayers(new ArrayList<>(players));
+            List<IntelPlayer> refreshed = new ArrayList<>(players);
+            if (gui != null) gui.setPlayers(refreshed);
+            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
 
         // Fetch Hypixel per player
@@ -141,7 +153,9 @@ public class IntelManager {
             pool.submit(() -> {
                 fetchHypixel(fp);
                 fp.computeThreat();
-                if (gui != null) gui.setPlayers(new ArrayList<>(players));
+                List<IntelPlayer> refreshed = new ArrayList<>(players);
+                if (gui != null) gui.setPlayers(refreshed);
+                if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
             });
         }
 
