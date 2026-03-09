@@ -22,13 +22,14 @@ public class IntelHudOverlay {
     private static final Minecraft mc = Minecraft.getMinecraft();
     
     // Layout constants
-    private static final int LINE_HEIGHT = 16;
-    private static final int HEAD_SIZE = 12;
-    private static final int PADDING = 4;
+    private static final int LINE_HEIGHT = 18;
+    private static final int HEAD_SIZE = 14;
+    private static final int PADDING = 6;
+    private static final int HEADER_HEIGHT = 12;
     private static final int BORDER_RADIUS = 4;
     
     // Color scheme - matching Spirit's aesthetic
-    private static final int BG_COLOR = 0xBB07070E;
+    private int bgOpacity = 200; // 0-255, configurable
     private static final int BG_HOVER = 0xCC151535;
     private static final int ACCENT = GuiColors.ACCENT; // Pink
     private static final int TEXT_BRIGHT = 0xFFDDDDEE;
@@ -69,6 +70,7 @@ public class IntelHudOverlay {
     public void setShowThreat(boolean show) { this.showThreat = show; }
     public void setShowTeamColor(boolean show) { this.showTeamColor = show; }
     public void setSortMode(String mode) { this.sortMode = mode; }
+    public void setBgOpacity(int opacity) { this.bgOpacity = Math.max(0, Math.min(255, opacity)); }
     
     public boolean isEnabled() { return enabled; }
     public int getPosX() { return posX; }
@@ -82,6 +84,7 @@ public class IntelHudOverlay {
     public boolean getShowThreat() { return showThreat; }
     public boolean getShowTeamColor() { return showTeamColor; }
     public String getSortMode() { return sortMode; }
+    public int getBgOpacity() { return bgOpacity; }
     
     // ── Data Management ────────────────────────────────────────────────────────
     
@@ -125,13 +128,46 @@ public class IntelHudOverlay {
         // Calculate dimensions
         int displayCount = Math.min(players.size(), maxPlayers);
         int width = calculateWidth();
-        int height = (LINE_HEIGHT * displayCount) + (PADDING * 2);
+        int contentHeight = (LINE_HEIGHT * displayCount) + (PADDING * 2);
+        int totalHeight = HEADER_HEIGHT + contentHeight;
         
-        // Draw background
-        drawRoundedRect(scaledX, scaledY, scaledX + width, scaledY + height, BORDER_RADIUS, BG_COLOR);
+        // Draw background with configurable opacity
+        int bgColor = (bgOpacity << 24) | 0x07070E;
+        drawRoundedRect(scaledX, scaledY, scaledX + width, scaledY + totalHeight, BORDER_RADIUS, bgColor);
+        
+        // Draw header background (slightly darker)
+        int headerBg = ((Math.min(255, bgOpacity + 40)) << 24) | 0x0A0A14;
+        fillRect(scaledX, scaledY, width, HEADER_HEIGHT, headerBg);
+        
+        // Draw headers
+        int headerY = scaledY + 3;
+        int x = scaledX + PADDING;
+        
+        if (showHeads) x += HEAD_SIZE + 4;
+        if (showTeamColor) x += 3;
+        
+        // Name header
+        drawText("NAME", x, headerY, TEXT_DIM);
+        x += 80;
+        
+        if (showFkdr) {
+            drawText("FKDR", x, headerY, TEXT_DIM);
+            x += 40;
+        }
+        if (showWlr) {
+            drawText("WLR", x, headerY, TEXT_DIM);
+            x += 35;
+        }
+        if (showStreak) {
+            drawText("WS", x, headerY, TEXT_DIM);
+            x += 30;
+        }
+        if (showThreat) {
+            drawText("THREAT", x, headerY, TEXT_DIM);
+        }
         
         // Draw players
-        int y = scaledY + PADDING;
+        int y = scaledY + HEADER_HEIGHT + PADDING;
         for (int i = 0; i < displayCount; i++) {
             IntelPlayer p = players.get(i);
             drawPlayerLine(p, scaledX + PADDING, y, width - (PADDING * 2));
@@ -145,11 +181,12 @@ public class IntelHudOverlay {
         int width = PADDING * 2; // Base padding
         
         if (showHeads) width += HEAD_SIZE + 4;
-        width += 100; // Name column (minimum)
-        if (showFkdr) width += 45;
-        if (showWlr) width += 40;
-        if (showStreak) width += 35;
-        if (showThreat) width += 50;
+        if (showTeamColor) width += 3; // Team indicator
+        width += 80; // Name column (minimum)
+        if (showFkdr) width += 40;
+        if (showWlr) width += 35;
+        if (showStreak) width += 30;
+        if (showThreat) width += 45;
         
         return width;
     }
@@ -157,64 +194,66 @@ public class IntelHudOverlay {
     private void drawPlayerLine(IntelPlayer p, int x, int y, int width) {
         int currentX = x;
         
+        // Draw team color indicator
+        if (showTeamColor && p.team != null && !p.team.isEmpty()) {
+            int teamColor = getTeamColor(p.team);
+            fillRect(currentX, y + 2, 2, HEAD_SIZE, teamColor);
+            currentX += 3;
+        }
+        
         // Draw player head
         if (showHeads) {
             drawPlayerHead(p.name, currentX, y + 2, HEAD_SIZE);
             currentX += HEAD_SIZE + 4;
         }
         
-        // Draw team color indicator
-        if (showTeamColor && p.team != null && !p.team.isEmpty()) {
-            int teamColor = getTeamColor(p.team);
-            fillRect(currentX - 2, y + 2, 2, HEAD_SIZE, teamColor);
-        }
-        
         // Draw name
         String displayName = p.name;
-        if (displayName.length() > 12) displayName = displayName.substring(0, 12);
+        if (displayName.length() > 10) displayName = displayName.substring(0, 10);
         
         int nameColor = p.cheater ? 0xFFFF4444 : TEXT_BRIGHT;
         if (p.threatScore >= 75) nameColor = ACCENT; // Pink for high threat
         
         drawText(displayName, currentX, y + 4, nameColor);
-        currentX += 100;
+        currentX += 80;
         
         // Draw FKDR
         if (showFkdr) {
-            String fkdrText = p.fkdr < 0 ? "-" : String.format("%.2f", p.fkdr);
-            int fkdrColor = getStatColor(p.fkdr, 3.0, 6.0);
+            String fkdrText = p.loading ? "-" : p.fkdr < 0 ? "-" : String.format("%.1f", p.fkdr);
+            int fkdrColor = p.loading ? TEXT_DIM : getStatColor(p.fkdr, 3.0, 6.0);
             drawText(fkdrText, currentX, y + 4, fkdrColor);
-            currentX += 45;
+            currentX += 40;
         }
         
         // Draw WLR
         if (showWlr) {
-            String wlrText = p.wlr < 0 ? "-" : String.format("%.2f", p.wlr);
-            int wlrColor = getStatColor(p.wlr, 2.0, 4.0);
+            String wlrText = p.loading ? "-" : p.wlr < 0 ? "-" : String.format("%.1f", p.wlr);
+            int wlrColor = p.loading ? TEXT_DIM : getStatColor(p.wlr, 2.0, 4.0);
             drawText(wlrText, currentX, y + 4, wlrColor);
-            currentX += 40;
+            currentX += 35;
         }
         
         // Draw Winstreak
         if (showStreak) {
-            String wsText = p.winstreak < 0 ? "-" : String.valueOf(p.winstreak);
-            int wsColor = p.winstreak >= 10 ? 0xFFFFCC44 : p.winstreak >= 5 ? 0xFF44DD66 : TEXT_DIM;
+            String wsText = p.loading ? "-" : p.winstreak < 0 ? "-" : String.valueOf(p.winstreak);
+            int wsColor = p.loading ? TEXT_DIM : p.winstreak >= 10 ? 0xFFFFCC44 : p.winstreak >= 5 ? 0xFF44DD66 : TEXT_DIM;
             drawText(wsText, currentX, y + 4, wsColor);
-            currentX += 35;
+            currentX += 30;
         }
         
-        // Draw threat score
+        // Draw threat score with small bar
         if (showThreat) {
             int threat = (int) p.threatScore;
-            String threatText = String.valueOf(threat);
+            String threatText = p.loading ? "-" : String.valueOf(threat);
             int threatColor = getThreatColor(threat);
             drawText(threatText, currentX, y + 4, threatColor);
+            currentX += 18;
             
-            // Draw threat bar
-            if (threat > 0) {
-                int barWidth = 30;
+            // Draw mini threat bar
+            if (!p.loading && threat > 0) {
+                int barWidth = 22;
                 int barHeight = 3;
-                int barY = y + LINE_HEIGHT - barHeight - 2;
+                int barY = y + LINE_HEIGHT - barHeight - 3;
                 
                 // Background
                 fillRect(currentX, barY, barWidth, barHeight, 0x33FFFFFF);
@@ -248,7 +287,11 @@ public class IntelHudOverlay {
                 skinIsSheet.put(name, true);
             }
             
+            // Proper GL state for rendering
+            GlStateManager.pushMatrix();
             GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+            GlStateManager.enableAlpha();
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
             
@@ -263,6 +306,7 @@ public class IntelHudOverlay {
             }
             
             GlStateManager.color(1f, 1f, 1f, 1f);
+            GlStateManager.popMatrix();
         } catch (Exception ignored) {}
     }
     
