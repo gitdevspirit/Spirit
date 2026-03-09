@@ -443,7 +443,7 @@ public class IntelGui extends GuiScreen {
 
         // Get HUD overlay instance
         myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
-            myau.module.ModuleManager.getModule("LobbyIntel");
+            myau.Myau.moduleManager.getModule("LobbyIntel");
         if (lobbyIntel == null) {
             gl(); mc.fontRendererObj.drawString("LobbyIntel module not found", innerX, y, COL_DIM, false);
             return;
@@ -759,7 +759,7 @@ public class IntelGui extends GuiScreen {
             int settingsW = SETTINGS_WIDTH - 24;
             
             myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
-                myau.module.ModuleManager.getModule("LobbyIntel");
+                myau.Myau.moduleManager.getModule("LobbyIntel");
             if (lobbyIntel != null) {
                 IntelHudOverlay hud = lobbyIntel.getHudOverlay();
                 if (hud != null) {
@@ -863,7 +863,7 @@ public class IntelGui extends GuiScreen {
         int settingsW = SETTINGS_WIDTH - 24;
         
         myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
-            myau.module.ModuleManager.getModule("LobbyIntel");
+            myau.Myau.moduleManager.getModule("LobbyIntel");
         if (lobbyIntel == null) return;
         IntelHudOverlay hud = lobbyIntel.getHudOverlay();
         if (hud == null) return;
