@@ -207,61 +207,47 @@ public class IntelHudOverlay {
             currentX += HEAD_SIZE + 4;
         }
         
-        // Draw name
-        String displayName = p.name;
-        if (displayName.length() > 10) displayName = displayName.substring(0, 10);
-        
+        // Draw full name (no truncation)
         int nameColor = p.cheater ? 0xFFFF4444 : TEXT_BRIGHT;
         if (p.threatScore >= 75) nameColor = ACCENT; // Pink for high threat
         
-        drawText(displayName, currentX, y + 4, nameColor);
+        drawText(p.name, currentX, y + 4, nameColor);
         currentX += 80;
         
-        // Draw FKDR
+        // Draw FKDR (centered)
         if (showFkdr) {
             String fkdrText = p.loading ? "-" : p.fkdr < 0 ? "-" : String.format("%.1f", p.fkdr);
             int fkdrColor = p.loading ? TEXT_DIM : getStatColor(p.fkdr, 3.0, 6.0);
-            drawText(fkdrText, currentX, y + 4, fkdrColor);
+            int fkdrWidth = mc.fontRendererObj.getStringWidth(fkdrText);
+            drawText(fkdrText, currentX + (40 - fkdrWidth) / 2, y + 4, fkdrColor);
             currentX += 40;
         }
         
-        // Draw WLR
+        // Draw WLR (centered)
         if (showWlr) {
             String wlrText = p.loading ? "-" : p.wlr < 0 ? "-" : String.format("%.1f", p.wlr);
             int wlrColor = p.loading ? TEXT_DIM : getStatColor(p.wlr, 2.0, 4.0);
-            drawText(wlrText, currentX, y + 4, wlrColor);
+            int wlrWidth = mc.fontRendererObj.getStringWidth(wlrText);
+            drawText(wlrText, currentX + (35 - wlrWidth) / 2, y + 4, wlrColor);
             currentX += 35;
         }
         
-        // Draw Winstreak
+        // Draw Winstreak (centered)
         if (showStreak) {
             String wsText = p.loading ? "-" : p.winstreak < 0 ? "-" : String.valueOf(p.winstreak);
             int wsColor = p.loading ? TEXT_DIM : p.winstreak >= 10 ? 0xFFFFCC44 : p.winstreak >= 5 ? 0xFF44DD66 : TEXT_DIM;
-            drawText(wsText, currentX, y + 4, wsColor);
+            int wsWidth = mc.fontRendererObj.getStringWidth(wsText);
+            drawText(wsText, currentX + (30 - wsWidth) / 2, y + 4, wsColor);
             currentX += 30;
         }
         
-        // Draw threat score with small bar
+        // Draw threat score (centered, no bar)
         if (showThreat) {
             int threat = (int) p.threatScore;
             String threatText = p.loading ? "-" : String.valueOf(threat);
             int threatColor = getThreatColor(threat);
-            drawText(threatText, currentX, y + 4, threatColor);
-            currentX += 18;
-            
-            // Draw mini threat bar
-            if (!p.loading && threat > 0) {
-                int barWidth = 22;
-                int barHeight = 3;
-                int barY = y + LINE_HEIGHT - barHeight - 3;
-                
-                // Background
-                fillRect(currentX, barY, barWidth, barHeight, 0x33FFFFFF);
-                
-                // Filled portion
-                int fillWidth = (int) ((threat / 100.0) * barWidth);
-                fillRect(currentX, barY, fillWidth, barHeight, threatColor);
-            }
+            int threatWidth = mc.fontRendererObj.getStringWidth(threatText);
+            drawText(threatText, currentX + (45 - threatWidth) / 2, y + 4, threatColor);
         }
     }
     
