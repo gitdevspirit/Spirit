@@ -68,6 +68,12 @@ public class IntelGui extends GuiScreen {
 
     private String  searchText  = "";
     private boolean searchFocus = false;
+    
+    // Settings panel
+    private boolean showSettings = false;
+    private static final int SETTINGS_WIDTH = 280;
+    private boolean settingsMouseDown = false;
+    private int settingsDragTarget = -1; // Which slider is being dragged (-1 = none)
 
     // Skin cache — keyed by player name -> ResourceLocation
     private final java.util.Map<String, ResourceLocation> skinCache     = new java.util.HashMap<>();
@@ -100,13 +106,15 @@ public class IntelGui extends GuiScreen {
 
         fillRect(0, 0, sw, sh, BG_FULL);
 
-        int detailW = selected != null ? Math.min(sw / 3, 320) : 0;
-        int listW   = sw - detailW;
+        int settingsW = showSettings ? SETTINGS_WIDTH : 0;
+        int detailW = selected != null && !showSettings ? Math.min(sw / 3, 320) : 0;
+        int listW   = sw - detailW - settingsW;
 
         drawHeader(sw, mx, my);
         drawSearchBar(listW, mx, my);
         drawList(listW, sh, mx, my, sr);
-        if (selected != null) drawDetail(listW, detailW, sh);
+        if (selected != null && !showSettings) drawDetail(listW, detailW, sh);
+        if (showSettings) drawSettings(sw - SETTINGS_WIDTH, SETTINGS_WIDTH, sh, mx, my);
         drawFooter(sw, sh);
 
         super.drawScreen(mx, my, pt);
@@ -158,6 +166,16 @@ public class IntelGui extends GuiScreen {
         RoundedUtils.drawRoundedRect(rx, ry, rw, 16, 4, rHov ? 0x33FFFFFF : 0x11FFFFFF);
         if (rHov) RoundedUtils.drawRoundedOutline(rx, ry, rw, 16, 4, 1f, 0x33FFFFFF);
         gl(); mc.fontRendererObj.drawString(ref, rx + 7f, ry + 4f, rHov ? COL_BRIGHT : COL_MID, false);
+        
+        // Settings button - left of refresh
+        String settings = "\u2699";
+        int sx = rx - 26, sy = ry;
+        boolean sHov = mx >= sx && mx < sx + 20 && my >= sy && my < sy + 16;
+        boolean sActive = showSettings;
+        RoundedUtils.drawRoundedRect(sx, sy, 20, 16, 4, sActive ? 0x55E991B8 : sHov ? 0x33FFFFFF : 0x11FFFFFF);
+        if (sActive) RoundedUtils.drawRoundedOutline(sx, sy, 20, 16, 4, 1f, COL_ACCENT);
+        else if (sHov) RoundedUtils.drawRoundedOutline(sx, sy, 20, 16, 4, 1f, 0x33FFFFFF);
+        gl(); mc.fontRendererObj.drawString(settings, sx + 6f, sy + 3f, sActive ? COL_ACCENT : sHov ? COL_BRIGHT : COL_MID, false);
     }
 
     // ── Search bar ────────────────────────────────────────────────────────────
@@ -401,6 +419,152 @@ public class IntelGui extends GuiScreen {
         }
     }
 
+    // ── Settings Panel ────────────────────────────────────────────────────────
+
+    private void drawSettings(int x, int w, int sh, int mx, int my) {
+        fillRect(x, 0, w, sh, BG_DETAIL);
+        fillRect(x, 0, 1, sh, COL_DIVIDER);
+
+        int innerX = x + 12;
+        int innerW = w - 24;
+        int y = 14;
+
+        // Title
+        gl();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(innerX, y, 0);
+        GlStateManager.scale(1.1f, 1.1f, 1f);
+        mc.fontRendererObj.drawString("HUD OVERLAY", 0, 0, COL_ACCENT, false);
+        GlStateManager.popMatrix();
+        y += 22;
+
+        fillRect(innerX, y, innerW, 1, COL_DIVIDER);
+        y += 10;
+
+        // Get HUD overlay instance
+        myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+            myau.module.ModuleManager.getModule("LobbyIntel");
+        if (lobbyIntel == null) {
+            gl(); mc.fontRendererObj.drawString("LobbyIntel module not found", innerX, y, COL_DIM, false);
+            return;
+        }
+        IntelHudOverlay hud = lobbyIntel.getHudOverlay();
+        if (hud == null) {
+            gl(); mc.fontRendererObj.drawString("HUD overlay not initialized", innerX, y, COL_DIM, false);
+            return;
+        }
+
+        // Enable/Disable toggle
+        y = drawToggle(innerX, y, innerW, "Enabled", hud.isEnabled(), mx, my, () -> hud.setEnabled(!hud.isEnabled()));
+
+        y += 8;
+        fillRect(innerX, y, innerW, 1, COL_DIVIDER);
+        y += 10;
+
+        // Position section
+        gl(); mc.fontRendererObj.drawString("POSITION", innerX, y, COL_DIM, false); y += 14;
+        y = drawSlider(innerX, y, innerW, "X Position", hud.getPosX(), 0, 1920, mx, my, val -> hud.setPosition(val, hud.getPosY()));
+        y = drawSlider(innerX, y, innerW, "Y Position", hud.getPosY(), 0, 1080, mx, my, val -> hud.setPosition(hud.getPosX(), val));
+
+        y += 8;
+        fillRect(innerX, y, innerW, 1, COL_DIVIDER);
+        y += 10;
+
+        // Display section
+        gl(); mc.fontRendererObj.drawString("DISPLAY", innerX, y, COL_DIM, false); y += 14;
+        y = drawSlider(innerX, y, innerW, "Scale", (int)(hud.getScale() * 100), 50, 200, mx, my, val -> hud.setScale(val / 100f));
+        y = drawSlider(innerX, y, innerW, "Max Players", hud.getMaxPlayers(), 1, 20, mx, my, hud::setMaxPlayers);
+
+        y += 8;
+        fillRect(innerX, y, innerW, 1, COL_DIVIDER);
+        y += 10;
+
+        // Columns section
+        gl(); mc.fontRendererObj.drawString("COLUMNS", innerX, y, COL_DIM, false); y += 14;
+        y = drawToggle(innerX, y, innerW, "Player Heads", hud.getShowHeads(), mx, my, () -> hud.setShowHeads(!hud.getShowHeads()));
+        y = drawToggle(innerX, y, innerW, "FKDR", hud.getShowFkdr(), mx, my, () -> hud.setShowFkdr(!hud.getShowFkdr()));
+        y = drawToggle(innerX, y, innerW, "WLR", hud.getShowWlr(), mx, my, () -> hud.setShowWlr(!hud.getShowWlr()));
+        y = drawToggle(innerX, y, innerW, "Winstreak", hud.getShowStreak(), mx, my, () -> hud.setShowStreak(!hud.getShowStreak()));
+        y = drawToggle(innerX, y, innerW, "Threat Score", hud.getShowThreat(), mx, my, () -> hud.setShowThreat(!hud.getShowThreat()));
+        y = drawToggle(innerX, y, innerW, "Team Colors", hud.getShowTeamColor(), mx, my, () -> hud.setShowTeamColor(!hud.getShowTeamColor()));
+
+        y += 8;
+        fillRect(innerX, y, innerW, 1, COL_DIVIDER);
+        y += 10;
+
+        // Sort section
+        gl(); mc.fontRendererObj.drawString("SORTING", innerX, y, COL_DIM, false); y += 14;
+        String[] sortModes = {"Threat", "FKDR", "Name"};
+        String currentMode = hud.getSortMode();
+        int modeIndex = currentMode.equals("threat") ? 0 : currentMode.equals("fkdr") ? 1 : 2;
+        y = drawDropdown(innerX, y, innerW, "Sort By", sortModes, modeIndex, mx, my, idx -> {
+            hud.setSortMode(idx == 0 ? "threat" : idx == 1 ? "fkdr" : "name");
+        });
+    }
+
+    private int drawToggle(int x, int y, int w, String label, boolean value, int mx, int my, Runnable onClick) {
+        boolean hov = mx >= x && mx < x + w && my >= y && my < y + 16;
+        
+        gl(); mc.fontRendererObj.drawString(label, x, y + 4, hov ? COL_BRIGHT : COL_MID, false);
+        
+        int toggleX = x + w - 32;
+        int toggleY = y + 2;
+        int toggleW = 32;
+        int toggleH = 12;
+        
+        // Background
+        int bgColor = value ? 0x88E991B8 : 0x44444455;
+        RoundedUtils.drawRoundedRect(toggleX, toggleY, toggleW, toggleH, toggleH / 2f, bgColor);
+        
+        // Knob
+        int knobX = value ? toggleX + toggleW - toggleH : toggleX;
+        int knobColor = value ? COL_ACCENT : 0xFF666677;
+        RoundedUtils.drawRoundedRect(knobX, toggleY, toggleH, toggleH, toggleH / 2f, knobColor);
+        
+        return y + 20;
+    }
+
+    private int drawSlider(int x, int y, int w, String label, int value, int min, int max, int mx, int my, java.util.function.Consumer<Integer> onChange) {
+        gl(); mc.fontRendererObj.drawString(label, x, y, COL_DIM, false);
+        String valStr = String.valueOf(value);
+        mc.fontRendererObj.drawString(valStr, x + w - mc.fontRendererObj.getStringWidth(valStr), y, COL_BRIGHT, false);
+        y += 10;
+        
+        int barY = y + 2;
+        int barH = 4;
+        
+        // Background
+        fillRect(x, barY, w, barH, 0x33FFFFFF);
+        
+        // Filled portion
+        float pct = (value - min) / (float)(max - min);
+        int fillW = (int)(w * pct);
+        fillRect(x, barY, fillW, barH, COL_ACCENT);
+        
+        // Knob
+        int knobX = x + fillW - 4;
+        int knobY = barY - 2;
+        fillRect(knobX, knobY, 8, 8, COL_ACCENT);
+        
+        return y + 16;
+    }
+
+    private int drawDropdown(int x, int y, int w, String label, String[] options, int selected, int mx, int my, java.util.function.Consumer<Integer> onChange) {
+        gl(); mc.fontRendererObj.drawString(label, x, y, COL_DIM, false);
+        y += 10;
+        
+        int btnH = 18;
+        boolean hov = mx >= x && mx < x + w && my >= y && my < y + btnH;
+        
+        RoundedUtils.drawRoundedRect(x, y, w, btnH, 3, hov ? 0x33FFFFFF : 0x22000000);
+        RoundedUtils.drawRoundedOutline(x, y, w, btnH, 3, 1f, hov ? COL_ACCENT : 0x33FFFFFF);
+        
+        gl(); mc.fontRendererObj.drawString(options[selected], x + 6f, y + 5f, COL_BRIGHT, false);
+        mc.fontRendererObj.drawString("\u25BC", x + w - 12f, y + 5f, COL_DIM, false);
+        
+        return y + 22;
+    }
+
     // ── Footer ────────────────────────────────────────────────────────────────
 
     private void drawFooter(int sw, int sh) {
@@ -506,6 +670,7 @@ public class IntelGui extends GuiScreen {
                                 ResourceLocation loc = mc.getTextureManager()
                                         .getDynamicTextureLocation("intel_face_" + nameFinal, dt);
                                 skinCache.put(nameFinal, loc);
+                                skinIsSheet.put(nameFinal, false); // Mark as pre-cropped
                                 skinFetchState.put(nameFinal, "done");
                             });
                         } catch (Exception e) {
@@ -518,20 +683,28 @@ public class IntelGui extends GuiScreen {
             // 4. Fallback: Steve
             if (skin == null) skin = new ResourceLocation("textures/entity/steve.png");
 
+            // Proper GL state for rendering
+            GlStateManager.pushMatrix();
             GlStateManager.enableBlend();
+            GlStateManager.tryBlendFuncSeparate(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA, GL11.GL_ONE, GL11.GL_ZERO);
+            GlStateManager.enableAlpha();
             GlStateManager.color(1f, 1f, 1f, 1f);
             mc.getTextureManager().bindTexture(skin);
 
-            boolean isSheet = skinIsSheet.getOrDefault(name, false);
+            boolean isSheet = skinIsSheet.getOrDefault(name, true); // Default to sheet for safety
             if (isSheet) {
-                // Full 64x64 skin sheet — draw face region (8,8)+(40,8) with hat overlay
+                // Full 64x64 skin sheet — draw face region (8,8) with hat overlay (40,8)
+                // Base face layer
                 Gui.drawScaledCustomSizeModalRect(x, y, 8f, 8f, 8, 8, size, size, 64f, 64f);
+                // Hat/overlay layer
                 Gui.drawScaledCustomSizeModalRect(x, y, 40f, 8f, 8, 8, size, size, 64f, 64f);
             } else {
                 // Pre-cropped 16x16 face texture — draw full image
                 Gui.drawScaledCustomSizeModalRect(x, y, 0f, 0f, 16, 16, size, size, 16f, 16f);
             }
+            
             GlStateManager.color(1f, 1f, 1f, 1f);
+            GlStateManager.popMatrix();
         } catch (Exception ignored) {}
     }
 
@@ -571,6 +744,78 @@ public class IntelGui extends GuiScreen {
         if (mx >= rx && mx < rx + rw && my >= ry && my < ry + 16) {
             IntelManager.getInstance().refresh(); return;
         }
+        
+        // Settings button
+        int sx = rx - 26, sy = ry;
+        if (mx >= sx && mx < sx + 20 && my >= sy && my < sy + 16) {
+            showSettings = !showSettings;
+            if (showSettings) selected = null; // Close detail when opening settings
+            return;
+        }
+        
+        // Settings panel interactions
+        if (showSettings) {
+            int settingsX = sw - SETTINGS_WIDTH + 12;
+            int settingsW = SETTINGS_WIDTH - 24;
+            
+            myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+                myau.module.ModuleManager.getModule("LobbyIntel");
+            if (lobbyIntel != null) {
+                IntelHudOverlay hud = lobbyIntel.getHudOverlay();
+                if (hud != null) {
+                    int y = 14 + 22 + 10; // Start after title
+                    
+                    // Enabled toggle
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setEnabled(!hud.isEnabled());
+                        return;
+                    }
+                    y += 20 + 8 + 10;
+                    
+                    // Position sliders (skip - need drag handling)
+                    y += 14 + 16 + 16 + 8 + 10;
+                    
+                    // Display sliders (skip - need drag handling)
+                    y += 14 + 16 + 16 + 8 + 10;
+                    
+                    // Columns toggles
+                    y += 14;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowHeads(!hud.getShowHeads()); return;
+                    }
+                    y += 20;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowFkdr(!hud.getShowFkdr()); return;
+                    }
+                    y += 20;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowWlr(!hud.getShowWlr()); return;
+                    }
+                    y += 20;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowStreak(!hud.getShowStreak()); return;
+                    }
+                    y += 20;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowThreat(!hud.getShowThreat()); return;
+                    }
+                    y += 20;
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                        hud.setShowTeamColor(!hud.getShowTeamColor()); return;
+                    }
+                    y += 20 + 8 + 10 + 14;
+                    
+                    // Sort dropdown
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y + 10 && my < y + 10 + 18) {
+                        String mode = hud.getSortMode();
+                        String newMode = mode.equals("threat") ? "fkdr" : mode.equals("fkdr") ? "name" : "threat";
+                        hud.setSortMode(newMode);
+                        return;
+                    }
+                }
+            }
+            return; // Clicked in settings panel, don't propagate
+        }
 
         // Search bar focus
         int sbx = 10, sby = HDR + 5, sbw = 220, sbh = SRCH - 10;
@@ -606,6 +851,50 @@ public class IntelGui extends GuiScreen {
         }
 
         super.mouseClicked(mx, my, button);
+    }
+    
+    @Override
+    protected void mouseClickMove(int mx, int my, int button, long timeSinceLastClick) {
+        if (!showSettings) return;
+        
+        ScaledResolution sr = new ScaledResolution(mc);
+        int sw = sr.getScaledWidth();
+        int settingsX = sw - SETTINGS_WIDTH + 12;
+        int settingsW = SETTINGS_WIDTH - 24;
+        
+        myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+            myau.module.ModuleManager.getModule("LobbyIntel");
+        if (lobbyIntel == null) return;
+        IntelHudOverlay hud = lobbyIntel.getHudOverlay();
+        if (hud == null) return;
+        
+        // X Position slider
+        int y1 = 14 + 22 + 10 + 20 + 8 + 10 + 14;
+        if (my >= y1 && my < y1 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+            int val = (int)((mx - settingsX) / (float)settingsW * 1920);
+            hud.setPosition(Math.max(0, Math.min(1920, val)), hud.getPosY());
+        }
+        
+        // Y Position slider
+        int y2 = y1 + 16;
+        if (my >= y2 && my < y2 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+            int val = (int)((mx - settingsX) / (float)settingsW * 1080);
+            hud.setPosition(hud.getPosX(), Math.max(0, Math.min(1080, val)));
+        }
+        
+        // Scale slider
+        int y3 = y2 + 16 + 8 + 10 + 14;
+        if (my >= y3 && my < y3 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+            int val = 50 + (int)((mx - settingsX) / (float)settingsW * 150);
+            hud.setScale(Math.max(0.5f, Math.min(2.0f, val / 100f)));
+        }
+        
+        // Max Players slider
+        int y4 = y3 + 16;
+        if (my >= y4 && my < y4 + 16 && mx >= settingsX && mx < settingsX + settingsW) {
+            int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
+            hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
+        }
     }
 
     @Override
