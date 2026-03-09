@@ -2,10 +2,12 @@ package myau.module.modules;
 
 import myau.event.EventTarget;
 import myau.events.LoadWorldEvent;
+import myau.events.Render2DEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
 import myau.property.properties.TextProperty;
 import myau.ui.intel.IntelGui;
+import myau.ui.intel.IntelHudOverlay;
 import myau.ui.intel.IntelManager;
 import net.minecraft.client.Minecraft;
 
@@ -24,11 +26,13 @@ public class LobbyIntel extends Module {
             System.getProperty("user.home") + detectDefaultLogPath());
 
     private final IntelGui gui = new IntelGui();
+    private final IntelHudOverlay hudOverlay = new IntelHudOverlay();
     private boolean scannedThisSession = false;
 
     public LobbyIntel() {
         super("LobbyIntel", false);
         IntelManager.getInstance().setGui(gui);
+        IntelManager.getInstance().setHudOverlay(hudOverlay);
         // Try to auto-detect key on startup
         tryAutoDetectKey();
     }
@@ -45,6 +49,14 @@ public class LobbyIntel extends Module {
     }
 
     @EventTarget
+    public void onRender2D(Render2DEvent event) {
+        // Render HUD overlay during gameplay
+        if (mc.currentScreen == null && hudOverlay.isEnabled()) {
+            hudOverlay.render();
+        }
+    }
+
+    @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         if (!autoScan.getValue()) return;
         // Re-scan on every world load (catches new BW game joins)
@@ -56,6 +68,10 @@ public class LobbyIntel extends Module {
                 IntelManager.getInstance().scanLobby();
             }
         });
+    }
+
+    public IntelHudOverlay getHudOverlay() {
+        return hudOverlay;
     }
 
     /** Scan the log file for a Hypixel API key */
