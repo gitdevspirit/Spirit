@@ -23,27 +23,35 @@ import net.minecraft.util.EnumFacing;
 public class Autoblock extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting  range          = register(new SliderSetting("Range",              3.5, 1.0,  8.0,  0.1));
-    public final SliderSetting  minAPS         = register(new SliderSetting("Min APS",             6,   1,    20,   1));
-    public final SliderSetting  maxAPS         = register(new SliderSetting("Max APS",             10,  1,    20,   1));
-    public final SliderSetting  lagChance      = register(new SliderSetting("Lag Chance (%)",     0,   0,    100,  1));
-    public final SliderSetting  lagMaxDuration = register(new SliderSetting("Lag Max (ms)",       200, 50,   1000, 10));
-    public final BooleanSetting preventDelay   = register(new BooleanSetting("Prevent Delay",     true));
-    public final BooleanSetting blockAgain     = register(new BooleanSetting("Block Again",       true));
-    public final BooleanSetting forceAnimation = register(new BooleanSetting("Force Animation",   false));
-    public final BooleanSetting animInRange    = register(new BooleanSetting("Anim Only In Range", true));
-    public final BooleanSetting requireLMB     = register(new BooleanSetting("Require LMB",       false));
-    public final BooleanSetting requireRMB     = register(new BooleanSetting("Require RMB",       false));
-    public final BooleanSetting requireDamaged = register(new BooleanSetting("Only When Damaged",  false));
+    public final SliderSetting  range           = register(new SliderSetting("Range",              3.5, 1.0,  8.0,  0.1));
+    public final SliderSetting  blockDuration   = register(new SliderSetting("Block Duration (ms)", 150, 50,  500,  10));
+    public final SliderSetting  unblockDuration = register(new SliderSetting("Unblock Duration (ms)", 50, 10, 200, 10));
+    public final SliderSetting  lagChance       = register(new SliderSetting("Lag Chance (%)",     0,   0,    100,  1));
+    public final SliderSetting  lagMaxDuration  = register(new SliderSetting("Lag Max (ms)",       200, 50,   1000, 10));
+    public final BooleanSetting preventDelay    = register(new BooleanSetting("Prevent Delay",     true));
+    public final BooleanSetting blockAgain      = register(new BooleanSetting("Block Again",       true));
+    public final BooleanSetting forceAnimation  = register(new BooleanSetting("Force Animation",   false));
+    public final BooleanSetting animInRange     = register(new BooleanSetting("Anim Only In Range", true));
+    public final BooleanSetting requireLMB      = register(new BooleanSetting("Require LMB",       false));
+    public final BooleanSetting requireRMB      = register(new BooleanSetting("Require RMB",       false));
+    public final BooleanSetting requireDamaged  = register(new BooleanSetting("Only When Damaged",  false));
     private static final Random rng = new Random();
     private boolean blockingState  = false;
     private boolean fakeBlockState = false;
-    private int     blockTick      = 0;
-    private int     holdTicks      = 0; // ticks to stay blocked before releasing
+    private long    blockStartMs   = 0L;
+    private long    unblockStartMs = 0L;
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
     private int     lastHurtTime   = 0;
+    
+    private enum BlockState {
+        IDLE,      // Not blocking
+        BLOCKING,  // Currently blocking
+        UNBLOCKED  // Released block, waiting to block again
+    }
+    
+    private BlockState state = BlockState.IDLE;
 
     public Autoblock() { super("Autoblock", false); }
 
@@ -64,13 +72,14 @@ public class Autoblock extends Module {
     @Override
     public void onEnabled() {
         if (mc.thePlayer != null) lastHurtTime = mc.thePlayer.hurtResistantTime;
+        state = BlockState.IDLE;
     }
 
     @Override
     public void onDisabled() {
         if (blockingState) stopBlock();
         if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
-        blockingState = false; fakeBlockState = false; blockTick = 0; holdTicks = 0;
+        blockingState = false; fakeBlockState = false; state = BlockState.IDLE;
     }
 
     @EventTarget
@@ -90,7 +99,7 @@ public class Autoblock extends Module {
         if (!checkConditions() || !hasTarget) {
             if (blockingState) stopBlock();
             fakeBlockState = false;
-            blockTick = 0;
+            state = BlockState.IDLE;
             return;
         }
 
@@ -104,29 +113,39 @@ public class Autoblock extends Module {
             return;
         }
 
-        switch (blockTick) {
-            case 0:
-                // Start blocking. holdTicks = how many ticks to stay blocked.
-                // At 20 TPS: 20 APS = 1 tick, 10 APS = 2 ticks, 5 APS = 4 ticks
-                double minAps = Math.min(minAPS.getValue(), maxAPS.getValue());
-                double maxAps = Math.max(minAPS.getValue(), maxAPS.getValue());
-                double aps = minAps + rng.nextDouble() * (maxAps - minAps);
-                holdTicks = Math.max(1, (int) Math.round(20.0 / aps));
+        long now = System.currentTimeMillis();
+
+        switch (state) {
+            case IDLE:
+                // Start blocking
                 if (!isPlayerBlocking()) startBlock();
-                blockTick = 1;
+                blockStartMs = now;
+                state = BlockState.BLOCKING;
                 break;
-            case 1:
-                holdTicks--;
-                if (holdTicks <= 0) {
+                
+            case BLOCKING:
+                // Stay blocked for the configured duration
+                long blockElapsed = now - blockStartMs;
+                if (blockElapsed >= blockDuration.getValue()) {
+                    // Time to unblock
                     if (isPlayerBlocking()) {
                         stopBlock();
                         if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
                             Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
                             lagging = true;
-                            lagStartMs = System.currentTimeMillis();
+                            lagStartMs = now;
                         }
                     }
-                    blockTick = 0;
+                    unblockStartMs = now;
+                    state = BlockState.UNBLOCKED;
+                }
+                break;
+                
+            case UNBLOCKED:
+                // Stay unblocked briefly, then re-block
+                long unblockElapsed = now - unblockStartMs;
+                if (unblockElapsed >= unblockDuration.getValue()) {
+                    state = BlockState.IDLE; // Will re-block on next tick
                 }
                 break;
         }
@@ -144,8 +163,13 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        holdTicks = 0; // release immediately after attack
-        blockTick = 1;
+        // On attack, briefly unblock then re-block
+        // This allows the attack to go through but maintains blocking
+        if (state == BlockState.BLOCKING) {
+            if (isPlayerBlocking()) stopBlock();
+            unblockStartMs = System.currentTimeMillis();
+            state = BlockState.UNBLOCKED;
+        }
     }
 
     @EventTarget
@@ -156,6 +180,10 @@ public class Autoblock extends Module {
                 (net.minecraft.network.play.server.S06PacketUpdateHealth) event.getPacket();
             if (pkt.getHealth() < mc.thePlayer.getHealth()) {
                 lastDamagedMs = System.currentTimeMillis();
+                // When taking damage, ensure we're blocking
+                if (state != BlockState.BLOCKING && !lagging) {
+                    state = BlockState.IDLE; // Will start blocking on next tick
+                }
                 if (lagging && preventDelay.getValue()) {
                     Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
                     lagging = false;
@@ -176,7 +204,7 @@ public class Autoblock extends Module {
 
     private void cleanup() {
         if (blockingState) stopBlock();
-        blockingState = false; fakeBlockState = false; blockTick = 0; holdTicks = 0;
+        blockingState = false; fakeBlockState = false; state = BlockState.IDLE;
     }
 
     private boolean checkConditions() {
