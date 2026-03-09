@@ -55,7 +55,7 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onKey(KeyEvent event) {
-        if (event.getKey() == hudKeybind.getValue().intValue()) {
+        if (event.getKey() == (int) hudKeybind.getValue()) {
             boolean newState = !hudOverlay.isEnabled();
             hudOverlay.setEnabled(newState);
             String status = newState ? "&a&lON" : "&c&lOFF";
@@ -114,9 +114,9 @@ public class LobbyIntel extends Module {
                     raf.seek(start);
                     byte[] buf = new byte[(int)(fileLen - start)];
                     raf.readFully(buf);
-                    String content = new String(buf, "UTF-8");
+                    String content2 = new String(buf, "UTF-8");
 
-                    Matcher m = pattern.matcher(content);
+                    Matcher m = pattern.matcher(content2);
                     while (m.find()) {
                         lastKey = m.group(1); // keep last match = most recent
                     }
