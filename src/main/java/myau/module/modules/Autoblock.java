@@ -24,8 +24,9 @@ public class Autoblock extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final SliderSetting  range           = register(new SliderSetting("Range",              3.5, 1.0,  8.0,  0.1));
-    public final SliderSetting  blockDuration   = register(new SliderSetting("Block Duration (ms)", 150, 50,  500,  10));
-    public final SliderSetting  unblockDuration = register(new SliderSetting("Unblock Duration (ms)", 50, 10, 200, 10));
+    public final SliderSetting  blockDuration   = register(new SliderSetting("Block Duration (ms)", 100, 50,  500,  10));
+    public final SliderSetting  unblockDuration = register(new SliderSetting("Unblock Duration (ms)", 80, 10, 200, 10));
+    public final SliderSetting  postHitDelay    = register(new SliderSetting("Post-Hit Delay (ms)", 50, 0, 200, 10));
     public final SliderSetting  lagChance       = register(new SliderSetting("Lag Chance (%)",     0,   0,    100,  1));
     public final SliderSetting  lagMaxDuration  = register(new SliderSetting("Lag Max (ms)",       200, 50,   1000, 10));
     public final BooleanSetting preventDelay    = register(new BooleanSetting("Prevent Delay",     true));
@@ -40,6 +41,7 @@ public class Autoblock extends Module {
     private boolean fakeBlockState = false;
     private long    blockStartMs   = 0L;
     private long    unblockStartMs = 0L;
+    private long    lastAttackMs   = 0L;
     private boolean lagging        = false;
     private long    lagStartMs     = 0L;
     private long    lastDamagedMs  = 0L;
@@ -114,6 +116,7 @@ public class Autoblock extends Module {
         }
 
         long now = System.currentTimeMillis();
+        long timeSinceAttack = now - lastAttackMs;
 
         switch (state) {
             case IDLE:
@@ -126,7 +129,10 @@ public class Autoblock extends Module {
             case BLOCKING:
                 // Stay blocked for the configured duration
                 long blockElapsed = now - blockStartMs;
-                if (blockElapsed >= blockDuration.getValue()) {
+                // Add post-hit delay: don't unblock until enough time has passed since last attack
+                boolean canUnblock = timeSinceAttack >= postHitDelay.getValue();
+                
+                if (blockElapsed >= blockDuration.getValue() && canUnblock) {
                     // Time to unblock
                     if (isPlayerBlocking()) {
                         stopBlock();
@@ -163,12 +169,14 @@ public class Autoblock extends Module {
     @EventTarget
     public void onAttack(AttackEvent event) {
         if (!isEnabled()) return;
-        // On attack, briefly unblock then re-block
-        // This allows the attack to go through but maintains blocking
+        lastAttackMs = System.currentTimeMillis();
+        // Keep blocking during and after attack
+        // Just reset the block timer to maintain blocking
         if (state == BlockState.BLOCKING) {
-            if (isPlayerBlocking()) stopBlock();
-            unblockStartMs = System.currentTimeMillis();
-            state = BlockState.UNBLOCKED;
+            blockStartMs = System.currentTimeMillis(); // Reset timer to stay blocked
+        } else if (state != BlockState.BLOCKING) {
+            // If not blocking, start blocking immediately after attack
+            state = BlockState.IDLE; // Will start blocking on next update
         }
     }
 
