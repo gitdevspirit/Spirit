@@ -816,6 +816,8 @@ public class IntelGui extends GuiScreen {
                     // Scale slider - handled by mouseDragged
                     y += 16;
                     // Max Players slider - handled by mouseDragged
+                    y += 16;
+                    // Background Opacity slider - handled by mouseDragged
                     y += 16 + 8 + 10;
                     
                     // Skip "COLUMNS" label
