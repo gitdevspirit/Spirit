@@ -797,59 +797,67 @@ public class IntelGui extends GuiScreen {
                     // Skip title and divider
                     y += 22 + 10;
                     
-                    // Enabled toggle
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    // Enabled toggle (visual height 16px, returns +20)
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setEnabled(!hud.isEnabled());
                         return;
                     }
-                    y += 20 + 8 + 10;
+                    y += 20; // After toggle
                     
-                    // Skip "POSITION" label
+                    // Divider + gap
+                    y += 8 + 10;
+                    // "POSITION" label
                     y += 14;
                     // X Position slider - handled by mouseDragged
                     y += 16;
                     // Y Position slider - handled by mouseDragged  
-                    y += 16 + 8 + 10;
+                    y += 16;
                     
-                    // Skip "DISPLAY" label
+                    // Divider + gap
+                    y += 8 + 10;
+                    // "DISPLAY" label
                     y += 14;
                     // Scale slider - handled by mouseDragged
                     y += 16;
                     // Max Players slider - handled by mouseDragged
                     y += 16;
                     // Background Opacity slider - handled by mouseDragged
-                    y += 16 + 8 + 10;
+                    y += 16;
                     
-                    // Skip "COLUMNS" label
+                    // Divider + gap
+                    y += 8 + 10;
+                    // "COLUMNS" label
                     y += 14;
                     
-                    // Columns toggles
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    // Columns toggles - each 20px clickable height
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowHeads(!hud.getShowHeads()); return;
                     }
                     y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowFkdr(!hud.getShowFkdr()); return;
                     }
                     y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowWlr(!hud.getShowWlr()); return;
                     }
                     y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowStreak(!hud.getShowStreak()); return;
                     }
                     y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowThreat(!hud.getShowThreat()); return;
                     }
                     y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
+                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setShowTeamColor(!hud.getShowTeamColor()); return;
                     }
-                    y += 20 + 8 + 10;
+                    y += 20;
                     
-                    // Skip "SORTING" label
+                    // Divider + gap
+                    y += 8 + 10;
+                    // "SORTING" label
                     y += 14;
                     
                     // Sort dropdown
