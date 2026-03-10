@@ -236,13 +236,13 @@ public class IntelHudSettingsGui extends GuiScreen {
         int closeX = popupX + POPUP_WIDTH - 28;
         int closeY = popupY + 10;
         if (mouseX >= closeX && mouseX < closeX + 18 && mouseY >= closeY && mouseY < closeY + 18) {
-            mc.displayGuiScreen(parent);
+            saveAndClose();
             return;
         }
         
         // Click outside popup closes it
         if (mouseX < popupX || mouseX > popupX + POPUP_WIDTH || mouseY < popupY || mouseY > popupY + POPUP_HEIGHT) {
-            mc.displayGuiScreen(parent);
+            saveAndClose();
             return;
         }
         
@@ -401,5 +401,15 @@ public class IntelHudSettingsGui extends GuiScreen {
     @Override
     public boolean doesGuiPauseGame() {
         return false;
+    }
+    
+    private void saveAndClose() {
+        // Save HUD settings to config
+        myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+            myau.Myau.moduleManager.getModule("LobbyIntel");
+        if (lobbyIntel != null) {
+            lobbyIntel.saveHudSettings();
+        }
+        mc.displayGuiScreen(parent);
     }
 }
