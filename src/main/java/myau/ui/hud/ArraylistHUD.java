@@ -89,13 +89,33 @@ public class ArraylistHUD {
 
         if (rows.isEmpty()) return;
 
-        // ── Render rows ───────────────────────────────────────────────────────
+        // ── Calculate max width ───────────────────────────────────────────────
+        int maxW = 0;
+        for (Row r : rows) {
+            String display = (r.isPitSub ? "  " : "") + r.name;
+            int w = mc.fontRendererObj.getStringWidth(display + r.detail);
+            if (w > maxW) maxW = w;
+        }
+
+        // ── Draw background ───────────────────────────────────────────────────
+        int bgW = maxW + padX * 2;
+        int bgH = rows.size() * lineHeight;
+        int bgX = sr.getScaledWidth() - bgW - 2;
+        int bgY = 4;
+
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
 
-        int startY = 4;
-        
+        if (drawBg) {
+            if (rounding >= 1) {
+                RoundedUtils.drawRoundedRect(bgX, bgY, bgW, bgH, rounding, 0xDD000000);
+            } else {
+                net.minecraft.client.gui.Gui.drawRect(bgX, bgY, bgX + bgW, bgY + bgH, 0xDD000000);
+            }
+        }
+
+        // ── Render rows ───────────────────────────────────────────────────────
         for (int i = 0; i < rows.size(); i++) {
             Row r = rows.get(i);
             String display = (r.isPitSub ? "  " : "") + r.name;
@@ -103,23 +123,10 @@ public class ArraylistHUD {
             int detailW = mc.fontRendererObj.getStringWidth(r.detail);
             int totalW = nameW + detailW;
             
-            // Calculate dimensions for this row
-            int rowW = totalW + padX * 2;
-            int rowH = lineHeight;
-            int rowX = sr.getScaledWidth() - rowW - 2;
-            int rowY = startY + i * rowH;
+            int rowY = bgY + i * lineHeight;
             
-            // Draw background with rounding
-            if (drawBg) {
-                if (rounding >= 1) {
-                    RoundedUtils.drawRoundedRect(rowX, rowY, rowW, rowH, rounding, 0xDD000000);
-                } else {
-                    net.minecraft.client.gui.Gui.drawRect(rowX, rowY, rowX + rowW, rowY + rowH, 0xDD000000);
-                }
-            }
-            
-            // Draw text - right aligned within the background
-            int textX = rowX + padX;
+            // Right-align text within the background
+            int textX = bgX + bgW - totalW - padX;
             int textY = rowY + padY;
             
             // Module name in orange (or custom list color)
@@ -131,12 +138,11 @@ public class ArraylistHUD {
                 mc.fontRendererObj.drawString(r.detail, textX + nameW, textY, detailRGB, shadow);
             }
             
-            // Optional: small colored bar on the right edge (like in image)
-            int barColor = detailRGB;
+            // Small colored bar on the right edge
             net.minecraft.client.gui.Gui.drawRect(
                 sr.getScaledWidth() - 2, rowY,
-                sr.getScaledWidth(), rowY + rowH,
-                barColor
+                sr.getScaledWidth(), rowY + lineHeight,
+                detailRGB
             );
         }
 
