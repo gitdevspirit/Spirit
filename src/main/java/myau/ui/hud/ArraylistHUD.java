@@ -18,17 +18,6 @@ import java.util.List;
 public class ArraylistHUD {
     private final Minecraft mc = Minecraft.getMinecraft();
 
-    // ── Settings (registered on HUD module) ───────────────────────────────────
-    // These are declared here as references but must be registered in HUD.java:
-    //   public final SliderSetting  alPadX        = register(new SliderSetting("AL Pad X",      2, 0, 10, 1));
-    //   public final SliderSetting  alPadY        = register(new SliderSetting("AL Pad Y",      1, 0, 10, 1));
-    //   public final SliderSetting  alRounding    = register(new SliderSetting("AL Rounding",   3, 0, 8,  1));
-    //   public final BooleanSetting alLowercase   = register(new BooleanSetting("AL Lowercase",  true));
-    //   public final BooleanSetting alShowDetails = register(new BooleanSetting("AL Details",    true));
-    //   public final BooleanSetting alBoundOnly   = register(new BooleanSetting("AL Bound Only", false));
-    //   public final BooleanSetting alBackground  = register(new BooleanSetting("AL Background", true));
-    //   (text color and details color come from existing hud.getListColor() and hud.getColor())
-
     private static final class Row {
         final String name;
         final String detail;
@@ -44,21 +33,22 @@ public class ArraylistHUD {
         if (hud == null || !hud.isEnabled()) return;
 
         // ── Read settings from HUD ────────────────────────────────────────────
-        int accentRGB  = hud.getColor(System.currentTimeMillis()).getRGB() | 0xFF000000;
-        int nameRGB    = hud.getListColor().getRGB() | 0xFF000000;
+        // Text color - orange from the image (FF8855 area)
+        int nameRGB = hud.getListColor().getRGB() | 0xFF000000;
+        // Details color - gray from the image
+        int detailRGB = hud.getColor(System.currentTimeMillis()).getRGB() | 0xFF000000;
+        
         boolean shadow = hud.shadow.getValue();
-
-        // New settings — read with safe fallback if not yet added to HUD.java
-        int    padX        = getSlider(hud, "AL Pad X",      2);
-        int    padY        = getSlider(hud, "AL Pad Y",      1);
-        float  rounding    = getSlider(hud, "AL Rounding",   3);
-        boolean lowercase  = getBool(hud,   "AL Lowercase",  true);
-        boolean showDetail = getBool(hud,   "AL Details",    true);
-        boolean boundOnly  = getBool(hud,   "AL Bound Only", false);
-        boolean drawBg     = getBool(hud,   "AL Background", true);
+        int    padX        = (int) hud.alPadX.getValue();
+        int    padY        = (int) hud.alPadY.getValue();
+        float  rounding    = (float) hud.alRounding.getValue();
+        boolean lowercase  = hud.alLowercase.getValue();
+        boolean showDetail = hud.alShowDetails.getValue();
+        boolean boundOnly  = hud.alBoundOnly.getValue();
+        boolean drawBg     = hud.alBackground.getValue();
 
         int fontH      = mc.fontRendererObj.FONT_HEIGHT;
-        int lineHeight = fontH + padY * 2 + 1;
+        int lineHeight = fontH + padY * 2;
 
         // ── Build rows ────────────────────────────────────────────────────────
         List<Row> rows = new ArrayList<>();
@@ -84,6 +74,7 @@ public class ArraylistHUD {
             others.add(m);
         }
 
+        // Sort by width (longest first)
         others.sort(Comparator.comparingInt((Module m) -> {
             String det = showDetail && m.getSuffix().length > 0
                     ? " " + fmt(m.getSuffix()[0], lowercase) : "";
@@ -98,84 +89,63 @@ public class ArraylistHUD {
 
         if (rows.isEmpty()) return;
 
-        // ── Measure max width ─────────────────────────────────────────────────
-        int maxW = 0;
-        for (Row r : rows) {
-            int w = mc.fontRendererObj.getStringWidth(
-                    (r.isPitSub ? "  " : "") + r.name + r.detail);
-            if (w > maxW) maxW = w;
-        }
-
-        int totalH = rows.size() * lineHeight;
-        int bgW    = maxW + padX * 2;
-        int bgX    = sr.getScaledWidth() - bgW - 1;
-        int bgY    = 4;
-
-        // ── Draw background ───────────────────────────────────────────────────
-        if (drawBg) {
-            if (rounding >= 1) {
-                // Shadow
-                RoundedUtils.drawRoundedRect(bgX - 2, bgY - 2, bgW + 4, totalH + 4,
-                        rounding + 2, 0x33000000);
-                // BG per-row with rounding
-                RoundedUtils.drawRoundedRect(bgX, bgY, bgW, totalH, rounding, 0xBB0A0A0A);
-            } else {
-                // Plain rect fallback (no import needed)
-                net.minecraft.client.gui.Gui.drawRect(bgX, bgY, bgX + bgW, bgY + totalH, 0xBB0A0A0A);
-            }
-        }
-
         // ── Render rows ───────────────────────────────────────────────────────
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
+        GlStateManager.enableBlend();
 
+        int startY = 4;
+        
         for (int i = 0; i < rows.size(); i++) {
-            Row r     = rows.get(i);
+            Row r = rows.get(i);
             String display = (r.isPitSub ? "  " : "") + r.name;
             int nameW = mc.fontRendererObj.getStringWidth(display);
-            int rowY  = bgY + i * lineHeight + padY;
-
-            // Right-align: text starts so that (display + detail) ends at right edge
-            int totalRowW = nameW + mc.fontRendererObj.getStringWidth(r.detail);
-            int textX     = sr.getScaledWidth() - totalRowW - 1 - padX;
-
-            // Submodule names in accent, normal names in nameRGB
-            int color = r.isPitSub ? accentRGB : nameRGB;
-            mc.fontRendererObj.drawString(display, textX, rowY, color, shadow);
-
-            if (!r.detail.isEmpty()) {
-                mc.fontRendererObj.drawString(r.detail, textX + nameW, rowY, accentRGB, shadow);
+            int detailW = mc.fontRendererObj.getStringWidth(r.detail);
+            int totalW = nameW + detailW;
+            
+            // Calculate dimensions for this row
+            int rowW = totalW + padX * 2;
+            int rowH = lineHeight;
+            int rowX = sr.getScaledWidth() - rowW - 2;
+            int rowY = startY + i * rowH;
+            
+            // Draw background with rounding
+            if (drawBg) {
+                if (rounding >= 1) {
+                    RoundedUtils.drawRoundedRect(rowX, rowY, rowW, rowH, rounding, 0xDD000000);
+                } else {
+                    net.minecraft.client.gui.Gui.drawRect(rowX, rowY, rowX + rowW, rowY + rowH, 0xDD000000);
+                }
             }
-
-            // Accent bar on right edge of each row
+            
+            // Draw text - right aligned within the background
+            int textX = rowX + padX;
+            int textY = rowY + padY;
+            
+            // Module name in orange (or custom list color)
+            int color = r.isPitSub ? detailRGB : nameRGB;
+            mc.fontRendererObj.drawString(display, textX, textY, color, shadow);
+            
+            // Details in gray (or custom accent color)
+            if (!r.detail.isEmpty()) {
+                mc.fontRendererObj.drawString(r.detail, textX + nameW, textY, detailRGB, shadow);
+            }
+            
+            // Optional: small colored bar on the right edge (like in image)
+            int barColor = detailRGB;
             net.minecraft.client.gui.Gui.drawRect(
-                    sr.getScaledWidth() - 2, bgY + i * lineHeight,
-                    sr.getScaledWidth() - 1, bgY + i * lineHeight + lineHeight - 1,
-                    accentRGB);
+                sr.getScaledWidth() - 2, rowY,
+                sr.getScaledWidth(), rowY + rowH,
+                barColor
+            );
         }
 
         GlStateManager.enableDepth();
-        GlStateManager.enableTexture2D();
+        GlStateManager.disableBlend();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     private String fmt(String s, boolean lower) {
         return lower ? s.toLowerCase() : s;
-    }
-
-    private int getSlider(HUD hud, String name, int def) {
-        for (myau.module.Setting s : hud.getSettings()) {
-            if (s instanceof SliderSetting && s.getName().equals(name))
-                return (int)((SliderSetting) s).getValue();
-        }
-        return def;
-    }
-
-    private boolean getBool(HUD hud, String name, boolean def) {
-        for (myau.module.Setting s : hud.getSettings()) {
-            if (s instanceof BooleanSetting && s.getName().equals(name))
-                return ((BooleanSetting) s).getValue();
-        }
-        return def;
     }
 }
