@@ -28,11 +28,11 @@ public class LobbyIntel extends Module {
 
     // HUD Overlay properties (saved to config)
     public final BooleanProperty hudEnabled      = new BooleanProperty("hud-enabled", true);
-    public final IntProperty     hudPosX         = new IntProperty("hud-x", 10);
-    public final IntProperty     hudPosY         = new IntProperty("hud-y", 100);
-    public final FloatProperty   hudScale        = new FloatProperty("hud-scale", 1.0f);
-    public final IntProperty     hudMaxPlayers   = new IntProperty("hud-max-players", 10);
-    public final IntProperty     hudBgOpacity    = new IntProperty("hud-bg-opacity", 200);
+    public final IntProperty     hudPosX         = new IntProperty("hud-x", 10, 0, 3840);
+    public final IntProperty     hudPosY         = new IntProperty("hud-y", 100, 0, 2160);
+    public final FloatProperty   hudScale        = new FloatProperty("hud-scale", 1.0f, 0.5f, 2.0f);
+    public final IntProperty     hudMaxPlayers   = new IntProperty("hud-max-players", 10, 1, 20);
+    public final IntProperty     hudBgOpacity    = new IntProperty("hud-bg-opacity", 200, 0, 255);
     public final BooleanProperty hudShowHeads    = new BooleanProperty("hud-show-heads", true);
     public final BooleanProperty hudShowFkdr     = new BooleanProperty("hud-show-fkdr", true);
     public final BooleanProperty hudShowWlr      = new BooleanProperty("hud-show-wlr", false);
@@ -103,7 +103,7 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onKey(KeyEvent event) {
-        if (event.getKey() == hudKeybind.getValue().intValue()) {
+        if (event.getKey() == (int) hudKeybind.getValue()) {
             boolean newState = !hudOverlay.isEnabled();
             hudOverlay.setEnabled(newState);
             String status = newState ? "&a&lON" : "&c&lOFF";
