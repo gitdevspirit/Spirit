@@ -108,8 +108,8 @@ public class ArraylistHUD {
         GlStateManager.enableBlend();
 
         if (drawBg) {
-            // More opaque background like in the image
-            int bgColor = 0xAA000000; // Semi-transparent black
+            // Darker, more opaque background like in the reference image
+            int bgColor = 0xE0000000; // Very opaque black background
             if (rounding >= 1) {
                 RoundedUtils.drawRoundedRect(bgX, bgY, bgW, bgH, rounding, bgColor);
             } else {
