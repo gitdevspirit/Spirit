@@ -794,68 +794,77 @@ public class IntelGui extends GuiScreen {
                     int startY = 14;
                     int y = startY - settingsScrollOff;
                     
-                    // Skip title and divider
-                    y += 22 + 10;
+                    // Title
+                    y += 22;
                     
-                    // Enabled toggle (visual height 16px, returns +20)
+                    // Divider after title
+                    y += 10;
+                    
+                    // Enabled toggle - clickable zone is full 20px (drawToggle draws 16px visual, returns y+20)
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
                         hud.setEnabled(!hud.isEnabled());
                         return;
                     }
-                    y += 20; // After toggle
+                    y += 20; // drawToggle returns y+20
                     
-                    // Divider + gap
-                    y += 8 + 10;
+                    // Divider after enabled
+                    y += 8;
+                    y += 10;
+                    
                     // "POSITION" label
                     y += 14;
                     
-                    // X Position slider - clickable full 16px height
+                    // X Position slider - drawSlider returns y+16
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         int val = (int)((mx - settingsX) / (float)settingsW * 1920);
                         hud.setPosition(Math.max(0, Math.min(1920, val)), hud.getPosY());
                         return;
                     }
-                    y += 16;
+                    y += 16; // drawSlider returns y+16
                     
-                    // Y Position slider - clickable full 16px height
+                    // Y Position slider - drawSlider returns y+16
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         int val = (int)((mx - settingsX) / (float)settingsW * 1080);
                         hud.setPosition(hud.getPosX(), Math.max(0, Math.min(1080, val)));
                         return;
                     }
-                    y += 16;
+                    y += 16; // drawSlider returns y+16
                     
-                    // Divider + gap
-                    y += 8 + 10;
+                    // Divider after position
+                    y += 8;
+                    y += 10;
+                    
                     // "DISPLAY" label
                     y += 14;
                     
-                    // Scale slider - clickable full 16px height
+                    // Scale slider - drawSlider returns y+16
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         int val = 50 + (int)((mx - settingsX) / (float)settingsW * 150);
                         hud.setScale(Math.max(0.5f, Math.min(2.0f, val / 100f)));
                         return;
                     }
-                    y += 16;
+                    y += 16; // drawSlider returns y+16
                     
-                    // Max Players slider - clickable full 16px height
+                    // Max Players slider - drawSlider returns y+16
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
                         hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
                         return;
                     }
-                    y += 16;
+                    y += 16; // drawSlider returns y+16
                     
-                    // Background Opacity slider - clickable full 16px height
+                    // Background Opacity slider - drawSlider returns y+16
                     if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
                         int val = (int)((mx - settingsX) / (float)settingsW * 255);
                         hud.setBgOpacity(Math.max(0, Math.min(255, val)));
                         return;
                     }
-                    y += 16;
+                    y += 16; // drawSlider returns y+16
                     
-                    // Divider + gap
-                    y += 8 + 10;
+                    // Divider after display
+                    y += 8;
+                    y += 10;
+                    
                     // "COLUMNS" label
                     y += 14;
                     
@@ -956,10 +965,23 @@ public class IntelGui extends GuiScreen {
         int startY = 14;
         int y = startY - settingsScrollOff;
         
-        // Skip title, divider, enabled toggle, divider, "POSITION" label
-        y += 22 + 10 + 20 + 8 + 10 + 14;
+        // Title
+        y += 22;
         
-        // X Position slider - full 16px height for drag
+        // Divider after title
+        y += 10;
+        
+        // Enabled toggle - drawToggle returns y+20
+        y += 20;
+        
+        // Divider after enabled
+        y += 8;
+        y += 10;
+        
+        // "POSITION" label
+        y += 14;
+        
+        // X Position slider - drawSlider returns y+16
         if (my >= y && my < y + 16 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = (int)((mx - settingsX) / (float)settingsW * 1920);
             hud.setPosition(Math.max(0, Math.min(1920, val)), hud.getPosY());
@@ -967,15 +989,22 @@ public class IntelGui extends GuiScreen {
         }
         y += 16;
         
-        // Y Position slider - full 16px height for drag
+        // Y Position slider - drawSlider returns y+16
         if (my >= y && my < y + 16 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = (int)((mx - settingsX) / (float)settingsW * 1080);
             hud.setPosition(hud.getPosX(), Math.max(0, Math.min(1080, val)));
             return;
         }
-        y += 16 + 8 + 10 + 14;
+        y += 16;
         
-        // Scale slider - full 16px height for drag
+        // Divider after position
+        y += 8;
+        y += 10;
+        
+        // "DISPLAY" label
+        y += 14;
+        
+        // Scale slider - drawSlider returns y+16
         if (my >= y && my < y + 16 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = 50 + (int)((mx - settingsX) / (float)settingsW * 150);
             hud.setScale(Math.max(0.5f, Math.min(2.0f, val / 100f)));
@@ -983,7 +1012,7 @@ public class IntelGui extends GuiScreen {
         }
         y += 16;
         
-        // Max Players slider - full 16px height for drag
+        // Max Players slider - drawSlider returns y+16
         if (my >= y && my < y + 16 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
             hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
@@ -991,7 +1020,7 @@ public class IntelGui extends GuiScreen {
         }
         y += 16;
         
-        // Background Opacity slider - full 16px height for drag
+        // Background Opacity slider - drawSlider returns y+16
         if (my >= y && my < y + 16 && mx >= settingsX && mx < settingsX + settingsW) {
             int val = (int)((mx - settingsX) / (float)settingsW * 255);
             hud.setBgOpacity(Math.max(0, Math.min(255, val)));
