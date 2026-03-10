@@ -7,7 +7,7 @@ import myau.events.Render2DEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
-import myau.property.properties.TextProperty;
+import myau.property.properties.*;
 import myau.ui.intel.IntelGui;
 import myau.ui.intel.IntelHudOverlay;
 import myau.ui.intel.IntelManager;
@@ -26,6 +26,21 @@ public class LobbyIntel extends Module {
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
     public final SliderSetting  hudKeybind  = register(new SliderSetting("HUD Toggle Key", Keyboard.KEY_H, 0, 255, 1));
 
+    // HUD Overlay properties (saved to config)
+    public final BooleanProperty hudEnabled      = new BooleanProperty("hud-enabled", true);
+    public final IntProperty     hudPosX         = new IntProperty("hud-x", 10);
+    public final IntProperty     hudPosY         = new IntProperty("hud-y", 100);
+    public final FloatProperty   hudScale        = new FloatProperty("hud-scale", 1.0f);
+    public final IntProperty     hudMaxPlayers   = new IntProperty("hud-max-players", 10);
+    public final IntProperty     hudBgOpacity    = new IntProperty("hud-bg-opacity", 200);
+    public final BooleanProperty hudShowHeads    = new BooleanProperty("hud-show-heads", true);
+    public final BooleanProperty hudShowFkdr     = new BooleanProperty("hud-show-fkdr", true);
+    public final BooleanProperty hudShowWlr      = new BooleanProperty("hud-show-wlr", false);
+    public final BooleanProperty hudShowStreak   = new BooleanProperty("hud-show-streak", false);
+    public final BooleanProperty hudShowThreat   = new BooleanProperty("hud-show-threat", true);
+    public final BooleanProperty hudShowTeamColor= new BooleanProperty("hud-show-team-color", true);
+    public final TextProperty    hudSortMode     = new TextProperty("hud-sort-mode", "threat");
+
     // Saved via config, set via .intelpath command
     public final TextProperty logPath = new TextProperty("log-path",
             System.getProperty("user.home") + detectDefaultLogPath());
@@ -40,6 +55,39 @@ public class LobbyIntel extends Module {
         IntelManager.getInstance().setHudOverlay(hudOverlay);
         // Try to auto-detect key on startup
         tryAutoDetectKey();
+        // Load HUD settings from properties
+        loadHudSettings();
+    }
+    
+    private void loadHudSettings() {
+        hudOverlay.setEnabled(hudEnabled.getValue());
+        hudOverlay.setPosition(hudPosX.getValue(), hudPosY.getValue());
+        hudOverlay.setScale(hudScale.getValue());
+        hudOverlay.setMaxPlayers(hudMaxPlayers.getValue());
+        hudOverlay.setBgOpacity(hudBgOpacity.getValue());
+        hudOverlay.setShowHeads(hudShowHeads.getValue());
+        hudOverlay.setShowFkdr(hudShowFkdr.getValue());
+        hudOverlay.setShowWlr(hudShowWlr.getValue());
+        hudOverlay.setShowStreak(hudShowStreak.getValue());
+        hudOverlay.setShowThreat(hudShowThreat.getValue());
+        hudOverlay.setShowTeamColor(hudShowTeamColor.getValue());
+        hudOverlay.setSortMode(hudSortMode.getValue());
+    }
+    
+    public void saveHudSettings() {
+        hudEnabled.setValue(hudOverlay.isEnabled());
+        hudPosX.setValue(hudOverlay.getPosX());
+        hudPosY.setValue(hudOverlay.getPosY());
+        hudScale.setValue(hudOverlay.getScale());
+        hudMaxPlayers.setValue(hudOverlay.getMaxPlayers());
+        hudBgOpacity.setValue(hudOverlay.getBgOpacity());
+        hudShowHeads.setValue(hudOverlay.getShowHeads());
+        hudShowFkdr.setValue(hudOverlay.getShowFkdr());
+        hudShowWlr.setValue(hudOverlay.getShowWlr());
+        hudShowStreak.setValue(hudOverlay.getShowStreak());
+        hudShowThreat.setValue(hudOverlay.getShowThreat());
+        hudShowTeamColor.setValue(hudOverlay.getShowTeamColor());
+        hudSortMode.setValue(hudOverlay.getSortMode());
     }
 
     @Override
@@ -55,7 +103,7 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onKey(KeyEvent event) {
-        if (event.getKey() == (int) hudKeybind.getValue()) {
+        if (event.getKey() == hudKeybind.getValue().intValue()) {
             boolean newState = !hudOverlay.isEnabled();
             hudOverlay.setEnabled(newState);
             String status = newState ? "&a&lON" : "&c&lOFF";
@@ -114,9 +162,9 @@ public class LobbyIntel extends Module {
                     raf.seek(start);
                     byte[] buf = new byte[(int)(fileLen - start)];
                     raf.readFully(buf);
-                    String content2 = new String(buf, "UTF-8");
+                    String content = new String(buf, "UTF-8");
 
-                    Matcher m = pattern.matcher(content2);
+                    Matcher m = pattern.matcher(content);
                     while (m.find()) {
                         lastKey = m.group(1); // keep last match = most recent
                     }
