@@ -1,6 +1,7 @@
 package myau.ui.intel;
 
 import myau.ui.clickgui.GuiColors;
+import myau.ui.clickgui.RoundedUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
@@ -338,9 +339,9 @@ public class IntelHudOverlay {
     }
     
     private void drawRoundedRect(int x, int y, int x2, int y2, int radius, int color) {
-        // Simple rounded rect using filled rects (no actual rounding for now)
-        // For proper rounded corners, you'd need RoundedUtils from ClickGUI
-        // but keeping it simple for HUD overlay
-        fillRect(x, y, x2 - x, y2 - y, color);
+        // Use RoundedUtils for proper rounded corners
+        int width = x2 - x;
+        int height = y2 - y;
+        RoundedUtils.drawRoundedRect(x, y, width, height, radius, color);
     }
 }
