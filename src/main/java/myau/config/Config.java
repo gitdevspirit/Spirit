@@ -126,6 +126,18 @@ public class Config {
                     }
                 }
             }
+            
+            // Load HUD overlay settings after all properties are loaded
+            try {
+                myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+                    Myau.moduleManager.getModule("LobbyIntel");
+                if (lobbyIntel != null) {
+                    lobbyIntel.loadHudSettings();
+                }
+            } catch (Exception e) {
+                ((IAccessorMinecraft) mc).getLogger().warn("Failed to load HUD overlay settings: " + e.getMessage());
+            }
+            
             ChatUtil.sendFormatted(String.format("%sConfig has been loaded (&a&o%s&r)&r", Myau.clientName, file.getName()));
         } catch (FileNotFoundException e) {
             ChatUtil.sendFormatted(String.format("%sConfig file not found (&c&o%s&r)&r", Myau.clientName, file.getName()));
