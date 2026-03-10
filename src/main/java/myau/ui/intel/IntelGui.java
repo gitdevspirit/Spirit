@@ -108,15 +108,15 @@ public class IntelGui extends GuiScreen {
 
         fillRect(0, 0, sw, sh, BG_FULL);
 
-        int settingsW = showSettings ? SETTINGS_WIDTH : 0;
-        int detailW = selected != null && !showSettings ? Math.min(sw / 3, 320) : 0;
+        int settingsW = 0; // No longer using side panel
+        int detailW = selected != null ? Math.min(sw / 3, 320) : 0;
         int listW   = sw - detailW - settingsW;
 
         drawHeader(sw, mx, my);
         drawSearchBar(listW, mx, my);
         drawList(listW, sh, mx, my, sr);
-        if (selected != null && !showSettings) drawDetail(listW, detailW, sh);
-        if (showSettings) drawSettings(sw - SETTINGS_WIDTH, SETTINGS_WIDTH, sh, mx, my);
+        if (selected != null) drawDetail(listW, detailW, sh);
+        // Settings now handled by popup GUI - no side panel rendering needed
         drawFooter(sw, sh);
 
         super.drawScreen(mx, my, pt);
@@ -173,7 +173,7 @@ public class IntelGui extends GuiScreen {
         String settings = "\u2699";
         int sx = rx - 26, sy = ry;
         boolean sHov = mx >= sx && mx < sx + 20 && my >= sy && my < sy + 16;
-        boolean sActive = showSettings;
+        boolean sActive = false; // No longer using side panel
         RoundedUtils.drawRoundedRect(sx, sy, 20, 16, 4, sActive ? 0x55E991B8 : sHov ? 0x33FFFFFF : 0x11FFFFFF);
         if (sActive) RoundedUtils.drawRoundedOutline(sx, sy, 20, 16, 4, 1f, COL_ACCENT);
         else if (sHov) RoundedUtils.drawRoundedOutline(sx, sy, 20, 16, 4, 1f, 0x33FFFFFF);
@@ -776,141 +776,15 @@ public class IntelGui extends GuiScreen {
         // Settings button
         int sx = rx - 26, sy = ry;
         if (mx >= sx && mx < sx + 20 && my >= sy && my < sy + 16) {
-            showSettings = !showSettings;
-            if (showSettings) selected = null; // Close detail when opening settings
+            // Open centered popup settings GUI
+            myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+                myau.Myau.moduleManager.getModule("LobbyIntel");
+            if (lobbyIntel != null && lobbyIntel.getHudOverlay() != null) {
+                mc.displayGuiScreen(new IntelHudSettingsGui(lobbyIntel.getHudOverlay(), this));
+            }
             return;
         }
         
-        // Settings panel interactions
-        if (showSettings) {
-            int settingsX = sw - SETTINGS_WIDTH + 12;
-            int settingsW = SETTINGS_WIDTH - 24;
-            
-            myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
-                myau.Myau.moduleManager.getModule("LobbyIntel");
-            if (lobbyIntel != null) {
-                IntelHudOverlay hud = lobbyIntel.getHudOverlay();
-                if (hud != null) {
-                    int startY = 14;
-                    int y = startY - settingsScrollOff;
-                    
-                    // Title
-                    y += 22;
-                    
-                    // Divider after title
-                    y += 10;
-                    
-                    // Enabled toggle - clickable zone is full 20px (drawToggle draws 16px visual, returns y+20)
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setEnabled(!hud.isEnabled());
-                        return;
-                    }
-                    y += 20; // drawToggle returns y+20
-                    
-                    // Divider after enabled
-                    y += 8;
-                    y += 10;
-                    
-                    // "POSITION" label
-                    y += 14;
-                    
-                    // X Position slider - drawSlider returns y+16
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
-                        int val = (int)((mx - settingsX) / (float)settingsW * 1920);
-                        hud.setPosition(Math.max(0, Math.min(1920, val)), hud.getPosY());
-                        return;
-                    }
-                    y += 16; // drawSlider returns y+16
-                    
-                    // Y Position slider - drawSlider returns y+16
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
-                        int val = (int)((mx - settingsX) / (float)settingsW * 1080);
-                        hud.setPosition(hud.getPosX(), Math.max(0, Math.min(1080, val)));
-                        return;
-                    }
-                    y += 16; // drawSlider returns y+16
-                    
-                    // Divider after position
-                    y += 8;
-                    y += 10;
-                    
-                    // "DISPLAY" label
-                    y += 14;
-                    
-                    // Scale slider - drawSlider returns y+16
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
-                        int val = 50 + (int)((mx - settingsX) / (float)settingsW * 150);
-                        hud.setScale(Math.max(0.5f, Math.min(2.0f, val / 100f)));
-                        return;
-                    }
-                    y += 16; // drawSlider returns y+16
-                    
-                    // Max Players slider - drawSlider returns y+16
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
-                        int val = 1 + (int)((mx - settingsX) / (float)settingsW * 19);
-                        hud.setMaxPlayers(Math.max(1, Math.min(20, val)));
-                        return;
-                    }
-                    y += 16; // drawSlider returns y+16
-                    
-                    // Background Opacity slider - drawSlider returns y+16
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 16) {
-                        int val = (int)((mx - settingsX) / (float)settingsW * 255);
-                        hud.setBgOpacity(Math.max(0, Math.min(255, val)));
-                        return;
-                    }
-                    y += 16; // drawSlider returns y+16
-                    
-                    // Divider after display
-                    y += 8;
-                    y += 10;
-                    
-                    // "COLUMNS" label
-                    y += 14;
-                    
-                    // Columns toggles - each 20px clickable height
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowHeads(!hud.getShowHeads()); return;
-                    }
-                    y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowFkdr(!hud.getShowFkdr()); return;
-                    }
-                    y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowWlr(!hud.getShowWlr()); return;
-                    }
-                    y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowStreak(!hud.getShowStreak()); return;
-                    }
-                    y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowThreat(!hud.getShowThreat()); return;
-                    }
-                    y += 20;
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y && my < y + 20) {
-                        hud.setShowTeamColor(!hud.getShowTeamColor()); return;
-                    }
-                    y += 20;
-                    
-                    // Divider + gap
-                    y += 8 + 10;
-                    // "SORTING" label
-                    y += 14;
-                    
-                    // Sort dropdown
-                    if (mx >= settingsX && mx < settingsX + settingsW && my >= y + 10 && my < y + 10 + 18) {
-                        String mode = hud.getSortMode();
-                        String newMode = mode.equals("threat") ? "fkdr" : mode.equals("fkdr") ? "name" : "threat";
-                        hud.setSortMode(newMode);
-                        return;
-                    }
-                }
-            }
-            return; // Clicked in settings panel, don't propagate
-        }
-
         // Search bar focus
         int sbx = 10, sby = HDR + 5, sbw = 220, sbh = SRCH - 10;
         searchFocus = mx >= sbx && mx < sbx + sbw && my >= sby && my < sby + sbh;
