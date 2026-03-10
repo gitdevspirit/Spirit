@@ -24,6 +24,7 @@ public class LobbyIntel extends Module {
 
     public final BooleanSetting autoScan    = register(new BooleanSetting("Auto Scan on Join", true));
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
+    public final BooleanSetting notifyCheaters = register(new BooleanSetting("Notify Cheaters", false));
     public final SliderSetting  hudKeybind  = register(new SliderSetting("HUD Toggle Key", Keyboard.KEY_H, 0, 255, 1));
 
     // HUD Overlay properties (saved to config)
@@ -59,7 +60,7 @@ public class LobbyIntel extends Module {
         loadHudSettings();
     }
     
-    private void loadHudSettings() {
+    public void loadHudSettings() {
         hudOverlay.setEnabled(hudEnabled.getValue());
         hudOverlay.setPosition(hudPosX.getValue(), hudPosY.getValue());
         hudOverlay.setScale(hudScale.getValue());
