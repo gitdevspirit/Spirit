@@ -132,13 +132,13 @@ public class IntelHudOverlay {
         int contentHeight = (LINE_HEIGHT * displayCount) + (PADDING * 2);
         int totalHeight = HEADER_HEIGHT + contentHeight;
         
-        // Draw background with configurable opacity
+        // Draw single unified background with rounded corners
         int bgColor = (bgOpacity << 24) | 0x07070E;
         drawRoundedRect(scaledX, scaledY, scaledX + width, scaledY + totalHeight, BORDER_RADIUS, bgColor);
         
-        // Draw header background (slightly darker)
-        int headerBg = ((Math.min(255, bgOpacity + 40)) << 24) | 0x0A0A14;
-        fillRect(scaledX, scaledY, width, HEADER_HEIGHT, headerBg);
+        // Draw header divider line instead of separate background
+        int dividerY = scaledY + HEADER_HEIGHT;
+        fillRect(scaledX + 2, dividerY, width - 4, 1, 0x33FFFFFF);
         
         // Draw headers
         int headerY = scaledY + 3;
