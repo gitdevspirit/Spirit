@@ -380,7 +380,7 @@ public class IntelManager {
             // Check if notifications are enabled in LobbyIntel module
             myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
                 myau.Myau.moduleManager.getModule("LobbyIntel");
-            if (lobbyIntel == null || !lobbyIntel.notifyCheaters.isEnabled()) return;
+            if (lobbyIntel == null || !lobbyIntel.notifyCheaters.getValue()) return;
             
             if (Myau.notificationManager == null) return;
             Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
