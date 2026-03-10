@@ -19,12 +19,12 @@ public class IntelHudSettingsGui extends GuiScreen {
     private final GuiScreen parent;
     
     // Layout
-    private static final int POPUP_WIDTH = 320;
-    private static final int POPUP_HEIGHT = 500;
-    private static final int PADDING = 16;
-    private static final int LINE_HEIGHT = 24;
-    private static final int SLIDER_HEIGHT = 32;
-    private static final int TOGGLE_HEIGHT = 28;
+    private static final int POPUP_WIDTH = 280;
+    private static final int POPUP_HEIGHT = 420;
+    private static final int PADDING = 12;
+    private static final int LINE_HEIGHT = 20;
+    private static final int SLIDER_HEIGHT = 28;
+    private static final int TOGGLE_HEIGHT = 24;
     
     // Colors
     private static final int BG_POPUP = 0xEE0A0A12;
@@ -47,8 +47,8 @@ public class IntelHudSettingsGui extends GuiScreen {
     
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // Draw dark overlay behind popup
-        drawRect(0, 0, width, height, 0x88000000);
+        // Draw lighter overlay behind popup so Intel GUI is visible
+        drawRect(0, 0, width, height, 0x60000000);
         
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth();
