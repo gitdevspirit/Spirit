@@ -190,20 +190,20 @@ public class IntelHudSettingsGui extends GuiScreen {
         int barW = w - 30; // Leave space for value
         int barH = 8;
         
-        // Background track - use Gui.drawRect for guaranteed visibility
-        Gui.drawRect(barX, barY, barX + barW, barY + barH, 0x66444444);
+        // Background track
+        drawRect(barX, barY, barX + barW, barY + barH, 0x66444444);
         
         // Filled portion
         float pct = (value - min) / (float)(max - min);
         int fillW = Math.max(2, (int)(barW * pct));
-        Gui.drawRect(barX, barY, barX + fillW, barY + barH, ACCENT & 0xFFFFFFFF);
+        drawRect(barX, barY, barX + fillW, barY + barH, ACCENT & 0xFFFFFFFF);
         
-        // Knob - draw as a rect for guaranteed visibility
+        // Knob
         int knobSize = 12;
         int knobX = barX + fillW - knobSize / 2;
         int knobY = barY - 2;
-        Gui.drawRect(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFFFFFFF);
-        Gui.drawRect(knobX + 2, knobY + 2, knobX + knobSize - 2, knobY + knobSize - 2, ACCENT & 0xFFFFFFFF);
+        drawRect(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFFFFFFF);
+        drawRect(knobX + 2, knobY + 2, knobX + knobSize - 2, knobY + knobSize - 2, ACCENT & 0xFFFFFFFF);
         
         return y + 20;
     }
