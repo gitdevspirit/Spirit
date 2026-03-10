@@ -47,18 +47,16 @@ public class IntelHudSettingsGui extends GuiScreen {
     
     @Override
     public void drawScreen(int mouseX, int mouseY, float partialTicks) {
-        // Don't draw overlay - parent GUI handles background
+        // Draw dark overlay over entire screen
+        drawRect(0, 0, width, height, 0xCC000000);
         
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth();
         int sh = sr.getScaledHeight();
         
-        // Position popup in center-right of screen (over Intel GUI)
-        int popupX = sw - POPUP_WIDTH - 40;
+        // Small centered popup
+        int popupX = (sw - POPUP_WIDTH) / 2;
         int popupY = (sh - POPUP_HEIGHT) / 2;
-        
-        // Draw semi-transparent background behind popup
-        drawRect(popupX - 4, popupY - 4, popupX + POPUP_WIDTH + 4, popupY + POPUP_HEIGHT + 4, 0x80000000);
         
         // Draw popup background with rounded corners
         RoundedUtils.drawRoundedRect(popupX, popupY, POPUP_WIDTH, POPUP_HEIGHT, 6, BG_POPUP);
@@ -70,16 +68,15 @@ public class IntelHudSettingsGui extends GuiScreen {
         // Title
         GlStateManager.pushMatrix();
         GlStateManager.translate(popupX + PADDING, popupY + 12, 0);
-        GlStateManager.scale(1.2f, 1.2f, 1f);
-        mc.fontRendererObj.drawString("HUD Overlay Settings", 0, 0, ACCENT, false);
+        GlStateManager.scale(1.1f, 1.1f, 1f);
+        mc.fontRendererObj.drawString("HUD Overlay", 0, 0, ACCENT, false);
         GlStateManager.popMatrix();
         
         // Close button (X)
-        int closeX = popupX + POPUP_WIDTH - 30;
+        int closeX = popupX + POPUP_WIDTH - 28;
         int closeY = popupY + 10;
-        boolean closeHover = mouseX >= closeX && mouseX < closeX + 20 && mouseY >= closeY && mouseY < closeY + 20;
-        RoundedUtils.drawRoundedRect(closeX, closeY, 20, 20, 4, closeHover ? 0x44FF4444 : 0x22FFFFFF);
-        mc.fontRendererObj.drawString("X", closeX + 6, closeY + 6, closeHover ? 0xFFFF4444 : TEXT_DIM, false);
+        boolean closeHover = mouseX >= closeX && mouseX < closeX + 18 && mouseY >= closeY && mouseY < closeY + 18;
+        mc.fontRendererObj.drawString("X", closeX + 5, closeY + 5, closeHover ? 0xFFFF4444 : TEXT_BRIGHT, false);
         
         // Enable scissor for scrollable content
         GlStateManager.pushMatrix();
@@ -179,37 +176,36 @@ public class IntelHudSettingsGui extends GuiScreen {
     }
     
     private int drawSlider(int x, int y, int w, String label, int value, int min, int max, int mx, int my, int sliderIndex) {
-        // Label and value on same line
-        mc.fontRendererObj.drawString(label, x, y, TEXT_DIM, false);
-        String valStr = String.valueOf(value);
-        mc.fontRendererObj.drawString(valStr, x + w - mc.fontRendererObj.getStringWidth(valStr), y, TEXT_BRIGHT, false);
+        // Draw label
+        mc.fontRendererObj.drawString(label, x, y, TEXT_BRIGHT, false);
         y += 10;
         
-        // Slider bar - make it taller and more visible
-        int barY = y + 4;
-        int barH = 6;
+        // Draw value on right
+        String valStr = String.valueOf(value);
+        mc.fontRendererObj.drawString(valStr, x + w - mc.fontRendererObj.getStringWidth(valStr), y, ACCENT, false);
         
-        // Background track - darker and more visible
-        RoundedUtils.drawRoundedRect(x, barY, w, barH, 3, 0x55FFFFFF);
+        // Slider bar position
+        int barX = x;
+        int barY = y;
+        int barW = w - 30; // Leave space for value
+        int barH = 8;
         
-        // Filled portion - bright accent color
+        // Background track - use Gui.drawRect for guaranteed visibility
+        Gui.drawRect(barX, barY, barX + barW, barY + barH, 0x66444444);
+        
+        // Filled portion
         float pct = (value - min) / (float)(max - min);
-        int fillW = Math.max(4, (int)(w * pct)); // Min width so it's always visible
-        RoundedUtils.drawRoundedRect(x, barY, fillW, barH, 3, ACCENT);
+        int fillW = Math.max(2, (int)(barW * pct));
+        Gui.drawRect(barX, barY, barX + fillW, barY + barH, ACCENT & 0xFFFFFFFF);
         
-        // Knob - larger and more visible
-        int knobSize = 14;
-        int knobX = x + fillW - knobSize / 2;
-        int knobY = barY - 4;
+        // Knob - draw as a rect for guaranteed visibility
+        int knobSize = 12;
+        int knobX = barX + fillW - knobSize / 2;
+        int knobY = barY - 2;
+        Gui.drawRect(knobX, knobY, knobX + knobSize, knobY + knobSize, 0xFFFFFFFF);
+        Gui.drawRect(knobX + 2, knobY + 2, knobX + knobSize - 2, knobY + knobSize - 2, ACCENT & 0xFFFFFFFF);
         
-        // Knob shadow
-        RoundedUtils.drawRoundedRect(knobX + 1, knobY + 1, knobSize, knobSize, knobSize / 2, 0x88000000);
-        // Knob
-        RoundedUtils.drawRoundedRect(knobX, knobY, knobSize, knobSize, knobSize / 2, ACCENT);
-        // Knob highlight
-        RoundedUtils.drawRoundedRect(knobX + 2, knobY + 2, knobSize - 4, knobSize - 4, (knobSize - 4) / 2, 0x44FFFFFF);
-        
-        return y + 18;
+        return y + 20;
     }
     
     private int drawDropdown(int x, int y, int w, String label, String[] options, int selected, int mx, int my) {
@@ -233,13 +229,13 @@ public class IntelHudSettingsGui extends GuiScreen {
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth();
         int sh = sr.getScaledHeight();
-        int popupX = sw - POPUP_WIDTH - 40;
+        int popupX = (sw - POPUP_WIDTH) / 2;
         int popupY = (sh - POPUP_HEIGHT) / 2;
         
         // Close button
-        int closeX = popupX + POPUP_WIDTH - 30;
+        int closeX = popupX + POPUP_WIDTH - 28;
         int closeY = popupY + 10;
-        if (mouseX >= closeX && mouseX < closeX + 20 && mouseY >= closeY && mouseY < closeY + 20) {
+        if (mouseX >= closeX && mouseX < closeX + 18 && mouseY >= closeY && mouseY < closeY + 18) {
             mc.displayGuiScreen(parent);
             return;
         }
@@ -364,9 +360,9 @@ public class IntelHudSettingsGui extends GuiScreen {
         
         ScaledResolution sr = new ScaledResolution(mc);
         int sw = sr.getScaledWidth();
-        int popupX = sw - POPUP_WIDTH - 40;
+        int popupX = (sw - POPUP_WIDTH) / 2;
         int innerX = popupX + PADDING;
-        int innerW = POPUP_WIDTH - PADDING * 2;
+        int innerW = POPUP_WIDTH - PADDING * 2 - 30; // Account for value text space
         
         switch (draggingSliderIndex) {
             case 0: // X Position
