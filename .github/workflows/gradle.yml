@@ -36,3 +36,4 @@ jobs:
         with:
           name: Spirit-Client
           path: build/libs/*.jar
+          retention-days: 1  # Auto-delete after 1 day to save storage
