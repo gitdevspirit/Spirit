@@ -198,7 +198,19 @@ public class Myau {
         if (config.file.exists()) config.load();
         if (friendManager.file.exists()) friendManager.load();
         if (targetManager.file.exists()) targetManager.load();
-        Runtime.getRuntime().addShutdownHook(new Thread(config::save));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Save HUD overlay settings before config save
+            try {
+                myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+                    moduleManager.getModule("LobbyIntel");
+                if (lobbyIntel != null) {
+                    lobbyIntel.saveHudSettings();
+                }
+            } catch (Exception e) {
+                // Ignore errors during shutdown
+            }
+            config.save();
+        }));
 
         try (InputStreamReader reader = new InputStreamReader(
                 Objects.requireNonNull(Myau.class.getResourceAsStream("/version.json")),
