@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      actions: write  # Needed for artifact cleanup
 
     steps:
       - name: Checkout repository
@@ -34,6 +35,7 @@ jobs:
       - name: Upload built jar
         uses: actions/upload-artifact@v4
         with:
-          name: Spirit-Client
+          name: Spirit-Client-${{ github.run_number }}  # Unique name per build
           path: build/libs/*.jar
-          retention-days: 1  # Auto-delete after 1 day to save storage
+          retention-days: 7  # Keep for 7 days, then auto-delete
+          if-no-files-found: error
