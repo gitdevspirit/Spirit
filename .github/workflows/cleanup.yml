@@ -3,11 +3,15 @@ name: Cleanup Artifacts
 on:
   schedule:
     - cron: '0 0 * * 0'  # Run weekly on Sunday
-  workflow_dispatch:  # Also allow manual trigger
+  workflow_dispatch:  # Allow manual trigger
 
 jobs:
   cleanup:
     runs-on: ubuntu-latest
+    permissions:
+      actions: write  # Required to delete artifacts
+      contents: read
+    
     steps:
       - name: Delete old artifacts
         uses: c-hive/gha-remove-artifacts@v1
