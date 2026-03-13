@@ -82,9 +82,8 @@ public class RoleManager {
      */
     public void load() {
         if (!rolesFile.exists()) {
-            // Create default - add yourself as owner
-            // Users should edit this file to add their UUID/name
-            addOwner("your_minecraft_username"); // TODO: Users should change this
+            // Create default - add 999Spirit as owner
+            addOwner("999Spirit");
             return;
         }
         
