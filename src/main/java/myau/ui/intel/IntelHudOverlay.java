@@ -222,36 +222,6 @@ public class IntelHudOverlay {
         
         drawText(p.name, currentX, y + 4, nameColor);
         
-        // Draw Urchin badge if flagged
-        if (p.cheater && p.urchinTag != null && !p.urchinTag.isEmpty()) {
-            int badgeX = currentX + mc.fontRendererObj.getStringWidth(p.name) + 3;
-            int badgeY = y + 3;
-            
-            // Get icon and color based on type
-            String icon = "⚠";
-            int badgeColor = 0xFFFF8844; // orange default
-            
-            if (p.urchinType != null) {
-                if (p.urchinType.contains("confirmed")) {
-                    icon = "⚑";
-                    badgeColor = 0xFFFF3344; // red
-                } else if (p.urchinType.contains("blatant")) {
-                    icon = "✖";
-                    badgeColor = 0xFFFF1122; // bright red
-                } else if (p.urchinType.contains("suspected")) {
-                    icon = "?";
-                    badgeColor = 0xFFFFAA44; // yellow-orange
-                }
-            }
-            
-            // Draw small badge with icon
-            fillRect(badgeX, badgeY, 10, 10, badgeColor);
-            GlStateManager.pushMatrix();
-            GlStateManager.scale(0.7f, 0.7f, 1.0f);
-            mc.fontRendererObj.drawString(icon, (int)((badgeX + 2) / 0.7f), (int)((badgeY + 1) / 0.7f), 0xFFFFFFFF, false);
-            GlStateManager.popMatrix();
-        }
-        
         currentX += 80;
         
         // Draw FKDR (centered)
@@ -281,21 +251,24 @@ public class IntelHudOverlay {
             currentX += 30;
         }
         
-        // Draw Urchin icon (centered)
+        // Draw Urchin icon (centered) - using proper Urchin app emojis
         if (showUrchin) {
             if (p.cheater && p.urchinType != null) {
-                String icon = "⚠";
-                int iconColor = 0xFFFF8844;
+                String icon = "⚠️"; // default warning
+                int iconColor = 0xFFFFAA44; // orange
                 
-                if (p.urchinType.contains("confirmed")) {
-                    icon = "⚑";
+                if (p.urchinType.contains("blatant")) {
+                    icon = "⚠️";  // Orange warning icon
+                    iconColor = 0xFFFF8844;
+                } else if (p.urchinType.contains("sniper")) {
+                    icon = "‼️";  // Red double exclamation
                     iconColor = 0xFFFF3344;
-                } else if (p.urchinType.contains("blatant")) {
-                    icon = "✖";
-                    iconColor = 0xFFFF1122;
-                } else if (p.urchinType.contains("suspected")) {
-                    icon = "?";
-                    iconColor = 0xFFFFAA44;
+                } else if (p.urchinType.contains("confirmed")) {
+                    icon = "❗";  // Purple/magenta exclamation
+                    iconColor = 0xFFDD44DD;
+                } else if (p.urchinType.contains("closet")) {
+                    icon = "⚙️";  // Orange gear icon
+                    iconColor = 0xFFFF8844;
                 }
                 
                 int iconWidth = mc.fontRendererObj.getStringWidth(icon);
