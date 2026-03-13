@@ -10,8 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      actions: write  # Needed for artifact cleanup
+      contents: write  # Required for creating releases
 
     steps:
       - name: Checkout repository
@@ -32,10 +31,29 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build --stacktrace
 
-      - name: Upload built jar
-        uses: actions/upload-artifact@v4
+      - name: Get JAR filename
+        id: jar
+        run: echo "file=$(ls build/libs/*.jar | head -n 1)" >> $GITHUB_OUTPUT
+
+      - name: Upload to Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
         with:
-          name: Spirit-Client-${{ github.run_number }}  # Unique name per build
-          path: build/libs/*.jar
-          retention-days: 7  # Keep for 7 days, then auto-delete
-          if-no-files-found: error
+          tag_name: build-${{ github.run_number }}
+          name: Spirit Build ${{ github.run_number }}
+          body: |
+            Automated build from commit ${{ github.sha }}
+            
+            **Changes:** ${{ github.event.head_commit.message }}
+          files: build/libs/*.jar
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "### ✅ Build Complete!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**JAR Location:** build/libs/" >> $GITHUB_STEP_SUMMARY
+          echo "**Download:** [Release Page](https://github.com/${{ github.repository }}/releases/tag/build-${{ github.run_number }})" >> $GITHUB_STEP_SUMMARY
