@@ -61,6 +61,10 @@ public class LobbyIntel extends Module {
     }
     
     public void loadHudSettings() {
+        // Debug logging
+        System.out.println("[LobbyIntel] Loading HUD settings: pos=(" + hudPosX.getValue() + "," + hudPosY.getValue() + 
+                          ") scale=" + hudScale.getValue() + " enabled=" + hudEnabled.getValue());
+        
         hudOverlay.setEnabled(hudEnabled.getValue());
         hudOverlay.setPosition(hudPosX.getValue(), hudPosY.getValue());
         hudOverlay.setScale(hudScale.getValue());
@@ -73,6 +77,8 @@ public class LobbyIntel extends Module {
         hudOverlay.setShowThreat(hudShowThreat.getValue());
         hudOverlay.setShowTeamColor(hudShowTeamColor.getValue());
         hudOverlay.setSortMode(hudSortMode.getValue());
+        
+        System.out.println("[LobbyIntel] HUD settings applied to overlay");
     }
     
     public void saveHudSettings() {
@@ -89,6 +95,10 @@ public class LobbyIntel extends Module {
         hudShowThreat.setValue(hudOverlay.getShowThreat());
         hudShowTeamColor.setValue(hudOverlay.getShowTeamColor());
         hudSortMode.setValue(hudOverlay.getSortMode());
+        
+        // Debug logging
+        System.out.println("[LobbyIntel] Saved HUD settings: pos=(" + hudPosX.getValue() + "," + hudPosY.getValue() + 
+                          ") scale=" + hudScale.getValue() + " enabled=" + hudEnabled.getValue());
     }
 
     @Override
