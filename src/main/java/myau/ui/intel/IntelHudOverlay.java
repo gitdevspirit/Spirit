@@ -222,6 +222,18 @@ public class IntelHudOverlay {
         
         drawText(p.name, currentX, y + 4, nameColor);
         
+        // Draw role badge if player has a role
+        if (p.role != null) {
+            int badgeX = currentX + mc.fontRendererObj.getStringWidth(p.name) + 3;
+            int badgeY = y + 3;
+            
+            // Draw small rounded badge
+            String roleText = p.role.getIcon();
+            int badgeW = mc.fontRendererObj.getStringWidth(roleText) + 4;
+            fillRect(badgeX, badgeY, badgeW, 10, p.role.getColor() & 0x66FFFFFF);
+            drawText(roleText, badgeX + 2, badgeY + 1, p.role.getColor());
+        }
+        
         currentX += 80;
         
         // Draw FKDR (centered)
