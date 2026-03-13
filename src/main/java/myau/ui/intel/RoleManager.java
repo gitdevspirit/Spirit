@@ -1,0 +1,152 @@
+package myau.ui.intel;
+
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
+/**
+ * Manages player roles for the Spirit client
+ * Only owners can assign roles
+ */
+public class RoleManager {
+    private static RoleManager instance;
+    private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
+    
+    private final File rolesFile;
+    private final Map<String, PlayerRole> playerRoles; // UUID or name -> role
+    private final Map<String, String> ownerList; // List of owner UUIDs
+    
+    private RoleManager() {
+        this.rolesFile = new File("./config/Myau/roles.json");
+        this.playerRoles = new HashMap<>();
+        this.ownerList = new HashMap<>();
+        load();
+    }
+    
+    public static RoleManager getInstance() {
+        if (instance == null) {
+            instance = new RoleManager();
+        }
+        return instance;
+    }
+    
+    /**
+     * Check if a player is an owner
+     */
+    public boolean isOwner(String playerNameOrUuid) {
+        return ownerList.containsKey(playerNameOrUuid.toLowerCase());
+    }
+    
+    /**
+     * Get a player's role
+     */
+    public PlayerRole getRole(String playerNameOrUuid) {
+        return playerRoles.get(playerNameOrUuid.toLowerCase());
+    }
+    
+    /**
+     * Assign a role to a player (only owners can do this)
+     */
+    public boolean assignRole(String assignerUuid, String targetPlayer, PlayerRole role) {
+        if (!isOwner(assignerUuid)) {
+            return false; // Not authorized
+        }
+        
+        if (role == null) {
+            playerRoles.remove(targetPlayer.toLowerCase());
+        } else {
+            playerRoles.put(targetPlayer.toLowerCase(), role);
+        }
+        
+        save();
+        return true;
+    }
+    
+    /**
+     * Add an owner (can only be done programmatically or via config edit)
+     */
+    public void addOwner(String playerNameOrUuid) {
+        ownerList.put(playerNameOrUuid.toLowerCase(), playerNameOrUuid);
+        playerRoles.put(playerNameOrUuid.toLowerCase(), PlayerRole.OWNER);
+        save();
+    }
+    
+    /**
+     * Load roles from file
+     */
+    public void load() {
+        if (!rolesFile.exists()) {
+            // Create default - add yourself as owner
+            // Users should edit this file to add their UUID/name
+            addOwner("your_minecraft_username"); // TODO: Users should change this
+            return;
+        }
+        
+        try (Reader reader = new InputStreamReader(new FileInputStream(rolesFile), StandardCharsets.UTF_8)) {
+            Map<String, Object> data = gson.fromJson(reader, new TypeToken<Map<String, Object>>(){}.getType());
+            
+            // Load owners
+            if (data.containsKey("owners")) {
+                Map<String, String> owners = (Map<String, String>) data.get("owners");
+                ownerList.putAll(owners);
+                // Owners automatically get OWNER role
+                for (String owner : owners.keySet()) {
+                    playerRoles.put(owner.toLowerCase(), PlayerRole.OWNER);
+                }
+            }
+            
+            // Load roles
+            if (data.containsKey("roles")) {
+                Map<String, String> roles = (Map<String, String>) data.get("roles");
+                for (Map.Entry<String, String> entry : roles.entrySet()) {
+                    PlayerRole role = PlayerRole.fromString(entry.getValue());
+                    if (role != null) {
+                        playerRoles.put(entry.getKey().toLowerCase(), role);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to load roles: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Save roles to file
+     */
+    public void save() {
+        try {
+            rolesFile.getParentFile().mkdirs();
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("owners", ownerList);
+            
+            // Save non-owner roles
+            Map<String, String> rolesToSave = new HashMap<>();
+            for (Map.Entry<String, PlayerRole> entry : playerRoles.entrySet()) {
+                if (entry.getValue() != PlayerRole.OWNER) { // Owners are in owners list
+                    rolesToSave.put(entry.getKey(), entry.getValue().getName());
+                }
+            }
+            data.put("roles", rolesToSave);
+            
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(rolesFile), StandardCharsets.UTF_8)) {
+                gson.toJson(data, writer);
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to save roles: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Get all players with roles (for display in GUI)
+     */
+    public Map<String, PlayerRole> getAllRoles() {
+        return new HashMap<>(playerRoles);
+    }
+}
