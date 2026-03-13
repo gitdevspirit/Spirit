@@ -132,10 +132,18 @@ public class Config {
                 myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
                     Myau.moduleManager.getModule("LobbyIntel");
                 if (lobbyIntel != null) {
+                    ((IAccessorMinecraft) mc).getLogger().info("[Config] Loading LobbyIntel HUD settings - property values:");
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-x: " + lobbyIntel.hudPosX.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-y: " + lobbyIntel.hudPosY.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-scale: " + lobbyIntel.hudScale.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-enabled: " + lobbyIntel.hudEnabled.getValue());
+                    
                     lobbyIntel.loadHudSettings();
+                    ((IAccessorMinecraft) mc).getLogger().info("[Config] Applied HUD settings to overlay");
                 }
             } catch (Exception e) {
-                ((IAccessorMinecraft) mc).getLogger().warn("Failed to load HUD overlay settings: " + e.getMessage());
+                ((IAccessorMinecraft) mc).getLogger().warn("[Config] Failed to load HUD settings: " + e.getMessage());
+                e.printStackTrace();
             }
             
             ChatUtil.sendFormatted(String.format("%sConfig has been loaded (&a&o%s&r)&r", Myau.clientName, file.getName()));
@@ -152,6 +160,22 @@ public class Config {
 
     public void save() {
         try {
+            // Save HUD overlay settings BEFORE saving config
+            try {
+                myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
+                    Myau.moduleManager.getModule("LobbyIntel");
+                if (lobbyIntel != null) {
+                    lobbyIntel.saveHudSettings();
+                    ((IAccessorMinecraft) mc).getLogger().info("[Config] Saved LobbyIntel HUD settings - checking values:");
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-x: " + lobbyIntel.hudPosX.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-y: " + lobbyIntel.hudPosY.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-scale: " + lobbyIntel.hudScale.getValue());
+                    ((IAccessorMinecraft) mc).getLogger().info("  hud-enabled: " + lobbyIntel.hudEnabled.getValue());
+                }
+            } catch (Exception e) {
+                ((IAccessorMinecraft) mc).getLogger().warn("[Config] Failed to save HUD settings: " + e.getMessage());
+            }
+            
             if (!file.getParentFile().exists()) {
                 file.getParentFile().mkdirs();
             }
