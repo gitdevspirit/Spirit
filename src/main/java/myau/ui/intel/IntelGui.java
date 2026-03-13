@@ -290,18 +290,49 @@ public class IntelGui extends GuiScreen {
         String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.level;
         mc.fontRendererObj.drawString(lvlStr, nameX, cy + 19, p.loading ? COL_DIM : COL_GOLD, false);
 
-        // Urchin tag badge below level
+        // Urchin tag badge below level with icon - using proper Urchin app emojis
         if (p.urchinTag != null) {
+            // Get icon based on type - matching Urchin app
+            String icon = "⚠️"; // default warning
+            int iconColor = 0xFFFF8844; // orange
+            
+            if (p.urchinType != null) {
+                if (p.urchinType.contains("blatant")) {
+                    icon = "⚠️";  // Orange warning icon
+                    iconColor = 0xFFFF8844;
+                } else if (p.urchinType.contains("sniper")) {
+                    icon = "‼️";  // Red double exclamation
+                    iconColor = 0xFFFF3344;
+                } else if (p.urchinType.contains("confirmed")) {
+                    icon = "❗";  // Purple/magenta exclamation
+                    iconColor = 0xFFDD44DD;
+                } else if (p.urchinType.contains("closet")) {
+                    icon = "⚙️";  // Orange gear icon
+                    iconColor = 0xFFFF8844;
+                }
+            }
+            
             // Truncate long tag for card display
             String tag = p.urchinTag;
-            if (mc.fontRendererObj.getStringWidth(tag) > 130) {
-                while (tag.length() > 3 && mc.fontRendererObj.getStringWidth(tag + "\u2026") > 130)
+            if (mc.fontRendererObj.getStringWidth(tag) > 120) { // Slightly shorter to fit icon
+                while (tag.length() > 3 && mc.fontRendererObj.getStringWidth(tag + "\u2026") > 120)
                     tag = tag.substring(0, tag.length() - 1);
                 tag += "\u2026";
             }
-            int tw = mc.fontRendererObj.getStringWidth(tag) + 6;
-            RoundedUtils.drawRoundedRect(nameX, cy + 30, tw, 8, 2, 0x33FF2244);
-            gl(); mc.fontRendererObj.drawString(tag, nameX + 3f, cy + 31f, COL_RED, false);
+            
+            // Draw badge background
+            int iconWidth = mc.fontRendererObj.getStringWidth(icon) + 4;
+            int tagWidth = mc.fontRendererObj.getStringWidth(tag) + 4;
+            int totalWidth = iconWidth + tagWidth + 2;
+            
+            // Icon background
+            RoundedUtils.drawRoundedRect(nameX, cy + 30, iconWidth, 9, 2, iconColor & 0x66FFFFFF);
+            // Tag background
+            RoundedUtils.drawRoundedRect(nameX + iconWidth + 1, cy + 30, tagWidth, 9, 2, 0x33FF2244);
+            
+            gl(); 
+            mc.fontRendererObj.drawString(icon, nameX + 2, cy + 31, iconColor, false);
+            mc.fontRendererObj.drawString(tag, nameX + iconWidth + 3, cy + 31, COL_RED, false);
         }
 
         // Team colour dot (top right of card)
