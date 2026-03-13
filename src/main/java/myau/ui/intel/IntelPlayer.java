@@ -23,12 +23,17 @@ public class IntelPlayer {
     public String  urchinType  = null;    // raw type: "confirmed_cheater", "blatant_cheater" etc
     public String  urchinReason = null;   // raw reason text (lowercase): "ac and legitscaff when..."
 
+    // Spirit Client Role
+    public PlayerRole role     = null;    // OWNER, BETA, FRIEND, or USER
+
     // Computed
     public double  threatScore = 0;
 
     public IntelPlayer(String name, String team) {
         this.name = name;
         this.team = team;
+        // Check role on creation
+        this.role = RoleManager.getInstance().getRole(name);
     }
 
     /** Called after stats are loaded — compute weighted threat score 0-100 */
