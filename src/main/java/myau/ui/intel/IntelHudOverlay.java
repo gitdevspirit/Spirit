@@ -47,6 +47,7 @@ public class IntelHudOverlay {
     private boolean showWlr = false;
     private boolean showStreak = false;
     private boolean showThreat = true;
+    private boolean showUrchin = true;
     private boolean showTeamColor = true;
     private String sortMode = "threat"; // "threat", "fkdr", "name"
     
@@ -69,6 +70,7 @@ public class IntelHudOverlay {
     public void setShowWlr(boolean show) { this.showWlr = show; }
     public void setShowStreak(boolean show) { this.showStreak = show; }
     public void setShowThreat(boolean show) { this.showThreat = show; }
+    public void setShowUrchin(boolean show) { this.showUrchin = show; }
     public void setShowTeamColor(boolean show) { this.showTeamColor = show; }
     public void setSortMode(String mode) { this.sortMode = mode; }
     public void setBgOpacity(int opacity) { this.bgOpacity = Math.max(0, Math.min(255, opacity)); }
@@ -83,6 +85,7 @@ public class IntelHudOverlay {
     public boolean getShowWlr() { return showWlr; }
     public boolean getShowStreak() { return showStreak; }
     public boolean getShowThreat() { return showThreat; }
+    public boolean getShowUrchin() { return showUrchin; }
     public boolean getShowTeamColor() { return showTeamColor; }
     public String getSortMode() { return sortMode; }
     public int getBgOpacity() { return bgOpacity; }
@@ -163,6 +166,10 @@ public class IntelHudOverlay {
             drawText("WS", x, headerY, TEXT_DIM);
             x += 30;
         }
+        if (showUrchin) {
+            drawText("U", x + 8, headerY, TEXT_DIM); // Centered "U" for Urchin
+            x += 25;
+        }
         if (showThreat) {
             drawText("THREAT", x, headerY, TEXT_DIM);
         }
@@ -187,6 +194,7 @@ public class IntelHudOverlay {
         if (showFkdr) width += 40;
         if (showWlr) width += 35;
         if (showStreak) width += 30;
+        if (showUrchin) width += 25; // Urchin icon column
         if (showThreat) width += 45;
         
         return width;
@@ -213,6 +221,37 @@ public class IntelHudOverlay {
         if (p.threatScore >= 75) nameColor = ACCENT; // Pink for high threat
         
         drawText(p.name, currentX, y + 4, nameColor);
+        
+        // Draw Urchin badge if flagged
+        if (p.cheater && p.urchinTag != null && !p.urchinTag.isEmpty()) {
+            int badgeX = currentX + mc.fontRendererObj.getStringWidth(p.name) + 3;
+            int badgeY = y + 3;
+            
+            // Get icon and color based on type
+            String icon = "⚠";
+            int badgeColor = 0xFFFF8844; // orange default
+            
+            if (p.urchinType != null) {
+                if (p.urchinType.contains("confirmed")) {
+                    icon = "⚑";
+                    badgeColor = 0xFFFF3344; // red
+                } else if (p.urchinType.contains("blatant")) {
+                    icon = "✖";
+                    badgeColor = 0xFFFF1122; // bright red
+                } else if (p.urchinType.contains("suspected")) {
+                    icon = "?";
+                    badgeColor = 0xFFFFAA44; // yellow-orange
+                }
+            }
+            
+            // Draw small badge with icon
+            fillRect(badgeX, badgeY, 10, 10, badgeColor);
+            GlStateManager.pushMatrix();
+            GlStateManager.scale(0.7f, 0.7f, 1.0f);
+            mc.fontRendererObj.drawString(icon, (int)((badgeX + 2) / 0.7f), (int)((badgeY + 1) / 0.7f), 0xFFFFFFFF, false);
+            GlStateManager.popMatrix();
+        }
+        
         currentX += 80;
         
         // Draw FKDR (centered)
@@ -240,6 +279,29 @@ public class IntelHudOverlay {
             int wsWidth = mc.fontRendererObj.getStringWidth(wsText);
             drawText(wsText, currentX + (30 - wsWidth) / 2, y + 4, wsColor);
             currentX += 30;
+        }
+        
+        // Draw Urchin icon (centered)
+        if (showUrchin) {
+            if (p.cheater && p.urchinType != null) {
+                String icon = "⚠";
+                int iconColor = 0xFFFF8844;
+                
+                if (p.urchinType.contains("confirmed")) {
+                    icon = "⚑";
+                    iconColor = 0xFFFF3344;
+                } else if (p.urchinType.contains("blatant")) {
+                    icon = "✖";
+                    iconColor = 0xFFFF1122;
+                } else if (p.urchinType.contains("suspected")) {
+                    icon = "?";
+                    iconColor = 0xFFFFAA44;
+                }
+                
+                int iconWidth = mc.fontRendererObj.getStringWidth(icon);
+                drawText(icon, currentX + (25 - iconWidth) / 2, y + 4, iconColor);
+            }
+            currentX += 25;
         }
         
         // Draw threat score (centered, no bar)
