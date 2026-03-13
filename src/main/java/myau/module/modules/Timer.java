@@ -50,6 +50,15 @@ public class Timer extends Module {
     public void setEnabled(boolean enabled) {
         if (!enabled && isEnabled()) {
             long ms = (long)(countdownSecs.getValue() * 1000.0);
+            
+            // Instant disable if countdown is 1 second or less
+            if (ms <= 1000) {
+                pendingOff = false;
+                offAt      = -1;
+                super.setEnabled(false);
+                return;
+            }
+            
             if (showCountdown.getValue() && ms > 0) {
                 if (pendingOff) {
                     // Second press = instant off
