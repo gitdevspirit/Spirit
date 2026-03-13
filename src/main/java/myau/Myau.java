@@ -72,6 +72,7 @@ public class Myau {
         commandManager.register(new myau.command.commands.UrchinKeyCommand());
         commandManager.register(new myau.command.commands.IntelDebugCommand());
         commandManager.register(new myau.command.commands.IntelPathCommand());
+        commandManager.register(new myau.command.commands.RoleCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
@@ -191,6 +192,15 @@ public class Myau {
                 }
             }
             propertyManager.properties.put(module.getClass(), properties);
+            
+            // Debug: Log property count for LobbyIntel
+            if (module.getName().equals("LobbyIntel")) {
+                System.out.println("[PropertyManager] Found " + properties.size() + " properties for LobbyIntel:");
+                for (Property<?> prop : properties) {
+                    System.out.println("  - " + prop.getName() + " = " + prop.getValue());
+                }
+            }
+            
             EventManager.register(module);
         }
 
