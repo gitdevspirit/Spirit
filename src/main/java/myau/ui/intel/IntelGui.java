@@ -290,25 +290,25 @@ public class IntelGui extends GuiScreen {
         String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.level;
         mc.fontRendererObj.drawString(lvlStr, nameX, cy + 19, p.loading ? COL_DIM : COL_GOLD, false);
 
-        // Urchin tag badge below level with icon - using simple text icons
+        // Urchin tag badge below level with icon - using letter codes
         if (p.urchinTag != null) {
-            // Get icon based on type - simple text that works in Minecraft
-            String icon = "!"; // default warning
+            // Get icon based on type - letter codes
+            String icon = "C"; // default closet
             int iconColor = 0xFFFF8844; // orange
             
             if (p.urchinType != null) {
-                if (p.urchinType.contains("blatant")) {
-                    icon = "!";   // Exclamation for blatant
+                if (p.urchinType.contains("closet")) {
+                    icon = "C";   // C for closet
                     iconColor = 0xFFFF8844;
-                } else if (p.urchinType.contains("sniper")) {
-                    icon = "!!";  // Double exclamation for sniper
-                    iconColor = 0xFFFF3344;
                 } else if (p.urchinType.contains("confirmed")) {
-                    icon = "C";   // C for confirmed
+                    icon = "CC";  // CC for confirmed
                     iconColor = 0xFFDD44DD;
-                } else if (p.urchinType.contains("closet")) {
-                    icon = "*";   // Star/asterisk for closet
-                    iconColor = 0xFFFF8844;
+                } else if (p.urchinType.contains("blatant")) {
+                    icon = "BC";  // BC for blatant
+                    iconColor = 0xFFFF3344;
+                } else if (p.urchinType.contains("sniper")) {
+                    icon = "S";   // S for sniper
+                    iconColor = 0xFFFF1122;
                 }
             }
             
