@@ -122,6 +122,7 @@ public class IntelHudSettingsGui extends GuiScreen {
         y = drawToggle(innerX, y, innerW, "FKDR", hudOverlay.getShowFkdr(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "WLR", hudOverlay.getShowWlr(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "Winstreak", hudOverlay.getShowStreak(), mouseX, mouseY);
+        y = drawToggle(innerX, y, innerW, "Urchin Icon", hudOverlay.getShowUrchin(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "Threat Score", hudOverlay.getShowThreat(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "Team Colors", hudOverlay.getShowTeamColor(), mouseX, mouseY);
         y += 8;
@@ -323,6 +324,11 @@ public class IntelHudSettingsGui extends GuiScreen {
         
         if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + TOGGLE_HEIGHT) {
             hudOverlay.setShowStreak(!hudOverlay.getShowStreak()); return;
+        }
+        y += TOGGLE_HEIGHT;
+        
+        if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + TOGGLE_HEIGHT) {
+            hudOverlay.setShowUrchin(!hudOverlay.getShowUrchin()); return;
         }
         y += TOGGLE_HEIGHT;
         
