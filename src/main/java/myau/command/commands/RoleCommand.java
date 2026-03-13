@@ -33,11 +33,11 @@ public class RoleCommand extends Command {
         switch (subCmd) {
             case "list":
                 ChatUtil.sendFormatted("&7[Role] Players with roles:");
-                var roles = rm.getAllRoles();
+                java.util.Map<String, PlayerRole> roles = rm.getAllRoles();
                 if (roles.isEmpty()) {
                     ChatUtil.sendFormatted("  &7No roles assigned yet");
                 } else {
-                    for (var entry : roles.entrySet()) {
+                    for (java.util.Map.Entry<String, PlayerRole> entry : roles.entrySet()) {
                         PlayerRole role = entry.getValue();
                         String colorCode = getColorCode(role);
                         ChatUtil.sendFormatted("  " + colorCode + entry.getKey() + " &7- " + colorCode + role.getName());
