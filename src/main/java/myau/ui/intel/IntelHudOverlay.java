@@ -251,26 +251,27 @@ public class IntelHudOverlay {
             currentX += 30;
         }
         
-        // Draw Urchin icon (centered) - using simple text icons
+        // Draw Urchin icon (centered) - using letter codes
         if (showUrchin) {
             if (p.cheater && p.urchinType != null) {
-                String icon = "!"; // default warning
+                String icon = "C"; // default closet
                 int iconColor = 0xFFFFAA44; // orange
                 
-                if (p.urchinType.contains("blatant")) {
-                    icon = "!";  // Exclamation for blatant
+                if (p.urchinType.contains("closet")) {
+                    icon = "C";   // C for closet
                     iconColor = 0xFFFF8844;
-                } else if (p.urchinType.contains("sniper")) {
-                    icon = "!!"; // Double exclamation for sniper
-                    iconColor = 0xFFFF3344;
                 } else if (p.urchinType.contains("confirmed")) {
-                    icon = "C";  // C for confirmed
+                    icon = "CC";  // CC for confirmed
                     iconColor = 0xFFDD44DD;
-                } else if (p.urchinType.contains("closet")) {
-                    icon = "*";  // Star/asterisk for closet
-                    iconColor = 0xFFFF8844;
+                } else if (p.urchinType.contains("blatant")) {
+                    icon = "BC";  // BC for blatant
+                    iconColor = 0xFFFF3344;
+                } else if (p.urchinType.contains("sniper")) {
+                    icon = "S";   // S for sniper
+                    iconColor = 0xFFFF1122;
                 }
                 
+                // Center the icon in the column
                 int iconWidth = mc.fontRendererObj.getStringWidth(icon);
                 drawText(icon, currentX + (25 - iconWidth) / 2, y + 4, iconColor);
             }
