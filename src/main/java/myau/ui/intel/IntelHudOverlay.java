@@ -251,23 +251,23 @@ public class IntelHudOverlay {
             currentX += 30;
         }
         
-        // Draw Urchin icon (centered) - using proper Urchin app emojis
+        // Draw Urchin icon (centered) - using simple text icons
         if (showUrchin) {
             if (p.cheater && p.urchinType != null) {
-                String icon = "⚠️"; // default warning
+                String icon = "!"; // default warning
                 int iconColor = 0xFFFFAA44; // orange
                 
                 if (p.urchinType.contains("blatant")) {
-                    icon = "⚠️";  // Orange warning icon
+                    icon = "!";  // Exclamation for blatant
                     iconColor = 0xFFFF8844;
                 } else if (p.urchinType.contains("sniper")) {
-                    icon = "‼️";  // Red double exclamation
+                    icon = "!!"; // Double exclamation for sniper
                     iconColor = 0xFFFF3344;
                 } else if (p.urchinType.contains("confirmed")) {
-                    icon = "❗";  // Purple/magenta exclamation
+                    icon = "C";  // C for confirmed
                     iconColor = 0xFFDD44DD;
                 } else if (p.urchinType.contains("closet")) {
-                    icon = "⚙️";  // Orange gear icon
+                    icon = "*";  // Star/asterisk for closet
                     iconColor = 0xFFFF8844;
                 }
                 
