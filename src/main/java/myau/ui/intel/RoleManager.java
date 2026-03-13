@@ -47,7 +47,10 @@ public class RoleManager {
      * Get a player's role
      */
     public PlayerRole getRole(String playerNameOrUuid) {
-        return playerRoles.get(playerNameOrUuid.toLowerCase());
+        String key = playerNameOrUuid.toLowerCase();
+        PlayerRole role = playerRoles.get(key);
+        System.out.println("[RoleManager] getRole(" + playerNameOrUuid + ") -> key: " + key + " -> role: " + role);
+        return role;
     }
     
     /**
@@ -72,8 +75,10 @@ public class RoleManager {
      * Add an owner (can only be done programmatically or via config edit)
      */
     public void addOwner(String playerNameOrUuid) {
-        ownerList.put(playerNameOrUuid.toLowerCase(), playerNameOrUuid);
-        playerRoles.put(playerNameOrUuid.toLowerCase(), PlayerRole.OWNER);
+        String key = playerNameOrUuid.toLowerCase();
+        ownerList.put(key, playerNameOrUuid);
+        playerRoles.put(key, PlayerRole.OWNER);
+        System.out.println("[RoleManager] Added owner: " + playerNameOrUuid + " (key: " + key + ")");
         save();
     }
     
@@ -84,11 +89,19 @@ public class RoleManager {
         if (!rolesFile.exists()) {
             // Create default - add 999Spirit as owner
             addOwner("999Spirit");
+            // Save immediately to create the file
+            save();
             return;
         }
         
         try (Reader reader = new InputStreamReader(new FileInputStream(rolesFile), StandardCharsets.UTF_8)) {
             Map<String, Object> data = gson.fromJson(reader, new TypeToken<Map<String, Object>>(){}.getType());
+            
+            if (data == null) {
+                addOwner("999Spirit");
+                save();
+                return;
+            }
             
             // Load owners
             if (data.containsKey("owners")) {
@@ -98,6 +111,9 @@ public class RoleManager {
                 for (String owner : owners.keySet()) {
                     playerRoles.put(owner.toLowerCase(), PlayerRole.OWNER);
                 }
+            } else {
+                // No owners in file, add 999Spirit
+                addOwner("999Spirit");
             }
             
             // Load roles
@@ -112,6 +128,8 @@ public class RoleManager {
             }
         } catch (Exception e) {
             System.err.println("Failed to load roles: " + e.getMessage());
+            addOwner("999Spirit");
+            save();
         }
     }
     
