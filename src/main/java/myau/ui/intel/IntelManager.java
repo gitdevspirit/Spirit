@@ -278,9 +278,15 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            dbg("[Sloth] fk=" + fk + " w=" + w + " star=" + p.star);
-            return fk > 0 || w > 0;
-        } catch (Exception e) { dbg("[Sloth] ex: " + e); return false; }
+            dbg("[Sloth] SUCCESS " + p.name + " fk=" + fk + " w=" + w + " star=" + p.star);
+            
+            // Return true if we got valid BedWars data, even if player has 0 stats
+            return true;
+        } catch (Exception e) { 
+            System.err.println("[Sloth] ERROR fetching " + p.name + ": " + e.getMessage());
+            dbg("[Sloth] ex: " + e); 
+            return false; 
+        }
     }
 
     /** Official Hypixel API v2 — used when API key is configured */
@@ -298,12 +304,28 @@ public class IntelManager {
             if (uuid == null) return false;
 
             String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
-            dbg("[HypixelAPI] len=" + (json == null ? "null" : json.length()));
-            if (json == null) return false;
+            dbg("[HypixelAPI] response len=" + (json == null ? "null" : json.length()));
+            if (json == null) {
+                dbg("[HypixelAPI] null response for " + p.name);
+                return false;
+            }
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (!root.has("success") || !root.get("success").getAsBoolean()) return false;
-            if (!root.has("player") || root.get("player").isJsonNull()) return false;
+            
+            // Check for API errors
+            if (root.has("success") && !root.get("success").getAsBoolean()) {
+                if (root.has("cause")) {
+                    String cause = root.get("cause").getAsString();
+                    System.err.println("[HypixelAPI] API Error: " + cause + " (Check your API key!)");
+                    dbg("[HypixelAPI] API Error: " + cause);
+                }
+                return false;
+            }
+            
+            if (!root.has("player") || root.get("player").isJsonNull()) {
+                dbg("[HypixelAPI] player field null/missing for " + p.name);
+                return false;
+            }
 
             JsonObject player = root.getAsJsonObject("player");
             if (player.has("networkExp")) {
@@ -353,8 +375,17 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            return fk > 0 || w > 0;
-        } catch (Exception e) { dbg("[HypixelAPI] ex: " + e); return false; }
+            
+            dbg("[HypixelAPI] SUCCESS " + p.name + " fk=" + fk + " w=" + w + " star=" + p.star + " fkdr=" + String.format("%.2f", p.fkdr));
+            
+            // Return true if we got valid BedWars data, even if player has 0 stats
+            return true;
+        } catch (Exception e) { 
+            System.err.println("[HypixelAPI] ERROR fetching " + p.name + ": " + e.getMessage());
+            e.printStackTrace();
+            dbg("[HypixelAPI] ex: " + e); 
+            return false; 
+        }
     }
 
     private int bwStat(JsonObject bw, String... keys) {
