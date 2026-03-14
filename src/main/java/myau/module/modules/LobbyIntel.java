@@ -60,7 +60,7 @@ public class LobbyIntel extends Module {
     private boolean scannedThisSession = false;
 
     public LobbyIntel() {
-        super("LobbyIntel", false);
+        super("LobbyIntel", true); // Start enabled so packet events work
         IntelManager.getInstance().setGui(gui);
         IntelManager.getInstance().setHudOverlay(hudOverlay);
         // Try to auto-detect key on startup
@@ -116,13 +116,18 @@ public class LobbyIntel extends Module {
 
     @Override
     public void onEnabled() {
+        // Just open the GUI, don't disable module so events keep working
         mc.addScheduledTask(() -> mc.displayGuiScreen(gui));
         if (IntelManager.getInstance().getPlayers().isEmpty()) {
             IntelManager.getInstance().scanLobby();
         } else {
             gui.setPlayers(IntelManager.getInstance().getPlayers());
         }
-        setEnabled(false);
+    }
+    
+    @Override
+    public void onDisabled() {
+        // User can disable module if they want, but by default it stays on
     }
 
     @EventTarget
@@ -210,7 +215,8 @@ public class LobbyIntel extends Module {
      */
     @EventTarget
     public void onPacket(PacketEvent event) {
-        if (!isEnabled() || event.getType() != EventType.RECEIVE) return;
+        // Don't check isEnabled() - we want this to work even when GUI is closed
+        if (event.getType() != EventType.RECEIVE) return;
         if (!(event.getPacket() instanceof S02PacketChat)) return;
         
         S02PacketChat packet = (S02PacketChat) event.getPacket();
@@ -240,15 +246,20 @@ public class LobbyIntel extends Module {
             String playerList = message.substring(7).trim(); // Remove "ONLINE:"
             String[] players = playerList.split(",\\s*");
             
+            int addedCount = 0;
             for (String playerName : players) {
                 // Clean up any extra formatting
                 playerName = playerName.replaceAll("[^a-zA-Z0-9_]", "").trim();
                 if (!playerName.isEmpty() && !playerName.equals(mc.thePlayer.getName())) {
-                    addPlayerToOverlay(playerName);
+                    if (addPlayerToOverlay(playerName)) {
+                        addedCount++;
+                    }
                 }
             }
             
-            ChatUtil.sendFormatted("&7[Intel] &aAdded " + players.length + " players from /who command");
+            if (addedCount > 0) {
+                ChatUtil.sendFormatted("&7[Intel] &aAdded " + addedCount + " players from /who command");
+            }
         }
     }
     
@@ -276,19 +287,21 @@ public class LobbyIntel extends Module {
     
     /**
      * Add a player to the overlay by name
+     * @return true if player was added, false if already exists
      */
-    private void addPlayerToOverlay(String playerName) {
+    private boolean addPlayerToOverlay(String playerName) {
         IntelManager manager = IntelManager.getInstance();
         
         // Check if player already exists
         for (IntelPlayer p : manager.getPlayers()) {
             if (p.name.equalsIgnoreCase(playerName)) {
-                return; // Already in overlay
+                return false; // Already in overlay
             }
         }
         
         // Add player manually
         manager.addManualPlayer(playerName);
+        return true;
     }
 
     /** Try to guess the default log path based on OS */
