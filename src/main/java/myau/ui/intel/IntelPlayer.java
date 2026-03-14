@@ -10,6 +10,7 @@ public class IntelPlayer {
 
     // Hypixel BedWars stats
     public int    level       = 0;
+    public int    star        = 0;  // BedWars star (accurate from Achievement Points)
     public double fkdr        = 0;
     public double wlr         = 0;
     public int    winstreak   = 0;
