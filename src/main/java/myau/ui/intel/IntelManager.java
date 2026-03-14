@@ -34,10 +34,13 @@ public class IntelManager {
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
 
-    // Hypixel rate limiter: max 1 request per 200ms (5/sec, well under 120/min limit)
+    // Hypixel rate limiter: 300 requests per 5 minutes = 1 request per second
+    // Using 1100ms to be safe and avoid hitting the limit
     private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 200L;
+    private static final long HYPIXEL_INTERVAL_MS = 1100L; // 1.1 seconds between requests
+    private final AtomicInteger hypixelRequestCount = new AtomicInteger(0);
+    private final AtomicLong hypixelCounterStartTime = new AtomicLong(System.currentTimeMillis());
 
     // UUID cache for skin lookups of non-lobby players
     private final Map<String, String> uuidCache = new HashMap<>();
@@ -294,11 +297,52 @@ public class IntelManager {
         try {
             hypixelSlots.acquire();
             try {
-                long now  = System.currentTimeMillis();
-                long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
-                if (wait > 0) Thread.sleep(wait);
+                // Check request count in last 5 minutes
+                long now = System.currentTimeMillis();
+                long elapsed = now - hypixelCounterStartTime.get();
+                
+                // Reset counter if 5 minutes have passed
+                if (elapsed > 300000) { // 5 minutes = 300,000ms
+                    hypixelRequestCount.set(0);
+                    hypixelCounterStartTime.set(now);
+                    dbg("[HypixelAPI] Rate counter reset");
+                }
+                
+                // Check if we're at the limit (300 requests per 5 minutes)
+                int count = hypixelRequestCount.get();
+                if (count >= 300) {
+                    long waitUntilReset = 300000 - elapsed; // Time until counter resets
+                    System.err.println("[HypixelAPI] Rate limit reached! (" + count + "/300) Waiting " + (waitUntilReset/1000) + "s");
+                    dbg("[HypixelAPI] Rate limit hit, waiting " + (waitUntilReset/1000) + "s");
+                    Thread.sleep(waitUntilReset);
+                    // Reset after waiting
+                    hypixelRequestCount.set(0);
+                    hypixelCounterStartTime.set(System.currentTimeMillis());
+                }
+                
+                // Enforce minimum interval between requests (1.1 seconds)
+                long timeSinceLastRequest = now - lastHypixelRequest.get();
+                long wait = HYPIXEL_INTERVAL_MS - timeSinceLastRequest;
+                if (wait > 0) {
+                    Thread.sleep(wait);
+                }
+                
+                // Update timestamps and counter
                 lastHypixelRequest.set(System.currentTimeMillis());
-            } finally { hypixelSlots.release(); }
+                int newCount = hypixelRequestCount.incrementAndGet();
+                
+                // Warn if approaching limit
+                if (newCount == 250) {
+                    System.out.println("[HypixelAPI] WARNING: 250/300 requests used in last 5 minutes");
+                } else if (newCount == 280) {
+                    System.out.println("[HypixelAPI] WARNING: 280/300 requests used - nearing limit!");
+                }
+                
+                dbg("[HypixelAPI] Request " + newCount + "/300 in last " + (elapsed/1000) + "s");
+                
+            } finally { 
+                hypixelSlots.release(); 
+            }
 
             String uuid = fetchAndCacheUuid(p.name);
             if (uuid == null) return false;
@@ -316,8 +360,18 @@ public class IntelManager {
             if (root.has("success") && !root.get("success").getAsBoolean()) {
                 if (root.has("cause")) {
                     String cause = root.get("cause").getAsString();
-                    System.err.println("[HypixelAPI] API Error: " + cause + " (Check your API key!)");
-                    dbg("[HypixelAPI] API Error: " + cause);
+                    if (cause.toLowerCase().contains("rate") || cause.toLowerCase().contains("limit")) {
+                        System.err.println("[HypixelAPI] RATE LIMITED! Requests too fast. Slowing down...");
+                        dbg("[HypixelAPI] RATE LIMITED");
+                        // Add extra delay on rate limit
+                        Thread.sleep(2000);
+                    } else if (cause.toLowerCase().contains("key") || cause.toLowerCase().contains("invalid")) {
+                        System.err.println("[HypixelAPI] INVALID API KEY: " + cause);
+                        dbg("[HypixelAPI] INVALID KEY");
+                    } else {
+                        System.err.println("[HypixelAPI] API Error: " + cause);
+                        dbg("[HypixelAPI] Error: " + cause);
+                    }
                 }
                 return false;
             }
