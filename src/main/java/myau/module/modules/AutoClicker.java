@@ -292,8 +292,8 @@ public class AutoClicker extends Module {
 
     @Override
     public String[] getSuffix() {
-        String pattern = clickPattern.getIndex() == 0 ? "J" : "B";
-        String exhaust = isExhausted ? "!" : "";
-        return new String[]{String.format("%s%d%s", pattern, (int)targetCPS.getValue(), exhaust)};
+        String pattern = clickPattern.getIndex() == 0 ? "Jitter" : "Butterfly";
+        String exhaust = isExhausted ? " (Exhausted)" : "";
+        return new String[]{String.format("%s %d CPS%s", pattern, (int)targetCPS.getValue(), exhaust)};
     }
 }
