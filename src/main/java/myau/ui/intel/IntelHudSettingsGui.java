@@ -119,6 +119,7 @@ public class IntelHudSettingsGui extends GuiScreen {
         drawLabel(innerX, y, "COLUMNS");
         y += 20;
         y = drawToggle(innerX, y, innerW, "Player Heads", hudOverlay.getShowHeads(), mouseX, mouseY);
+        y = drawToggle(innerX, y, innerW, "Star", hudOverlay.getShowStar(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "FKDR", hudOverlay.getShowFkdr(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "WLR", hudOverlay.getShowWlr(), mouseX, mouseY);
         y = drawToggle(innerX, y, innerW, "Winstreak", hudOverlay.getShowStreak(), mouseX, mouseY);
@@ -309,6 +310,11 @@ public class IntelHudSettingsGui extends GuiScreen {
         // Column toggles
         if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + TOGGLE_HEIGHT) {
             hudOverlay.setShowHeads(!hudOverlay.getShowHeads()); return;
+        }
+        y += TOGGLE_HEIGHT;
+        
+        if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + TOGGLE_HEIGHT) {
+            hudOverlay.setShowStar(!hudOverlay.getShowStar()); return;
         }
         y += TOGGLE_HEIGHT;
         
