@@ -116,18 +116,21 @@ public class LobbyIntel extends Module {
 
     @Override
     public void onEnabled() {
-        // Just open the GUI, don't disable module so events keep working
+        // Open the GUI
         mc.addScheduledTask(() -> mc.displayGuiScreen(gui));
         if (IntelManager.getInstance().getPlayers().isEmpty()) {
             IntelManager.getInstance().scanLobby();
         } else {
             gui.setPlayers(IntelManager.getInstance().getPlayers());
         }
+        
+        // Keep module enabled after opening GUI so events work
     }
     
     @Override
     public void onDisabled() {
-        // User can disable module if they want, but by default it stays on
+        // Re-enable immediately so packet events keep working
+        setEnabled(true);
     }
 
     @EventTarget
