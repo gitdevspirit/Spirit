@@ -31,6 +31,19 @@ public class RoleCommand extends Command {
         String subCmd = args[0].toLowerCase();
         
         switch (subCmd) {
+            case "reload":
+            case "refresh":
+                rm.load();
+                ChatUtil.sendFormatted("&a[Role] Reloaded roles from file");
+                ChatUtil.sendFormatted("&7Total roles: " + rm.getAllRoles().size());
+                // Show if you're an owner
+                if (rm.isOwner(myName)) {
+                    ChatUtil.sendFormatted("&a[Role] You are an &cOWNER");
+                } else {
+                    ChatUtil.sendFormatted("&7[Role] You are not an owner");
+                }
+                break;
+            
             case "list":
                 ChatUtil.sendFormatted("&7[Role] Players with roles:");
                 java.util.Map<String, PlayerRole> roles = rm.getAllRoles();
