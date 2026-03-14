@@ -217,12 +217,20 @@ public class IntelManager {
 
     private void fetchHypixel(IntelPlayer p) {
         dbg("[Stats] fetching " + p.name);
-        boolean got = fetchSlothpixel(p);
-        dbg("[Stats] slothpixel=" + got + " fkdr=" + p.fkdr);
-        if (!got && !hypixelApiKey.isEmpty()) {
+        boolean got = false;
+        
+        // If we have Hypixel API key, use it first (more accurate, has stars)
+        if (!hypixelApiKey.isEmpty()) {
             got = fetchHypixelApi(p);
-            dbg("[Stats] hypixelApi=" + got + " fkdr=" + p.fkdr);
+            dbg("[Stats] hypixelApi=" + got + " fkdr=" + p.fkdr + " star=" + p.star);
         }
+        
+        // Fallback to Slothpixel if Hypixel API failed or no key
+        if (!got) {
+            got = fetchSlothpixel(p);
+            dbg("[Stats] slothpixel=" + got + " fkdr=" + p.fkdr);
+        }
+        
         p.loading = false;
     }
 
@@ -244,7 +252,21 @@ public class IntelManager {
                 if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
             }
             dbg("[Sloth] bw=" + (bw != null));
-            if (bw == null) return false;
+            if (bw == null) {
+                p.star = 0;
+                return false;
+            }
+            
+            // Try to get star from Slothpixel (they call it "level")
+            if (bw.has("level")) {
+                try {
+                    p.star = bw.get("level").getAsInt();
+                } catch (Exception e) {
+                    p.star = 0;
+                }
+            } else {
+                p.star = 0;
+            }
 
             int fk = bwInt(bw, "final_kills_bedwars");
             int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
@@ -256,7 +278,7 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            dbg("[Sloth] fk=" + fk + " w=" + w);
+            dbg("[Sloth] fk=" + fk + " w=" + w + " star=" + p.star);
             return fk > 0 || w > 0;
         } catch (Exception e) { dbg("[Sloth] ex: " + e); return false; }
     }
