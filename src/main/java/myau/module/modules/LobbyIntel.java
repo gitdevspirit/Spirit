@@ -1,8 +1,10 @@
 package myau.module.modules;
 
 import myau.event.EventTarget;
+import myau.event.types.EventType;
 import myau.events.KeyEvent;
 import myau.events.LoadWorldEvent;
+import myau.events.PacketEvent;
 import myau.events.Render2DEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
@@ -11,8 +13,11 @@ import myau.property.properties.*;
 import myau.ui.intel.IntelGui;
 import myau.ui.intel.IntelHudOverlay;
 import myau.ui.intel.IntelManager;
+import myau.ui.intel.IntelPlayer;
 import myau.util.ChatUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.network.play.server.S02PacketChat;
+import net.minecraft.util.IChatComponent;
 import org.lwjgl.input.Keyboard;
 
 import java.io.*;
@@ -39,6 +44,7 @@ public class LobbyIntel extends Module {
     public final BooleanProperty hudShowWlr      = new BooleanProperty("hud-show-wlr", false);
     public final BooleanProperty hudShowStreak   = new BooleanProperty("hud-show-streak", false);
     public final BooleanProperty hudShowThreat   = new BooleanProperty("hud-show-threat", true);
+    public final BooleanProperty hudShowUrchin   = new BooleanProperty("hud-show-urchin", true);
     public final BooleanProperty hudShowTeamColor= new BooleanProperty("hud-show-team-color", true);
     public final TextProperty    hudSortMode     = new TextProperty("hud-sort-mode", "threat");
 
@@ -75,6 +81,7 @@ public class LobbyIntel extends Module {
         hudOverlay.setShowWlr(hudShowWlr.getValue());
         hudOverlay.setShowStreak(hudShowStreak.getValue());
         hudOverlay.setShowThreat(hudShowThreat.getValue());
+        hudOverlay.setShowUrchin(hudShowUrchin.getValue());
         hudOverlay.setShowTeamColor(hudShowTeamColor.getValue());
         hudOverlay.setSortMode(hudSortMode.getValue());
         
@@ -93,6 +100,7 @@ public class LobbyIntel extends Module {
         hudShowWlr.setValue(hudOverlay.getShowWlr());
         hudShowStreak.setValue(hudOverlay.getShowStreak());
         hudShowThreat.setValue(hudOverlay.getShowThreat());
+        hudShowUrchin.setValue(hudOverlay.getShowUrchin());
         hudShowTeamColor.setValue(hudOverlay.getShowTeamColor());
         hudSortMode.setValue(hudOverlay.getSortMode());
         
@@ -190,6 +198,92 @@ public class LobbyIntel extends Module {
                 }
             } catch (Exception ignored) {}
         }).start();
+    }
+    
+    /**
+     * Handle chat packets for final kills and /who command
+     */
+    @EventTarget
+    public void onPacket(PacketEvent event) {
+        if (!isEnabled() || event.getType() != EventType.RECEIVE) return;
+        if (!(event.getPacket() instanceof S02PacketChat)) return;
+        
+        S02PacketChat packet = (S02PacketChat) event.getPacket();
+        IChatComponent component = packet.getChatComponent();
+        if (component == null) return;
+        
+        String message = component.getUnformattedText();
+        
+        // Detect final kills and remove player from overlay
+        // Hypixel format: "FINAL KILL! PlayerName was killed by OtherPlayer"
+        // or "FINAL KILL! PlayerName fell into the void"
+        if (message.contains("FINAL KILL!")) {
+            // Extract the killed player name
+            // Patterns: "FINAL KILL! Name was..." or "FINAL KILL! Name fell..."
+            Pattern killPattern = Pattern.compile("FINAL KILL! (\\w+) (?:was|fell|died)");
+            Matcher matcher = killPattern.matcher(message);
+            
+            if (matcher.find()) {
+                String killedPlayer = matcher.group(1);
+                removePlayerFromOverlay(killedPlayer);
+            }
+        }
+        
+        // Detect /who command response and add players
+        // Hypixel format: "ONLINE: Player1, Player2, Player3, ..."
+        if (message.startsWith("ONLINE:")) {
+            String playerList = message.substring(7).trim(); // Remove "ONLINE:"
+            String[] players = playerList.split(",\\s*");
+            
+            for (String playerName : players) {
+                // Clean up any extra formatting
+                playerName = playerName.replaceAll("[^a-zA-Z0-9_]", "").trim();
+                if (!playerName.isEmpty() && !playerName.equals(mc.thePlayer.getName())) {
+                    addPlayerToOverlay(playerName);
+                }
+            }
+            
+            ChatUtil.sendFormatted("&7[Intel] &aAdded " + players.length + " players from /who command");
+        }
+    }
+    
+    /**
+     * Remove a player from the overlay by name
+     */
+    private void removePlayerFromOverlay(String playerName) {
+        IntelManager manager = IntelManager.getInstance();
+        boolean removed = false;
+        
+        // Remove from main players list
+        for (int i = manager.getPlayers().size() - 1; i >= 0; i--) {
+            IntelPlayer p = manager.getPlayers().get(i);
+            if (p.name.equalsIgnoreCase(playerName)) {
+                manager.getPlayers().remove(i);
+                removed = true;
+                break;
+            }
+        }
+        
+        if (removed) {
+            ChatUtil.sendFormatted("&7[Intel] &cRemoved " + playerName + " (Final Kill)");
+        }
+    }
+    
+    /**
+     * Add a player to the overlay by name
+     */
+    private void addPlayerToOverlay(String playerName) {
+        IntelManager manager = IntelManager.getInstance();
+        
+        // Check if player already exists
+        for (IntelPlayer p : manager.getPlayers()) {
+            if (p.name.equalsIgnoreCase(playerName)) {
+                return; // Already in overlay
+            }
+        }
+        
+        // Add player manually
+        manager.addManualPlayer(playerName);
     }
 
     /** Try to guess the default log path based on OS */
