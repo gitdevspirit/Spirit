@@ -43,6 +43,7 @@ public class IntelHudOverlay {
     private float scale = 1.0f;
     private int maxPlayers = 10;
     private boolean showHeads = true;
+    private boolean showStar = true;
     private boolean showFkdr = true;
     private boolean showWlr = false;
     private boolean showStreak = false;
@@ -66,6 +67,7 @@ public class IntelHudOverlay {
     public void setScale(float scale) { this.scale = Math.max(0.5f, Math.min(2.0f, scale)); }
     public void setMaxPlayers(int max) { this.maxPlayers = Math.max(1, Math.min(20, max)); }
     public void setShowHeads(boolean show) { this.showHeads = show; }
+    public void setShowStar(boolean show) { this.showStar = show; }
     public void setShowFkdr(boolean show) { this.showFkdr = show; }
     public void setShowWlr(boolean show) { this.showWlr = show; }
     public void setShowStreak(boolean show) { this.showStreak = show; }
@@ -81,6 +83,7 @@ public class IntelHudOverlay {
     public float getScale() { return scale; }
     public int getMaxPlayers() { return maxPlayers; }
     public boolean getShowHeads() { return showHeads; }
+    public boolean getShowStar() { return showStar; }
     public boolean getShowFkdr() { return showFkdr; }
     public boolean getShowWlr() { return showWlr; }
     public boolean getShowStreak() { return showStreak; }
@@ -116,10 +119,53 @@ public class IntelHudOverlay {
         }
     }
     
+    /**
+     * Get players to display, filtering out self and teammates if enabled
+     */
+    private List<IntelPlayer> getDisplayPlayers() {
+        // Get hide teammates setting
+        myau.module.modules.LobbyIntel lobbyIntel = 
+            (myau.module.modules.LobbyIntel) myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
+        boolean hideTeammates = lobbyIntel != null && lobbyIntel.hideTeammates.getValue();
+        
+        // Get my team
+        String myTeam = null;
+        String myName = mc.thePlayer != null ? mc.thePlayer.getName() : null;
+        
+        if (myName != null) {
+            for (IntelPlayer p : players) {
+                if (p.name.equals(myName)) {
+                    myTeam = p.team;
+                    break;
+                }
+            }
+        }
+        
+        // Filter players
+        List<IntelPlayer> filtered = new ArrayList<>();
+        for (IntelPlayer p : players) {
+            // Skip self
+            if (myName != null && p.name.equals(myName)) continue;
+            
+            // Skip teammates if enabled
+            if (hideTeammates && myTeam != null && p.team != null && p.team.equals(myTeam)) {
+                continue;
+            }
+            
+            filtered.add(p);
+        }
+        
+        return filtered;
+    }
+    
     // ── Rendering ──────────────────────────────────────────────────────────────
     
     public void render() {
         if (!enabled || players.isEmpty()) return;
+        
+        // Filter out teammates if hideTeammates is enabled
+        List<IntelPlayer> displayPlayers = getDisplayPlayers();
+        if (displayPlayers.isEmpty()) return;
         
         ScaledResolution sr = new ScaledResolution(mc);
         
@@ -130,7 +176,7 @@ public class IntelHudOverlay {
         int scaledY = (int)(posY / scale);
         
         // Calculate dimensions
-        int displayCount = Math.min(players.size(), maxPlayers);
+        int displayCount = Math.min(displayPlayers.size(), maxPlayers);
         int width = calculateWidth();
         int contentHeight = (LINE_HEIGHT * displayCount) + (PADDING * 2);
         int totalHeight = HEADER_HEIGHT + contentHeight;
@@ -153,6 +199,12 @@ public class IntelHudOverlay {
         // Name header
         drawText("NAME", x, headerY, TEXT_DIM);
         x += 80;
+        
+        // Star header
+        if (showStar) {
+            drawText("✫", x + 15, headerY, TEXT_DIM);
+            x += 35;
+        }
         
         if (showFkdr) {
             drawText("FKDR", x, headerY, TEXT_DIM);
@@ -177,7 +229,7 @@ public class IntelHudOverlay {
         // Draw players
         int y = scaledY + HEADER_HEIGHT + PADDING;
         for (int i = 0; i < displayCount; i++) {
-            IntelPlayer p = players.get(i);
+            IntelPlayer p = displayPlayers.get(i);
             drawPlayerLine(p, scaledX + PADDING, y, width - (PADDING * 2));
             y += LINE_HEIGHT;
         }
@@ -191,6 +243,7 @@ public class IntelHudOverlay {
         if (showHeads) width += HEAD_SIZE + 4;
         if (showTeamColor) width += 3; // Team indicator
         width += 80; // Name column (minimum)
+        if (showStar) width += 35; // Star column
         if (showFkdr) width += 40;
         if (showWlr) width += 35;
         if (showStreak) width += 30;
@@ -235,6 +288,15 @@ public class IntelHudOverlay {
         }
         
         currentX += 80;
+        
+        // Draw Star (centered)
+        if (showStar) {
+            String starText = p.loading ? "-" : String.valueOf(p.star);
+            int starColor = p.loading ? TEXT_DIM : getStarColor(p.star);
+            int starWidth = mc.fontRendererObj.getStringWidth(starText);
+            drawText(starText, currentX + (35 - starWidth) / 2, y + 4, starColor);
+            currentX += 35;
+        }
         
         // Draw FKDR (centered)
         if (showFkdr) {
@@ -372,6 +434,14 @@ public class IntelHudOverlay {
         if (value >= mid) return 0xFFFF9933;
         if (value >= mid / 2) return 0xFFFFEE44;
         return 0xFF44CC66;
+    }
+    
+    private int getStarColor(int star) {
+        if (star >= 1000) return 0xFFFF5555; // Red - Prestiged players
+        if (star >= 500) return 0xFFFFAA00;  // Orange - Expert
+        if (star >= 200) return 0xFFFFFF55;  // Yellow - Advanced
+        if (star >= 100) return 0xFF55FF55;  // Green - Experienced
+        return 0xFFAAAAAA; // Gray - Beginner
     }
     
     // ── Utility Methods ────────────────────────────────────────────────────────
