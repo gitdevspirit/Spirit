@@ -291,19 +291,34 @@ public class IntelManager {
 
             JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
             JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
-            if (bw == null) return false;
-
+            
             // Calculate accurate BedWars star from Achievement Points
             // Hypixel stores BedWars level as "Experience" in the Bedwars stats
-            if (bw.has("Experience")) {
-                int experience = bw.get("Experience").getAsInt();
-                p.star = getBedWarsLevelFromExp(experience);
+            if (bw != null && bw.has("Experience")) {
+                try {
+                    int experience = bw.get("Experience").getAsInt();
+                    p.star = getBedWarsLevelFromExp(experience);
+                } catch (Exception e) {
+                    p.star = 0;
+                }
             } else {
                 // Fallback: use achievements if available
-                JsonObject achievements = player.has("achievements") ? player.getAsJsonObject("achievements") : null;
-                if (achievements != null && achievements.has("bedwars_level")) {
-                    p.star = achievements.get("bedwars_level").getAsInt();
+                try {
+                    JsonObject achievements = player.has("achievements") ? player.getAsJsonObject("achievements") : null;
+                    if (achievements != null && achievements.has("bedwars_level")) {
+                        p.star = achievements.get("bedwars_level").getAsInt();
+                    } else {
+                        p.star = 0; // Default to 0 if no data
+                    }
+                } catch (Exception e) {
+                    p.star = 0;
                 }
+            }
+            
+            // If no BedWars stats, return false but set star to 0 first
+            if (bw == null) {
+                p.star = 0;
+                return false;
             }
 
             int fk = bwInt(bw, "final_kills_bedwars");
