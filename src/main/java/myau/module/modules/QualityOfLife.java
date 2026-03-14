@@ -66,10 +66,10 @@ public class QualityOfLife extends Module {
     public final SliderSetting  keystrokesBgGreen  = register(new SliderSetting("  BG Green", 0, 0, 255, 1));
     public final SliderSetting  keystrokesBgBlue   = register(new SliderSetting("  BG Blue", 0, 0, 255, 1));
     public final SliderSetting  keystrokesBgAlpha  = register(new SliderSetting("  BG Alpha", 136, 0, 255, 1));
-    public final SliderSetting  keystrokesPressedRed   = register(new SliderSetting("  Pressed Red", 255, 0, 255, 1));
-    public final SliderSetting  keystrokesPressedGreen = register(new SliderSetting("  Pressed Green", 255, 0, 255, 1));
-    public final SliderSetting  keystrokesPressedBlue  = register(new SliderSetting("  Pressed Blue", 255, 0, 255, 1));
-    public final SliderSetting  keystrokesPressedAlpha = register(new SliderSetting("  Pressed Alpha", 136, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedRed   = register(new SliderSetting("  Pressed Red", 200, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedGreen = register(new SliderSetting("  Pressed Green", 200, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedBlue  = register(new SliderSetting("  Pressed Blue", 200, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedAlpha = register(new SliderSetting("  Pressed Alpha", 180, 0, 255, 1));
     public final SliderSetting  keystrokesBorderRed    = register(new SliderSetting("  Border Red", 85, 0, 255, 1));
     public final SliderSetting  keystrokesBorderGreen  = register(new SliderSetting("  Border Green", 85, 0, 255, 1));
     public final SliderSetting  keystrokesBorderBlue   = register(new SliderSetting("  Border Blue", 85, 0, 255, 1));
