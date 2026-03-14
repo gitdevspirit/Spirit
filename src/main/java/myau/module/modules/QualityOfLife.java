@@ -60,6 +60,26 @@ public class QualityOfLife extends Module {
     public final SliderSetting  keystrokesScale    = register(new SliderSetting("  Scale", 1.0, 0.5, 2.0, 0.1));
     public final BooleanSetting keystrokesShowCPS  = register(new BooleanSetting("  Show CPS", true));
     public final DropdownSetting keystrokesMode    = register(new DropdownSetting("  Mode", 0, "WASD", "WASD+SPACE", "WASD+MOUSE"));
+    public final SliderSetting  keystrokesKeySize  = register(new SliderSetting("  Key Size", 25, 15, 40, 1));
+    public final SliderSetting  keystrokesGap      = register(new SliderSetting("  Key Gap", 2, 0, 10, 1));
+    public final SliderSetting  keystrokesBgRed    = register(new SliderSetting("  BG Red", 0, 0, 255, 1));
+    public final SliderSetting  keystrokesBgGreen  = register(new SliderSetting("  BG Green", 0, 0, 255, 1));
+    public final SliderSetting  keystrokesBgBlue   = register(new SliderSetting("  BG Blue", 0, 0, 255, 1));
+    public final SliderSetting  keystrokesBgAlpha  = register(new SliderSetting("  BG Alpha", 136, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedRed   = register(new SliderSetting("  Pressed Red", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedGreen = register(new SliderSetting("  Pressed Green", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedBlue  = register(new SliderSetting("  Pressed Blue", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesPressedAlpha = register(new SliderSetting("  Pressed Alpha", 136, 0, 255, 1));
+    public final SliderSetting  keystrokesBorderRed    = register(new SliderSetting("  Border Red", 85, 0, 255, 1));
+    public final SliderSetting  keystrokesBorderGreen  = register(new SliderSetting("  Border Green", 85, 0, 255, 1));
+    public final SliderSetting  keystrokesBorderBlue   = register(new SliderSetting("  Border Blue", 85, 0, 255, 1));
+    public final SliderSetting  keystrokesBorderAlpha  = register(new SliderSetting("  Border Alpha", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesBorderWidth  = register(new SliderSetting("  Border Width", 1, 0, 5, 1));
+    public final SliderSetting  keystrokesTextRed      = register(new SliderSetting("  Text Red", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesTextGreen    = register(new SliderSetting("  Text Green", 255, 0, 255, 1));
+    public final SliderSetting  keystrokesTextBlue     = register(new SliderSetting("  Text Blue", 255, 0, 255, 1));
+    public final BooleanSetting keystrokesRounded      = register(new BooleanSetting("  Rounded Corners", false));
+    public final BooleanSetting keystrokesShadow       = register(new BooleanSetting("  Text Shadow", true));
     
     // ═══════════════════════════════════════════════════════════════════
     // CPS COUNTER - Clicks per second display
@@ -297,8 +317,8 @@ public class QualityOfLife extends Module {
         int x = (int) keystrokesX.getValue();
         int y = (int) keystrokesY.getValue();
         
-        int keySize = 25;
-        int gap = 2;
+        int keySize = (int) keystrokesKeySize.getValue();
+        int gap = (int) keystrokesGap.getValue();
         
         GlStateManager.pushMatrix();
         GlStateManager.scale(scale, scale, 1.0f);
@@ -330,10 +350,21 @@ public class QualityOfLife extends Module {
             if (keystrokesShowCPS.getValue()) {
                 String cpsText = leftClicks.size() + " | " + rightClicks.size() + " CPS";
                 int cpsW = mc.fontRendererObj.getStringWidth(cpsText);
-                mc.fontRendererObj.drawStringWithShadow(cpsText, 
-                    scaledX + (keySize * 3 + gap * 2) / 2 - cpsW / 2, 
-                    mouseY + keySize + 5, 
-                    0xFFFFFFFF);
+                int textColor = getColorFromSettings(
+                    keystrokesTextRed, keystrokesTextGreen, keystrokesTextBlue, 255
+                );
+                
+                if (keystrokesShadow.getValue()) {
+                    mc.fontRendererObj.drawStringWithShadow(cpsText, 
+                        scaledX + (keySize * 3 + gap * 2) / 2 - cpsW / 2, 
+                        mouseY + keySize + 5, 
+                        textColor);
+                } else {
+                    mc.fontRendererObj.drawString(cpsText, 
+                        scaledX + (keySize * 3 + gap * 2) / 2 - cpsW / 2, 
+                        mouseY + keySize + 5, 
+                        textColor, false);
+                }
             }
         }
         
@@ -341,22 +372,87 @@ public class QualityOfLife extends Module {
     }
     
     private void drawKey(String label, int x, int y, int width, boolean pressed) {
-        int height = 25;
-        int bgColor = pressed ? 0x88FFFFFF : 0x88000000;
-        int borderColor = pressed ? 0xFFFFFFFF : 0xFF555555;
+        int keySize = (int) keystrokesKeySize.getValue();
+        int height = keySize;
+        
+        // Get colors from settings
+        int bgColor = pressed ? 
+            getColorFromSettings(keystrokesPressedRed, keystrokesPressedGreen, keystrokesPressedBlue, keystrokesPressedAlpha) :
+            getColorFromSettings(keystrokesBgRed, keystrokesBgGreen, keystrokesBgBlue, keystrokesBgAlpha);
+        
+        int borderWidth = (int) keystrokesBorderWidth.getValue();
+        int borderColor = getColorFromSettings(
+            keystrokesBorderRed, keystrokesBorderGreen, keystrokesBorderBlue, keystrokesBorderAlpha
+        );
+        
+        int textColor = getColorFromSettings(
+            keystrokesTextRed, keystrokesTextGreen, keystrokesTextBlue, 255
+        );
         
         // Background
-        drawRect(x, y, width, height, bgColor);
+        if (keystrokesRounded.getValue()) {
+            drawRoundedRect(x, y, width, height, 3, bgColor);
+        } else {
+            drawRect(x, y, width, height, bgColor);
+        }
         
         // Border
-        drawHollowRect(x, y, width, height, 1, borderColor);
+        if (borderWidth > 0) {
+            if (keystrokesRounded.getValue()) {
+                drawRoundedRectOutline(x, y, width, height, 3, borderWidth, borderColor);
+            } else {
+                drawHollowRect(x, y, width, height, borderWidth, borderColor);
+            }
+        }
         
         // Label
         int labelW = mc.fontRendererObj.getStringWidth(label);
-        mc.fontRendererObj.drawStringWithShadow(label, 
-            x + width / 2 - labelW / 2, 
-            y + height / 2 - 4, 
-            0xFFFFFFFF);
+        if (keystrokesShadow.getValue()) {
+            mc.fontRendererObj.drawStringWithShadow(label, 
+                x + width / 2 - labelW / 2, 
+                y + height / 2 - 4, 
+                textColor);
+        } else {
+            mc.fontRendererObj.drawString(label, 
+                x + width / 2 - labelW / 2, 
+                y + height / 2 - 4, 
+                textColor, false);
+        }
+    }
+    
+    private int getColorFromSettings(SliderSetting r, SliderSetting g, SliderSetting b, int a) {
+        return getColorFromSettings(r, g, b, null, a);
+    }
+    
+    private int getColorFromSettings(SliderSetting r, SliderSetting g, SliderSetting b, SliderSetting a) {
+        return getColorFromSettings(r, g, b, a, 255);
+    }
+    
+    private int getColorFromSettings(SliderSetting r, SliderSetting g, SliderSetting b, SliderSetting a, int defaultAlpha) {
+        int red = (int) r.getValue();
+        int green = (int) g.getValue();
+        int blue = (int) b.getValue();
+        int alpha = a != null ? (int) a.getValue() : defaultAlpha;
+        return (alpha << 24) | (red << 16) | (green << 8) | blue;
+    }
+    
+    private void drawRoundedRect(int x, int y, int width, int height, int radius, int color) {
+        // Simple rounded rect approximation for now
+        // Draw center rect
+        drawRect(x + radius, y, width - radius * 2, height, color);
+        drawRect(x, y + radius, radius, height - radius * 2, color);
+        drawRect(x + width - radius, y + radius, radius, height - radius * 2, color);
+        
+        // Draw corners (approximate with small rects)
+        drawRect(x + radius, y, radius, radius, color);
+        drawRect(x + width - radius * 2, y, radius, radius, color);
+        drawRect(x + radius, y + height - radius, radius, radius, color);
+        drawRect(x + width - radius * 2, y + height - radius, radius, radius, color);
+    }
+    
+    private void drawRoundedRectOutline(int x, int y, int width, int height, int radius, int lineWidth, int color) {
+        // Simple outline approximation
+        drawHollowRect(x, y, width, height, lineWidth, color);
     }
     
     private void renderCPS() {
