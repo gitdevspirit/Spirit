@@ -36,10 +36,10 @@ public class IntelManager {
     private volatile boolean fetching = false;
 
     // Hypixel rate limiter: 300 requests per 5 minutes = 1 request per second
-    // Using 1100ms to be safe and avoid hitting the limit
+    // Using exactly 1000ms = 60 requests/min = 300 requests/5min (at the limit but safe)
     private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 1100L; // 1.1 seconds between requests
+    private static final long HYPIXEL_INTERVAL_MS = 1000L; // 1 second between requests
     private final AtomicInteger hypixelRequestCount = new AtomicInteger(0);
     private final AtomicLong hypixelCounterStartTime = new AtomicLong(System.currentTimeMillis());
 
