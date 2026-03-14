@@ -30,6 +30,7 @@ public class LobbyIntel extends Module {
     public final BooleanSetting autoScan    = register(new BooleanSetting("Auto Scan on Join", true));
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
     public final BooleanSetting notifyCheaters = register(new BooleanSetting("Notify Cheaters", false));
+    public final BooleanSetting hideTeammates  = register(new BooleanSetting("Hide Teammates", false));
     public final SliderSetting  hudKeybind  = register(new SliderSetting("HUD Toggle Key", Keyboard.KEY_H, 0, 255, 1));
 
     // HUD Overlay properties (saved to config)
@@ -40,6 +41,7 @@ public class LobbyIntel extends Module {
     public final IntProperty     hudMaxPlayers   = new IntProperty("hud-max-players", 10, 1, 20);
     public final IntProperty     hudBgOpacity    = new IntProperty("hud-bg-opacity", 200, 0, 255);
     public final BooleanProperty hudShowHeads    = new BooleanProperty("hud-show-heads", true);
+    public final BooleanProperty hudShowStar     = new BooleanProperty("hud-show-star", true);
     public final BooleanProperty hudShowFkdr     = new BooleanProperty("hud-show-fkdr", true);
     public final BooleanProperty hudShowWlr      = new BooleanProperty("hud-show-wlr", false);
     public final BooleanProperty hudShowStreak   = new BooleanProperty("hud-show-streak", false);
@@ -47,6 +49,7 @@ public class LobbyIntel extends Module {
     public final BooleanProperty hudShowUrchin   = new BooleanProperty("hud-show-urchin", true);
     public final BooleanProperty hudShowTeamColor= new BooleanProperty("hud-show-team-color", true);
     public final TextProperty    hudSortMode     = new TextProperty("hud-sort-mode", "threat");
+    public final TextProperty    hudColumnOrder  = new TextProperty("hud-column-order", "name,star,fkdr,urchin,threat");
 
     // Saved via config, set via .intelpath command
     public final TextProperty logPath = new TextProperty("log-path",
@@ -77,6 +80,7 @@ public class LobbyIntel extends Module {
         hudOverlay.setMaxPlayers(hudMaxPlayers.getValue());
         hudOverlay.setBgOpacity(hudBgOpacity.getValue());
         hudOverlay.setShowHeads(hudShowHeads.getValue());
+        hudOverlay.setShowStar(hudShowStar.getValue());
         hudOverlay.setShowFkdr(hudShowFkdr.getValue());
         hudOverlay.setShowWlr(hudShowWlr.getValue());
         hudOverlay.setShowStreak(hudShowStreak.getValue());
@@ -96,6 +100,7 @@ public class LobbyIntel extends Module {
         hudMaxPlayers.setValue(hudOverlay.getMaxPlayers());
         hudBgOpacity.setValue(hudOverlay.getBgOpacity());
         hudShowHeads.setValue(hudOverlay.getShowHeads());
+        hudShowStar.setValue(hudOverlay.getShowStar());
         hudShowFkdr.setValue(hudOverlay.getShowFkdr());
         hudShowWlr.setValue(hudOverlay.getShowWlr());
         hudShowStreak.setValue(hudOverlay.getShowStreak());
