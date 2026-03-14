@@ -293,6 +293,19 @@ public class IntelManager {
             JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
             if (bw == null) return false;
 
+            // Calculate accurate BedWars star from Achievement Points
+            // Hypixel stores BedWars level as "Experience" in the Bedwars stats
+            if (bw.has("Experience")) {
+                int experience = bw.get("Experience").getAsInt();
+                p.star = getBedWarsLevelFromExp(experience);
+            } else {
+                // Fallback: use achievements if available
+                JsonObject achievements = player.has("achievements") ? player.getAsJsonObject("achievements") : null;
+                if (achievements != null && achievements.has("bedwars_level")) {
+                    p.star = achievements.get("bedwars_level").getAsInt();
+                }
+            }
+
             int fk = bwInt(bw, "final_kills_bedwars");
             int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
             int w  = bwInt(bw, "wins_bedwars");
@@ -434,6 +447,52 @@ public class IntelManager {
         while ((line = br.readLine()) != null) sb.append(line);
         br.close();
         return sb.toString();
+    }
+    
+    /**
+     * Calculate BedWars level (star) from experience points
+     * Hypixel BedWars uses a tiered progression system
+     */
+    private static int getBedWarsLevelFromExp(int exp) {
+        int level = 0;
+        
+        // Levels 0-3: 500 XP per level
+        if (exp < 2000) {
+            return exp / 500;
+        }
+        level = 4;
+        exp -= 2000;
+        
+        // Levels 4-99: 1000 XP per level  
+        if (exp < 96000) {
+            return level + (exp / 1000);
+        }
+        level = 100;
+        exp -= 96000;
+        
+        // Levels 100-199: 2000 XP per level
+        if (exp < 200000) {
+            return level + (exp / 2000);
+        }
+        level = 200;
+        exp -= 200000;
+        
+        // Levels 200-299: 3000 XP per level
+        if (exp < 300000) {
+            return level + (exp / 3000);
+        }
+        level = 300;
+        exp -= 300000;
+        
+        // Levels 300-399: 4000 XP per level
+        if (exp < 400000) {
+            return level + (exp / 4000);
+        }
+        level = 400;
+        exp -= 400000;
+        
+        // Levels 400+: 5000 XP per level
+        return level + (exp / 5000);
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
