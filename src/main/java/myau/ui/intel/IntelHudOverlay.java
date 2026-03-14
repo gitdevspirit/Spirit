@@ -200,30 +200,45 @@ public class IntelHudOverlay {
         drawText("NAME", x, headerY, TEXT_DIM);
         x += 80;
         
-        // Star header
+        // Star header - centered
         if (showStar) {
-            drawText("✫", x + 15, headerY, TEXT_DIM);
+            int starHeaderW = mc.fontRendererObj.getStringWidth("✫");
+            drawText("✫", x + (35 - starHeaderW) / 2, headerY, TEXT_DIM);
             x += 35;
         }
         
+        // FKDR header - centered
         if (showFkdr) {
-            drawText("FKDR", x, headerY, TEXT_DIM);
+            int fkdrHeaderW = mc.fontRendererObj.getStringWidth("FKDR");
+            drawText("FKDR", x + (40 - fkdrHeaderW) / 2, headerY, TEXT_DIM);
             x += 40;
         }
+        
+        // WLR header - centered
         if (showWlr) {
-            drawText("WLR", x, headerY, TEXT_DIM);
+            int wlrHeaderW = mc.fontRendererObj.getStringWidth("WLR");
+            drawText("WLR", x + (35 - wlrHeaderW) / 2, headerY, TEXT_DIM);
             x += 35;
         }
+        
+        // WS header - centered
         if (showStreak) {
-            drawText("WS", x, headerY, TEXT_DIM);
+            int wsHeaderW = mc.fontRendererObj.getStringWidth("WS");
+            drawText("WS", x + (30 - wsHeaderW) / 2, headerY, TEXT_DIM);
             x += 30;
         }
+        
+        // U header - centered
         if (showUrchin) {
-            drawText("U", x + 8, headerY, TEXT_DIM); // Centered "U" for Urchin
+            int uHeaderW = mc.fontRendererObj.getStringWidth("U");
+            drawText("U", x + (25 - uHeaderW) / 2, headerY, TEXT_DIM);
             x += 25;
         }
+        
+        // THREAT header - centered
         if (showThreat) {
-            drawText("THREAT", x, headerY, TEXT_DIM);
+            int threatHeaderW = mc.fontRendererObj.getStringWidth("THREAT");
+            drawText("THREAT", x + (45 - threatHeaderW) / 2, headerY, TEXT_DIM);
         }
         
         // Draw players
@@ -289,12 +304,17 @@ public class IntelHudOverlay {
         
         currentX += 80;
         
-        // Draw Star (centered)
+        // Draw Star (centered with ✫ symbol)
         if (showStar) {
-            String starText = p.loading ? "-" : String.valueOf(p.star);
-            int starColor = p.loading ? TEXT_DIM : getStarColor(p.star);
-            int starWidth = mc.fontRendererObj.getStringWidth(starText);
-            drawText(starText, currentX + (35 - starWidth) / 2, y + 4, starColor);
+            if (p.loading) {
+                int dashWidth = mc.fontRendererObj.getStringWidth("-");
+                drawText("-", currentX + (35 - dashWidth) / 2, y + 4, TEXT_DIM);
+            } else {
+                String starText = "✫" + p.star;
+                int starColor = getPrestigeColor(p.star);
+                int starWidth = mc.fontRendererObj.getStringWidth(starText);
+                drawText(starText, currentX + (35 - starWidth) / 2, y + 4, starColor);
+            }
             currentX += 35;
         }
         
@@ -436,12 +456,46 @@ public class IntelHudOverlay {
         return 0xFF44CC66;
     }
     
-    private int getStarColor(int star) {
-        if (star >= 1000) return 0xFFFF5555; // Red - Prestiged players
-        if (star >= 500) return 0xFFFFAA00;  // Orange - Expert
-        if (star >= 200) return 0xFFFFFF55;  // Yellow - Advanced
-        if (star >= 100) return 0xFF55FF55;  // Green - Experienced
-        return 0xFFAAAAAA; // Gray - Beginner
+    /**
+     * Get color based on Hypixel BedWars prestige brackets
+     */
+    private int getPrestigeColor(int star) {
+        // Hypixel BedWars Prestige Colors
+        if (star >= 3000) return 0xFFFF55FF; // Pink/Magenta [3000+]
+        if (star >= 2900) return 0xFFAA00AA; // Dark Purple [2900-2999]
+        if (star >= 2800) return 0xFF00AAAA; // Dark Aqua [2800-2899]
+        if (star >= 2700) return 0xFF00AA00; // Dark Green [2700-2799]
+        if (star >= 2600) return 0xFFFFAA00; // Gold [2600-2699]
+        if (star >= 2500) return 0xFFFF5555; // Red [2500-2599]
+        if (star >= 2400) return 0xFFAAAAAA; // Gray [2400-2499]
+        if (star >= 2300) return 0xFFFFFFFF; // White [2300-2399]
+        if (star >= 2200) return 0xFF55FF55; // Green [2200-2299]
+        if (star >= 2100) return 0xFF5555FF; // Blue [2100-2199]
+        if (star >= 2000) return 0xFF55FFFF; // Aqua [2000-2099]
+        
+        if (star >= 1900) return 0xFFFF55FF; // Light Purple [1900-1999]
+        if (star >= 1800) return 0xFF555555; // Dark Gray [1800-1899]
+        if (star >= 1700) return 0xFF00AA00; // Dark Green [1700-1799]
+        if (star >= 1600) return 0xFF00AAAA; // Dark Aqua [1600-1699]
+        if (star >= 1500) return 0xFF0000AA; // Dark Blue [1500-1599]
+        if (star >= 1400) return 0xFFAA0000; // Dark Red [1400-1499]
+        if (star >= 1300) return 0xFFAAAAAA; // Gray [1300-1399]
+        if (star >= 1200) return 0xFFFFFFFF; // White [1200-1299]
+        if (star >= 1100) return 0xFF55FF55; // Green [1100-1199]
+        if (star >= 1000) return 0xFFFFFF55; // Yellow [1000-1099]
+        
+        // Below 1000 - standard progression
+        if (star >= 900) return 0xFF55FFFF;  // Aqua [900-999]
+        if (star >= 800) return 0xFF5555FF;  // Blue [800-899]
+        if (star >= 700) return 0xFFFF55FF;  // Light Purple [700-799]
+        if (star >= 600) return 0xFFFF5555;  // Red [600-699]
+        if (star >= 500) return 0xFFAA00AA;  // Dark Purple [500-599]
+        if (star >= 400) return 0xFF00AAAA;  // Dark Aqua [400-499]
+        if (star >= 300) return 0xFF0000AA;  // Dark Blue [300-399]
+        if (star >= 200) return 0xFFFFFF55;  // Yellow [200-299]
+        if (star >= 100) return 0xFFFFFFFF;  // White [100-199]
+        
+        return 0xFFAAAAAA; // Gray [0-99]
     }
     
     // ── Utility Methods ────────────────────────────────────────────────────────
