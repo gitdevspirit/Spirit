@@ -463,44 +463,70 @@ public class IntelHudOverlay {
     
     /**
      * Get color based on Hypixel BedWars prestige brackets
+     * Based on official Hypixel color scheme
      */
     private int getPrestigeColor(int star) {
-        // Hypixel BedWars Prestige Colors
-        if (star >= 3000) return 0xFFFF55FF; // Pink/Magenta [3000+]
-        if (star >= 2900) return 0xFFAA00AA; // Dark Purple [2900-2999]
-        if (star >= 2800) return 0xFF00AAAA; // Dark Aqua [2800-2899]
-        if (star >= 2700) return 0xFF00AA00; // Dark Green [2700-2799]
-        if (star >= 2600) return 0xFFFFAA00; // Gold [2600-2699]
-        if (star >= 2500) return 0xFFFF5555; // Red [2500-2599]
-        if (star >= 2400) return 0xFFAAAAAA; // Gray [2400-2499]
-        if (star >= 2300) return 0xFFFFFFFF; // White [2300-2399]
-        if (star >= 2200) return 0xFF55FF55; // Green [2200-2299]
-        if (star >= 2100) return 0xFF5555FF; // Blue [2100-2199]
-        if (star >= 2000) return 0xFF55FFFF; // Aqua [2000-2099]
+        // 5000+ Prestiges
+        if (star >= 5000) return 0xFF00FFFF; // Aqua+ (5000+)
+        if (star >= 4900) return 0xFFFF0000; // Red+ (4900-4999)
+        if (star >= 4800) return 0xFFFF00FF; // Light Purple+ (4800-4899)
+        if (star >= 4700) return 0xFF00AA00; // Dark Green+ (4700-4799)
+        if (star >= 4600) return 0xFF00AAAA; // Dark Aqua+ (4600-4699)
+        if (star >= 4500) return 0xFF0000AA; // Dark Blue+ (4500-4599)
+        if (star >= 4400) return 0xFFAA0000; // Dark Red+ (4400-4499)
+        if (star >= 4300) return 0xFF555555; // Dark Gray+ (4300-4399)
+        if (star >= 4200) return 0xFFAAAAAA; // Gray+ (4200-4299)
+        if (star >= 4100) return 0xFFFFFFFF; // White+ (4100-4199)
+        if (star >= 4000) return 0xFF55FF55; // Green+ (4000-4099)
         
-        if (star >= 1900) return 0xFFFF55FF; // Light Purple [1900-1999]
-        if (star >= 1800) return 0xFF555555; // Dark Gray [1800-1899]
-        if (star >= 1700) return 0xFF00AA00; // Dark Green [1700-1799]
-        if (star >= 1600) return 0xFF00AAAA; // Dark Aqua [1600-1699]
-        if (star >= 1500) return 0xFF0000AA; // Dark Blue [1500-1599]
-        if (star >= 1400) return 0xFFAA0000; // Dark Red [1400-1499]
-        if (star >= 1300) return 0xFFAAAAAA; // Gray [1300-1399]
-        if (star >= 1200) return 0xFFFFFFFF; // White [1200-1299]
-        if (star >= 1100) return 0xFF55FF55; // Green [1100-1199]
-        if (star >= 1000) return 0xFFFFFF55; // Yellow [1000-1099]
+        // 3000+ Prestiges
+        if (star >= 3900) return 0xFF00FFFF; // Aqua✦ (3900-3999)
+        if (star >= 3800) return 0xFFFF0000; // Red✦ (3800-3899)
+        if (star >= 3700) return 0xFFFF00FF; // Light Purple✦ (3700-3799)
+        if (star >= 3600) return 0xFF00AA00; // Dark Green✦ (3600-3699)
+        if (star >= 3500) return 0xFF00AAAA; // Dark Aqua✦ (3500-3599)
+        if (star >= 3400) return 0xFF0000AA; // Dark Blue✦ (3400-3499)
+        if (star >= 3300) return 0xFFAA0000; // Dark Red✦ (3300-3399)
+        if (star >= 3200) return 0xFF555555; // Dark Gray✦ (3200-3299)
+        if (star >= 3100) return 0xFFAAAAAA; // Gray✦ (3100-3199)
+        if (star >= 3000) return 0xFFFFFFFF; // White✦ (3000-3099)
         
-        // Below 1000 - standard progression
-        if (star >= 900) return 0xFF55FFFF;  // Aqua [900-999]
-        if (star >= 800) return 0xFF5555FF;  // Blue [800-899]
-        if (star >= 700) return 0xFFFF55FF;  // Light Purple [700-799]
-        if (star >= 600) return 0xFFFF5555;  // Red [600-699]
-        if (star >= 500) return 0xFFAA00AA;  // Dark Purple [500-599]
-        if (star >= 400) return 0xFF00AAAA;  // Dark Aqua [400-499]
-        if (star >= 300) return 0xFF0000AA;  // Dark Blue [300-399]
-        if (star >= 200) return 0xFFFFFF55;  // Yellow [200-299]
-        if (star >= 100) return 0xFFFFFFFF;  // White [100-199]
+        // 2000+ Prestiges
+        if (star >= 2900) return 0xFF00FFFF; // Aqua☯ (2900-2999)
+        if (star >= 2800) return 0xFFFF0000; // Red☯ (2800-2899)
+        if (star >= 2700) return 0xFFFF00FF; // Light Purple☯ (2700-2799)
+        if (star >= 2600) return 0xFF00AA00; // Dark Green☯ (2600-2699)
+        if (star >= 2500) return 0xFF00AAAA; // Dark Aqua☯ (2500-2599)
+        if (star >= 2400) return 0xFF0000AA; // Dark Blue☯ (2400-2499)
+        if (star >= 2300) return 0xFFAA0000; // Dark Red☯ (2300-2399)
+        if (star >= 2200) return 0xFF555555; // Dark Gray☯ (2200-2299)
+        if (star >= 2100) return 0xFFAAAAAA; // Gray☯ (2100-2199)
+        if (star >= 2000) return 0xFFFFFFFF; // White☯ (2000-2099)
         
-        return 0xFFAAAAAA; // Gray [0-99]
+        // 1000+ Prestiges
+        if (star >= 1900) return 0xFF00FFFF; // Aqua⚝ (1900-1999)
+        if (star >= 1800) return 0xFFFF0000; // Red⚝ (1800-1899)
+        if (star >= 1700) return 0xFFFF00FF; // Light Purple⚝ (1700-1799)
+        if (star >= 1600) return 0xFF00AA00; // Dark Green⚝ (1600-1699)
+        if (star >= 1500) return 0xFF00AAAA; // Dark Aqua⚝ (1500-1599)
+        if (star >= 1400) return 0xFF0000AA; // Dark Blue⚝ (1400-1499)
+        if (star >= 1300) return 0xFFAA0000; // Dark Red⚝ (1300-1399)
+        if (star >= 1200) return 0xFF555555; // Dark Gray⚝ (1200-1299)
+        if (star >= 1100) return 0xFFAAAAAA; // Gray⚝ (1100-1199)
+        if (star >= 1000) return 0xFFFFFFFF; // White⚝ (1000-1099)
+        
+        // Below 1000
+        if (star >= 900) return 0xFFFF00FF;  // Light Purple☆ (900-999)
+        if (star >= 800) return 0xFF5555FF;  // Blue☆ (800-899)
+        if (star >= 700) return 0xFF55FFFF;  // Aqua☆ (700-799)
+        if (star >= 600) return 0xFF55FF55;  // Green☆ (600-699)
+        if (star >= 500) return 0xFFFF5555;  // Red☆ (500-599)
+        if (star >= 400) return 0xFF0000AA;  // Dark Blue★ (400-499)
+        if (star >= 300) return 0xFF00AAAA;  // Dark Aqua★ (300-399)
+        if (star >= 200) return 0xFFFFAA00;  // Gold★ (200-299)
+        if (star >= 100) return 0xFFFFFFFF;  // White★ (100-199)
+        
+        return 0xFFAAAAAA; // Gray (0-99)
     }
     
     // ── Utility Methods ────────────────────────────────────────────────────────
