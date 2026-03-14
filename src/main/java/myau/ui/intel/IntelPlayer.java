@@ -43,53 +43,43 @@ public class IntelPlayer {
     private static final Object[][] KEYWORD_SCORES = {
         // Blatant / high-impact — 80+
         { "blatant",     false, 85 },
-        { "scaffold",    true,  80 },
-        { "bridg",       false, 78 },
-        { "ab",          true,  78 },
-        { "autoblock",   false, 78 },
-        { "full hop",    false, 75 },
-        { "hopping",     false, 75 },
-        { "hop",         true,  72 },
+        { "blatant scaffold", false, 85 },  // Specific blatant scaffold
         { "fly",         true,  80 },
         { "bhop",        true,  75 },
         { "bunnyhop",    false, 75 },
+        { "full hop",    false, 75 },
         { "speed",       true,  75 },
         { "esp",         true,  80 },
-        { "visual",      false, 78 },
         { "xray",        false, 80 },
         { "x-ray",       false, 80 },
         { "wallhack",    false, 80 },
         { "aimbot",      false, 85 },
-        // Medium — 50-65
-        { "ka",          true,  65 },
         { "killaura",    false, 65 },
         { "kill aura",   false, 65 },
-        { "aa",          true,  55 },
-        { "aim assist",  false, 55 },
-        { "aimassist",   false, 55 },
+        
+        // Medium — 50-65
+        { "autoblock",   false, 65 },  // Full word autoblock
         { "reach",       true,  58 },
-        { "velo",        true,  55 },
         { "velocity",    false, 55 },
-        { "jr",          true,  55 },
-        { "jrv",         true,  58 },
+        { "velo",        true,  55 },
         { "jump reset",  false, 55 },
         { "anti-kb",     false, 55 },
         { "antikb",      false, 55 },
-        { "sniper",      false, 50 },
-        // Low-medium — 25-40
-        { "ac",          true,  35 },
+        
+        // Low-medium (closet cheats) — 25-40
         { "autoclicker", false, 35 },
         { "autoclick",   false, 35 },
-        { "cps",         true,  30 },
+        { "legit scaffold", false, 30 },  // Legit scaffold is closet
         { "legitscaff",  false, 30 },
         { "legitscaf",   false, 30 },
+        { "eagle",       true,  25 },  // Eagle is closet, not blatant
         { "fastplace",   false, 28 },
-        { "eagle",       true,  25 },
+        { "safewalk",    false, 25 },
         { "2q",          false, 20 },
         { "3q",          false, 22 },
         { "4q",          false, 25 },
         { "boosting",    false, 20 },
-        { "queue",       false, 20 },
+        { "queuing",     false, 20 },
     };
 
     public void computeThreat() {
