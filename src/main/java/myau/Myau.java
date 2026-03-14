@@ -175,6 +175,7 @@ public class Myau {
         moduleManager.modules.put(ViewClip.class,        new ViewClip());
         moduleManager.modules.put(Wtap.class,            new Wtap());
         moduleManager.modules.put(Xray.class,            new Xray());
+        moduleManager.modules.put(QualityOfLife.class,   new QualityOfLife());
 
         for (Module module : moduleManager.modules.values()) {
             ArrayList<Property<?>> properties = new ArrayList<>();
