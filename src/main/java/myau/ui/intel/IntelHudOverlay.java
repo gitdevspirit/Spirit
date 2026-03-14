@@ -128,7 +128,12 @@ public class IntelHudOverlay {
             (myau.module.modules.LobbyIntel) myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
         boolean hideTeammates = lobbyIntel != null && lobbyIntel.hideTeammates.getValue();
         
-        // Get my team
+        // If not hiding teammates, show everyone
+        if (!hideTeammates) {
+            return new ArrayList<>(players);
+        }
+        
+        // Get my team for filtering
         String myTeam = null;
         String myName = mc.thePlayer != null ? mc.thePlayer.getName() : null;
         
@@ -141,14 +146,14 @@ public class IntelHudOverlay {
             }
         }
         
-        // Filter players
+        // Filter players - skip self and teammates
         List<IntelPlayer> filtered = new ArrayList<>();
         for (IntelPlayer p : players) {
             // Skip self
             if (myName != null && p.name.equals(myName)) continue;
             
-            // Skip teammates if enabled
-            if (hideTeammates && myTeam != null && p.team != null && p.team.equals(myTeam)) {
+            // Skip teammates (same team as me)
+            if (myTeam != null && p.team != null && p.team.equals(myTeam)) {
                 continue;
             }
             
@@ -198,7 +203,7 @@ public class IntelHudOverlay {
         
         // Name header
         drawText("NAME", x, headerY, TEXT_DIM);
-        x += 80;
+        x += 120; // Increased from 80 to 120 for longer names
         
         // Star header - centered
         if (showStar) {
@@ -257,7 +262,7 @@ public class IntelHudOverlay {
         
         if (showHeads) width += HEAD_SIZE + 4;
         if (showTeamColor) width += 3; // Team indicator
-        width += 80; // Name column (minimum)
+        width += 120; // Name column (increased from 80 to 120)
         if (showStar) width += 35; // Star column
         if (showFkdr) width += 40;
         if (showWlr) width += 35;
@@ -302,7 +307,7 @@ public class IntelHudOverlay {
             drawText(roleText, badgeX + 2, badgeY + 1, p.role.getColor());
         }
         
-        currentX += 80;
+        currentX += 120; // Increased from 80 to 120 for longer names
         
         // Draw Star (centered with ✫ symbol)
         if (showStar) {
