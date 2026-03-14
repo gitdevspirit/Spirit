@@ -8,7 +8,7 @@ import myau.events.PacketEvent;
 import myau.events.Render2DEvent;
 import myau.module.BooleanSetting;
 import myau.module.Module;
-import myau.module.SliderSetting;
+import myau.module.KeybindSetting;
 import myau.property.properties.*;
 import myau.ui.intel.IntelGui;
 import myau.ui.intel.IntelHudOverlay;
@@ -31,7 +31,7 @@ public class LobbyIntel extends Module {
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
     public final BooleanSetting notifyCheaters = register(new BooleanSetting("Notify Cheaters", false));
     public final BooleanSetting hideTeammates  = register(new BooleanSetting("Hide Teammates", false));
-    public final SliderSetting  hudKeybind  = register(new SliderSetting("HUD Toggle Key", Keyboard.KEY_H, 0, 255, 1));
+    public final KeybindSetting hudKeybind  = register(new KeybindSetting("HUD Toggle Key", Keyboard.KEY_H));
 
     // HUD Overlay properties (saved to config)
     public final BooleanProperty hudEnabled      = new BooleanProperty("hud-enabled", true);
@@ -127,7 +127,7 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onKey(KeyEvent event) {
-        if (event.getKey() == (int) hudKeybind.getValue()) {
+        if (event.getKey() == hudKeybind.getKeyCode()) {
             boolean newState = !hudOverlay.isEnabled();
             hudOverlay.setEnabled(newState);
             String status = newState ? "&a&lON" : "&c&lOFF";
