@@ -277,13 +277,9 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            dbg("[Sloth] SUCCESS " + p.name + " fk=" + fk + " w=" + w + " star=" + p.star);
             
-            // Return true if we got valid BedWars data, even if player has 0 stats
-            return true;
+            return true; // Success - stats loaded
         } catch (Exception e) { 
-            System.err.println("[Sloth] ERROR fetching " + p.name + ": " + e.getMessage());
-            dbg("[Sloth] ex: " + e); 
             return false; 
         }
     }
@@ -297,58 +293,22 @@ public class IntelManager {
                 long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
                 if (wait > 0) Thread.sleep(wait);
                 lastHypixelRequest.set(System.currentTimeMillis());
-                
-                // Track request rate (reset counter every 5 minutes)
-                int count = hypixelRequestCount.incrementAndGet();
-                long elapsed = now - hypixelCounterStartTime.get();
-                if (elapsed > 300000) { // 5 minutes
-                    hypixelRequestCount.set(1);
-                    hypixelCounterStartTime.set(now);
-                    dbg("[HypixelAPI] Rate counter reset");
-                } else {
-                    dbg("[HypixelAPI] Request " + count + " in last " + (elapsed/1000) + "s");
-                }
             } finally { hypixelSlots.release(); }
 
             String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) {
-                dbg("[HypixelAPI] Failed to fetch UUID for " + p.name);
-                return false;
-            }
+            if (uuid == null) return false;
 
             String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
-            dbg("[HypixelAPI] response len=" + (json == null ? "null" : json.length()));
-            if (json == null) {
-                dbg("[HypixelAPI] null response for " + p.name);
-                return false;
-            }
+            if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            
-            // Check for API errors
-            if (root.has("success") && !root.get("success").getAsBoolean()) {
+            if (!root.has("success") || !root.get("success").getAsBoolean()) {
                 if (root.has("cause")) {
-                    String cause = root.get("cause").getAsString();
-                    if (cause.toLowerCase().contains("rate") || cause.toLowerCase().contains("limit")) {
-                        System.err.println("[HypixelAPI] RATE LIMITED! Requests too fast. Slowing down...");
-                        dbg("[HypixelAPI] RATE LIMITED");
-                        // Add extra delay on rate limit
-                        Thread.sleep(2000);
-                    } else if (cause.toLowerCase().contains("key") || cause.toLowerCase().contains("invalid")) {
-                        System.err.println("[HypixelAPI] INVALID API KEY: " + cause);
-                        dbg("[HypixelAPI] INVALID KEY");
-                    } else {
-                        System.err.println("[HypixelAPI] API Error: " + cause);
-                        dbg("[HypixelAPI] Error: " + cause);
-                    }
+                    System.err.println("[HypixelAPI] Error: " + root.get("cause").getAsString());
                 }
                 return false;
             }
-            
-            if (!root.has("player") || root.get("player").isJsonNull()) {
-                dbg("[HypixelAPI] player field null/missing for " + p.name);
-                return false;
-            }
+            if (!root.has("player") || root.get("player").isJsonNull()) return false;
 
             JsonObject player = root.getAsJsonObject("player");
             if (player.has("networkExp")) {
@@ -399,14 +359,8 @@ public class IntelManager {
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
             
-            dbg("[HypixelAPI] SUCCESS " + p.name + " fk=" + fk + " w=" + w + " star=" + p.star + " fkdr=" + String.format("%.2f", p.fkdr));
-            
-            // Return true if we got valid BedWars data, even if player has 0 stats
-            return true;
+            return true; // Success - stats loaded
         } catch (Exception e) { 
-            System.err.println("[HypixelAPI] ERROR fetching " + p.name + ": " + e.getMessage());
-            e.printStackTrace();
-            dbg("[HypixelAPI] ex: " + e); 
             return false; 
         }
     }
