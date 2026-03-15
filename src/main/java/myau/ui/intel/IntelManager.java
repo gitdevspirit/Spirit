@@ -104,7 +104,23 @@ public class IntelManager {
         return all;
     }
 
+    /** Returns true if the player appears to be on Hypixel */
+    public static boolean isOnHypixel() {
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            if (mc.getCurrentServerData() == null) return false;
+            String ip = mc.getCurrentServerData().serverIP.toLowerCase();
+            return ip.contains("hypixel.net") || ip.contains("hypixel.io");
+        } catch (Exception e) { return false; }
+    }
+
     public void scanLobby() {
+        // Don't fetch if not on Hypixel — saves API calls and avoids rate limits
+        if (!isOnHypixel()) {
+            dbg("[Intel] Not on Hypixel, skipping scan");
+            return;
+        }
+
         players.clear();
         fetching = true;
 
@@ -164,17 +180,20 @@ public class IntelManager {
             dbg("[Intel] UUID pre-fetch complete for " + playersRef.size() + " players");
         });
 
-        // Fetch Hypixel per player — rate limited via hypixelLock
-        for (IntelPlayer p : players) {
-            final IntelPlayer fp = p;
-            pool.submit(() -> {
+        // Fetch Hypixel with staggered delay — one request every 300ms
+        // Keeps us well under Hypixel's rate limit even for full 16-player lobbies (~5s total)
+        final List<IntelPlayer> staggerRef = new ArrayList<>(players);
+        pool.submit(() -> {
+            for (int i = 0; i < staggerRef.size(); i++) {
+                final IntelPlayer fp = staggerRef.get(i);
+                try { if (i > 0) Thread.sleep(300L); } catch (InterruptedException ignored) {}
                 fetchHypixel(fp);
                 fp.computeThreat();
                 List<IntelPlayer> refreshed = new ArrayList<>(players);
                 if (gui != null) gui.setPlayers(refreshed);
                 if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
-            });
-        }
+            }
+        });
 
         fetching = false;
     }
