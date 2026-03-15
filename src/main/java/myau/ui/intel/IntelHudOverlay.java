@@ -209,7 +209,7 @@ public class IntelHudOverlay {
         int headerTextY = (HEADER_H - mc.fontRendererObj.FONT_HEIGHT) / 2;
         drawSortHeader("NAME", hx, headerTextY, COL_NAME, "name"); hx += COL_NAME;
         // Clickable sort headers — highlighted when active, underlined
-        if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("☆",  hx, headerTextY, COL_STAR,   "star");   hx += COL_STAR; }
+        if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("STAR", hx, headerTextY, COL_STAR, "star");   hx += COL_STAR; }
         if (showFkdr)   { colDiv(hx, HEADER_H); drawSortHeader("FKDR",   hx, headerTextY, COL_FKDR,   "fkdr");   hx += COL_FKDR; }
         if (showWlr)    { colDiv(hx, HEADER_H); drawSortHeader("WLR",    hx, headerTextY, COL_WLR,    "wlr");    hx += COL_WLR; }
         if (showStreak) { colDiv(hx, HEADER_H); drawSortHeader("WS",     hx, headerTextY, COL_WS,     "streak"); hx += COL_WS; }
