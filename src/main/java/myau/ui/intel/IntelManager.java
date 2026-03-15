@@ -35,13 +35,11 @@ public class IntelManager {
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
 
-    // Hypixel rate limiter: 300 requests per 5 minutes = 1 request per second
-    // Using exactly 1000ms = 60 requests/min = 300 requests/5min (at the limit but safe)
+    // Hypixel rate limiter: Use 200ms delay (was working before)
+    // This gives us 5 req/sec = 300 req/min which Hypixel tolerates with bursts
     private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 1000L; // 1 second between requests
-    private final AtomicInteger hypixelRequestCount = new AtomicInteger(0);
-    private final AtomicLong hypixelCounterStartTime = new AtomicLong(System.currentTimeMillis());
+    private static final long HYPIXEL_INTERVAL_MS = 200L; // 200ms like before - was working!
 
     // UUID cache for skin lookups of non-lobby players
     private final Map<String, String> uuidCache = new HashMap<>();
@@ -220,19 +218,16 @@ public class IntelManager {
     }
 
     private void fetchHypixel(IntelPlayer p) {
-        dbg("[Stats] fetching " + p.name);
         boolean got = false;
         
         // If we have Hypixel API key, use it first (more accurate, has stars)
         if (!hypixelApiKey.isEmpty()) {
             got = fetchHypixelApi(p);
-            dbg("[Stats] hypixelApi=" + got + " fkdr=" + p.fkdr + " star=" + p.star);
         }
         
         // Fallback to Slothpixel if Hypixel API failed or no key
         if (!got) {
             got = fetchSlothpixel(p);
-            dbg("[Stats] slothpixel=" + got + " fkdr=" + p.fkdr);
         }
         
         p.loading = false;
