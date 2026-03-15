@@ -364,7 +364,7 @@ public class IntelHudOverlay {
 
     /** Renders ☆ at 1.3x then the number at normal size, all centered in the column. */
     private void drawStarCell(String numText, int x, int y, int colW, int color) {
-        float starScale = 1.6f;
+        float starScale = 1.1f;
         String star = "☆";
         int starW  = (int)(mc.fontRendererObj.getStringWidth(star) * starScale);
         int numW   = mc.fontRendererObj.getStringWidth(numText);
@@ -375,9 +375,9 @@ public class IntelHudOverlay {
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
 
-        // Draw star scaled
+        // Draw star scaled - keep same baseline as number
         GlStateManager.pushMatrix();
-        GlStateManager.translate(startX, y - (starScale - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
+        GlStateManager.translate(startX, y, 0);
         GlStateManager.scale(starScale, starScale, 1f);
         mc.fontRendererObj.drawString(star, 0, 0, color, true);
         GlStateManager.popMatrix();
