@@ -534,16 +534,48 @@ public class IntelHudOverlay {
         }
     }
     private int prestigeColor(int s) {
-        if (s >= 1000) return 0xFFFFFFFF;
-        if (s >= 900)  return 0xFFFF00FF;
-        if (s >= 800)  return 0xFF5555FF;
-        if (s >= 700)  return 0xFF55FFFF;
-        if (s >= 600)  return 0xFF55FF55;
-        if (s >= 500)  return 0xFFFF5555;
-        if (s >= 400)  return 0xFF0000AA;
-        if (s >= 300)  return 0xFF00AAAA;
-        if (s >= 200)  return 0xFFFFAA00;
-        if (s >= 100)  return 0xFFFFFFFF;
-        return 0xFFAAAAAA;
+        if (s < 100)   return 0xFFAAAAAA; // 0-99:    Gray
+        if (s < 200)   return 0xFFFFFFFF; // 100-199: White
+        if (s < 300)   return 0xFFFFAA00; // 200-299: Gold
+        if (s < 400)   return 0xFF55FFFF; // 300-399: Aqua
+        if (s < 500)   return 0xFF55FF55; // 400-499: Green
+        if (s < 600)   return 0xFF55FFFF; // 500-599: Aqua
+        if (s < 700)   return 0xFFFF5555; // 600-699: Red
+        if (s < 800)   return 0xFFFF55FF; // 700-799: Pink
+        if (s < 900)   return 0xFF5555FF; // 800-899: Blue
+        if (s < 1000)  return 0xFFAA00AA; // 900-999: Purple
+        if (s < 1100)  return 0xFFFFAA00; // 1000-1099: Gold
+        if (s < 2000)  return 0xFFAAAAAA; // 1100-1999: Gray (1000s prestige)
+        if (s < 2100)  return 0xFFFFAA00; // 2000-2099: Gold
+        if (s < 2200)  return 0xFFFFAA00; // 2100-2199: Gold
+        if (s < 2300)  return 0xFFFF55FF; // 2200-2299: Pink
+        if (s < 2400)  return 0xFF00AAAA; // 2300-2399: Teal
+        if (s < 2500)  return 0xFFFFFFFF; // 2400-2499: White
+        if (s < 2600)  return 0xFFFF5555; // 2500-2599: Red
+        if (s < 2700)  return 0xFFFFFF55; // 2600-2699: Yellow
+        if (s < 2800)  return 0xFF55FF55; // 2700-2799: Green
+        if (s < 2900)  return 0xFF55FFFF; // 2800-2899: Aqua
+        if (s < 3000)  return 0xFFFFAA00; // 2900-2999: Gold
+        if (s < 3100)  return 0xFFFFAA00; // 3000-3099: Gold
+        if (s < 3200)  return 0xFF5555FF; // 3100-3199: Blue
+        if (s < 3300)  return 0xFFFF5555; // 3200-3299: Red
+        if (s < 3400)  return 0xFFAA0000; // 3300-3399: Dark Red
+        if (s < 3500)  return 0xFF55FFFF; // 3400-3499: Teal
+        if (s < 3600)  return 0xFF55FFFF; // 3500-3599: Aqua
+        if (s < 3700)  return 0xFF55FF55; // 3600-3699: Green
+        if (s < 3800)  return 0xFFFF7700; // 3700-3799: Orange
+        if (s < 3900)  return 0xFF0000AA; // 3800-3899: Dark Blue
+        if (s < 4000)  return 0xFFFF5577; // 3900-3999: Pink Red
+        if (s < 4100)  return 0xFF55FF55; // 4000-4099: Green
+        if (s < 4200)  return 0xFFFFFF55; // 4100-4199: Yellow
+        if (s < 4300)  return 0xFF0000AA; // 4200-4299: Dark Blue
+        if (s < 4400)  return 0xFF333333; // 4300-4399: Black/Dark
+        if (s < 4500)  return 0xFFFF55FF; // 4400-4499: Pink
+        if (s < 4600)  return 0xFFFFFFFF; // 4500-4599: White
+        if (s < 4700)  return 0xFF55FFFF; // 4600-4699: Aqua
+        if (s < 4800)  return 0xFFAAFFFF; // 4700-4799: Light Aqua
+        if (s < 4900)  return 0xFFAA00AA; // 4800-4899: Purple
+        if (s < 5000)  return 0xFFFF5555; // 4900-4999: Red
+        return           0xFF5555FF;       // 5000+:     Blue
     }
 }
