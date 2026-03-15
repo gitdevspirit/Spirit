@@ -1,6 +1,8 @@
 package myau.command.commands;
 
+import myau.Myau;
 import myau.command.Command;
+import myau.module.modules.LobbyIntel;
 import myau.ui.intel.IntelManager;
 
 /**
@@ -19,7 +21,7 @@ public class IntelKeyCommand extends Command {
         if (args.length == 0) {
             if (IntelManager.hypixelApiKey.isEmpty()) {
                 reply("&cNo API key set. Use &f.intelkey <key> &cto set one.");
-                reply("&7Get a key at &fhttps://developer.hypixel.net");
+                reply("&7Tip: run &e/api new &7on Hypixel then rejoin — it auto-detects too.");
             } else {
                 // Show only first/last 4 chars for security
                 String key = IntelManager.hypixelApiKey;
@@ -32,7 +34,26 @@ public class IntelKeyCommand extends Command {
         }
 
         String key = args[0].trim();
+        // Basic UUID format validation
+        if (!key.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            reply("&cThat doesn't look like a valid Hypixel API key.");
+            reply("&7Keys look like: &fxxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx");
+            reply("&7Get one by running &e/api new &7on Hypixel.");
+            return;
+        }
+
         IntelManager.hypixelApiKey = key;
-        reply("&aHypixel API key set. &7Use &f.lobbyintel &7or toggle LobbyIntel to scan.");
+        // Reset invalid-key flag so it retries with the new key
+        IntelManager.getInstance().resetInvalidKeyFlag();
+
+        // Persist to config via LobbyIntel property
+        try {
+            LobbyIntel li = (LobbyIntel) Myau.moduleManager.getModule(LobbyIntel.class);
+            if (li != null) {
+                li.savedApiKey.setValue(key);
+            }
+        } catch (Exception ignored) {}
+
+        reply("&aHypixel API key set and saved. &7Use &f.lobbyintel &7or toggle LobbyIntel to scan.");
     }
 }
