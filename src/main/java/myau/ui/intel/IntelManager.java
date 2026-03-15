@@ -304,14 +304,21 @@ public class IntelManager {
             String uuid = fetchAndCacheUuid(p.name);
             if (uuid == null) return false;
 
-            String json = get("https://api.hypixel.net/player?uuid=" + uuid, "API-Key", hypixelApiKey);
-            dbg("[HypixelAPI] response len=" + (json == null ? "null" : json.length()) + " uuid=" + uuid);
+            String[] hypixelResponse = getWithCode("https://api.hypixel.net/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            int httpCode = hypixelResponse[0] == null ? 0 : Integer.parseInt(hypixelResponse[0]);
+            String json = hypixelResponse[1];
+            dbg("[HypixelAPI] http=" + httpCode + " len=" + (json == null ? "null" : json.length()) + " uuid=" + uuid);
+            if (httpCode == 403 || httpCode == 401) { notifyInvalidKey(); return false; }
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
             if (!root.has("success") || !root.get("success").getAsBoolean()) {
-                if (root.has("cause")) {
-                    System.err.println("[HypixelAPI] Error: " + root.get("cause").getAsString());
+                String cause = root.has("cause") ? root.get("cause").getAsString() : "";
+                dbg("[HypixelAPI] failed cause=" + cause);
+                // Detect invalid/expired key and notify player
+                if (cause.toLowerCase().contains("invalid") || cause.toLowerCase().contains("forbidden")
+                        || cause.toLowerCase().contains("key") || cause.toLowerCase().contains("unauthorized")) {
+                    notifyInvalidKey();
                 }
                 return false;
             }
@@ -456,6 +463,47 @@ public class IntelManager {
     }
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
+
+    // Tracks if we already notified this session to avoid spam
+    private volatile boolean invalidKeyNotified = false;
+
+    /** Call after setting a new key so the next request retries properly */
+    public void resetInvalidKeyFlag() { invalidKeyNotified = false; }
+
+    private void notifyInvalidKey() {
+        if (invalidKeyNotified) return;
+        invalidKeyNotified = true;
+        // Clear the invalid key
+        hypixelApiKey = "";
+        // Save blank key back to LobbyIntel property
+        try {
+            myau.module.modules.LobbyIntel li = (myau.module.modules.LobbyIntel)
+                myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
+            if (li != null) li.savedApiKey.setValue("");
+        } catch (Exception ignored) {}
+        // Notify in chat
+        net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
+            myau.util.ChatUtil.sendFormatted(
+                "&7[Intel] &cYour Hypixel API key is invalid or expired! " +
+                "Run &e/api new &cin Hypixel to generate a new one.");
+        });
+        dbg("[HypixelAPI] Key invalidated - notified player");
+    }
+
+    /** Like get() but returns [httpCode, body] so callers can detect 403/401 */
+    private String[] getWithCode(String urlStr, String headerKey, String headerVal) {
+        try {
+            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
+            con.setRequestMethod("GET");
+            con.setConnectTimeout(5000);
+            con.setReadTimeout(5000);
+            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+            if (headerKey != null) con.setRequestProperty(headerKey, headerVal);
+            int code = con.getResponseCode();
+            if (code != 200) return new String[]{String.valueOf(code), null};
+            return new String[]{String.valueOf(code), readStream(con.getInputStream())};
+        } catch (Exception e) { return new String[]{null, null}; }
+    }
 
     private String get(String urlStr, String headerKey, String headerVal) {
         try {
