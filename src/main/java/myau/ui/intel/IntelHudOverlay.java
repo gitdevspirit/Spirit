@@ -364,7 +364,7 @@ public class IntelHudOverlay {
 
     /** Renders ☆ at 1.3x then the number at normal size, all centered in the column. */
     private void drawStarCell(String numText, int x, int y, int colW, int color) {
-        float starScale = 1.3f;
+        float starScale = 1.6f;
         String star = "☆";
         int starW  = (int)(mc.fontRendererObj.getStringWidth(star) * starScale);
         int numW   = mc.fontRendererObj.getStringWidth(numText);
