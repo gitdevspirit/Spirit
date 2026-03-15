@@ -269,7 +269,7 @@ public class IntelHudOverlay {
 
         // Star
         if (showStar) {
-            drawCellScaled(p.loading ? "-" : "☆" + p.star,
+            drawStarCell(p.loading ? "-" : String.valueOf(p.star),
                      cx, midY, COL_STAR,
                      p.loading ? TEXT_DIM : prestigeColor(p.star));
             cx += COL_STAR;
@@ -362,17 +362,28 @@ public class IntelHudOverlay {
         if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
     }
 
-    private void drawCellScaled(String text, int x, int y, int colW, int color) {
-        float s = 1.4f;
-        int tw = (int)(mc.fontRendererObj.getStringWidth(text) * s);
-        int tx = x + (colW - tw) / 2;
+    /** Renders ☆ at 1.3x then the number at normal size, all centered in the column. */
+    private void drawStarCell(String numText, int x, int y, int colW, int color) {
+        float starScale = 1.3f;
+        String star = "☆";
+        int starW  = (int)(mc.fontRendererObj.getStringWidth(star) * starScale);
+        int numW   = mc.fontRendererObj.getStringWidth(numText);
+        int gap    = 1;
+        int totalW = starW + gap + numW;
+        int startX = x + (colW - totalW) / 2;
+
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
+
+        // Draw star scaled
         GlStateManager.pushMatrix();
-        GlStateManager.translate(tx, y - (s - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
-        GlStateManager.scale(s, s, 1f);
-        mc.fontRendererObj.drawString(text, 0, 0, color, true);
+        GlStateManager.translate(startX, y - (starScale - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
+        GlStateManager.scale(starScale, starScale, 1f);
+        mc.fontRendererObj.drawString(star, 0, 0, color, true);
         GlStateManager.popMatrix();
+
+        // Draw number at normal size
+        mc.fontRendererObj.drawString(numText, startX + starW + gap, y, color, true);
     }
 
     /** Call from LobbyIntel mouse handler to cycle sort by clicking column headers. */
