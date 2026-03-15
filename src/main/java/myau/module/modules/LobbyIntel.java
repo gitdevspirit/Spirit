@@ -155,10 +155,26 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        // Render HUD overlay during gameplay
         if (mc.currentScreen == null && hudOverlay.isEnabled()) {
             hudOverlay.render();
         }
+    }
+
+    private boolean wasMouseDown = false;
+
+    @EventTarget
+    public void onRender2DClick(Render2DEvent event) {
+        // Detect left click on overlay headers to change sort
+        if (mc.currentScreen != null) return;
+        boolean down = org.lwjgl.input.Mouse.isButtonDown(0);
+        if (down && !wasMouseDown) {
+            net.minecraft.client.gui.ScaledResolution sr =
+                new net.minecraft.client.gui.ScaledResolution(mc);
+            int mx = org.lwjgl.input.Mouse.getX() * sr.getScaledWidth()  / mc.displayWidth;
+            int my = sr.getScaledHeight() - org.lwjgl.input.Mouse.getY() * sr.getScaledHeight() / mc.displayHeight - 1;
+            hudOverlay.handleClick(mx, my);
+        }
+        wasMouseDown = down;
     }
 
     @EventTarget
