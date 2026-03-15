@@ -160,21 +160,9 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
-        if (!autoScan.getValue()) return;
+        // Reset scan flag on every world change so we re-scan the next game
         scannedThisSession = false;
-        // Small delay so the server IP is available before we check
-        mc.addScheduledTask(() -> {
-            if (!scannedThisSession) {
-                scannedThisSession = true;
-                if (autoKey.getValue()) tryAutoDetectKey();
-                // Only scan if on Hypixel — avoids wasting API calls on other servers
-                if (IntelManager.isOnHypixel()) {
-                    IntelManager.getInstance().scanLobby();
-                } else {
-                    myau.ui.intel.IntelManager.dbg("[Intel] Skipping scan — not on Hypixel");
-                }
-            }
-        });
+        if (autoKey.getValue()) tryAutoDetectKey();
     }
 
     public IntelHudOverlay getHudOverlay() {
@@ -241,6 +229,18 @@ public class LobbyIntel extends Module {
         
         String message = component.getUnformattedText();
         
+        // Detect BedWars game start — "The game starts in 10 seconds!"
+        // This is the most reliable signal that we're actually in a BedWars game
+        if (autoScan.getValue() && !scannedThisSession
+                && message.contains("The game starts in 10 seconds")) {
+            scannedThisSession = true;
+            IntelManager.dbg("[Intel] BedWars game start detected — scanning lobby");
+            mc.addScheduledTask(() -> {
+                if (autoKey.getValue()) tryAutoDetectKey();
+                IntelManager.getInstance().scanLobby();
+            });
+        }
+
         // Detect final kills and remove player from overlay
         // Hypixel format: "FINAL KILL! PlayerName was killed by OtherPlayer"
         // or "FINAL KILL! PlayerName fell into the void"
