@@ -18,7 +18,7 @@ public class IntelHudSettingsGui extends GuiScreen {
     private final GuiScreen parent;
 
     private static final int POPUP_W  = 280;
-    private static final int POPUP_H  = 500;
+    private static final int POPUP_H  = 520;
     private static final int PAD      = 12;
     private static final int SLIDER_H = 28;
     private static final int TOGGLE_H = 24;
@@ -140,7 +140,9 @@ public class IntelHudSettingsGui extends GuiScreen {
                 hudOverlay.getSortMode().equals("threat") ? 0 : hudOverlay.getSortMode().equals("fkdr") ? 1 : 2,
                 mx, my);
 
-        maxScroll = Math.max(0, (y - (contentY + PAD) + PAD) - contentH + PAD * 2);
+        // Add extra bottom padding so the last item is fully scrollable into view
+        int totalContentH = y - contentY + scrollOffset + PAD * 4;
+        maxScroll = Math.max(0, totalContentH - contentH);
 
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
         GlStateManager.popMatrix();
