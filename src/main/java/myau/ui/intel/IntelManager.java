@@ -104,23 +104,7 @@ public class IntelManager {
         return all;
     }
 
-    /** Returns true if the player appears to be on Hypixel */
-    public static boolean isOnHypixel() {
-        try {
-            Minecraft mc = Minecraft.getMinecraft();
-            if (mc.getCurrentServerData() == null) return false;
-            String ip = mc.getCurrentServerData().serverIP.toLowerCase();
-            return ip.contains("hypixel.net") || ip.contains("hypixel.io");
-        } catch (Exception e) { return false; }
-    }
-
     public void scanLobby() {
-        // Don't fetch if not on Hypixel — saves API calls and avoids rate limits
-        if (!isOnHypixel()) {
-            dbg("[Intel] Not on Hypixel, skipping scan");
-            return;
-        }
-
         players.clear();
         fetching = true;
 
