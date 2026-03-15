@@ -269,7 +269,7 @@ public class IntelHudOverlay {
 
         // Star
         if (showStar) {
-            drawCell(p.loading ? "-" : "☆" + p.star,
+            drawCellScaled(p.loading ? "-" : "☆" + p.star,
                      cx, midY, COL_STAR,
                      p.loading ? TEXT_DIM : prestigeColor(p.star));
             cx += COL_STAR;
@@ -347,6 +347,32 @@ public class IntelHudOverlay {
         GlStateManager.enableTexture2D();
         mc.fontRendererObj.drawString(text, tx, y, active ? ACCENT : TEXT_DIM, false);
         if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
+    }
+
+    private void drawSortHeaderScaled(String text, int x, int y, int colW, String mode, float s) {
+        boolean active = sortMode.equals(mode);
+        int tw = (int)(mc.fontRendererObj.getStringWidth(text) * s);
+        int tx = x + (colW - tw) / 2;
+        GlStateManager.enableTexture2D();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(tx, y - (s - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
+        GlStateManager.scale(s, s, 1f);
+        mc.fontRendererObj.drawString(text, 0, 0, active ? ACCENT : TEXT_DIM, false);
+        GlStateManager.popMatrix();
+        if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
+    }
+
+    private void drawCellScaled(String text, int x, int y, int colW, int color) {
+        float s = 1.4f;
+        int tw = (int)(mc.fontRendererObj.getStringWidth(text) * s);
+        int tx = x + (colW - tw) / 2;
+        GlStateManager.enableTexture2D();
+        GlStateManager.disableDepth();
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(tx, y - (s - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
+        GlStateManager.scale(s, s, 1f);
+        mc.fontRendererObj.drawString(text, 0, 0, color, true);
+        GlStateManager.popMatrix();
     }
 
     /** Call from LobbyIntel mouse handler to cycle sort by clicking column headers. */
