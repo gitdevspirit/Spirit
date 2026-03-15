@@ -568,49 +568,32 @@ public class IntelManager {
     }
     
     /**
-     * Calculate BedWars level (star) from experience points
-     * Hypixel BedWars uses a tiered progression system
+     * Calculate BedWars star from Experience points using the correct Hypixel formula.
+     * Each prestige (100 levels) = 487,000 XP total:
+     *   Level 1 =   500 XP  (cumulative    500)
+     *   Level 2 =  1000 XP  (cumulative  1,500)
+     *   Level 3 =  2000 XP  (cumulative  3,500)
+     *   Level 4 =  3500 XP  (cumulative  7,000)
+     *   Levels 5-100 = 5000 XP each (cumulative 487,000 at end of prestige)
      */
     private static int getBedWarsLevelFromExp(int exp) {
-        int level = 0;
-        
-        // Levels 0-3: 500 XP per level
-        if (exp < 2000) {
-            return exp / 500;
+        // XP required to reach the START of each easy level (cumulative)
+        final int[] EASY_CUMULATIVE = { 0, 500, 1500, 3500, 7000 };
+        final int XP_PER_PRESTIGE   = 487000;
+        final int XP_PER_LEVEL      = 5000;
+
+        int prestige  = exp / XP_PER_PRESTIGE;
+        int remainder = exp % XP_PER_PRESTIGE;
+
+        // Check which easy level (1-4) we're in
+        for (int i = 1; i <= 4; i++) {
+            if (remainder < EASY_CUMULATIVE[i]) {
+                return prestige * 100 + (i - 1);
+            }
         }
-        level = 4;
-        exp -= 2000;
-        
-        // Levels 4-99: 1000 XP per level  
-        if (exp < 96000) {
-            return level + (exp / 1000);
-        }
-        level = 100;
-        exp -= 96000;
-        
-        // Levels 100-199: 2000 XP per level
-        if (exp < 200000) {
-            return level + (exp / 2000);
-        }
-        level = 200;
-        exp -= 200000;
-        
-        // Levels 200-299: 3000 XP per level
-        if (exp < 300000) {
-            return level + (exp / 3000);
-        }
-        level = 300;
-        exp -= 300000;
-        
-        // Levels 300-399: 4000 XP per level
-        if (exp < 400000) {
-            return level + (exp / 4000);
-        }
-        level = 400;
-        exp -= 400000;
-        
-        // Levels 400+: 5000 XP per level
-        return level + (exp / 5000);
+
+        // Past the easy levels — each level costs 5000 XP
+        return prestige * 100 + 4 + (remainder - 7000) / XP_PER_LEVEL;
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
