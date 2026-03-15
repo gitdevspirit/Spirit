@@ -120,6 +120,13 @@ public class IntelHudOverlay {
                     return c != 0 ? c : Double.compare(b.threatScore, a.threatScore);
                 });
                 break;
+            case "star":
+                players.sort((a, b) -> {
+                    if (a.loading && !b.loading) return 1;
+                    if (!a.loading && b.loading) return -1;
+                    return Integer.compare(b.star, a.star);
+                });
+                break;
             case "name":
                 players.sort(Comparator.comparing(p -> p.name));
                 break;
