@@ -1,9 +1,8 @@
-// Source code is decompiled from a .class file using FernFlower decompiler (from Intellij IDEA).
 package myau.ui.intel;
 
-import java.io.IOException;
 import myau.Myau;
 import myau.module.modules.LobbyIntel;
+import myau.ui.clickgui.GuiColors;
 import myau.ui.clickgui.RoundedUtils;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.ScaledResolution;
@@ -11,338 +10,293 @@ import net.minecraft.client.renderer.GlStateManager;
 import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
+import java.io.IOException;
+
 public class IntelHudSettingsGui extends GuiScreen {
-   private final IntelHudOverlay hudOverlay;
-   private final GuiScreen parent;
-   private static final int POPUP_WIDTH = 280;
-   private static final int POPUP_HEIGHT = 420;
-   private static final int PADDING = 12;
-   private static final int LINE_HEIGHT = 20;
-   private static final int SLIDER_HEIGHT = 28;
-   private static final int TOGGLE_HEIGHT = 24;
-   private static final int BG_POPUP = -301331950;
-   private static final int BG_HEADER = -15395555;
-   private static final int ACCENT = -1470024;
-   private static final int TEXT_BRIGHT = -2236946;
-   private static final int TEXT_DIM = -7829351;
-   private static final int DIVIDER = 872415231;
-   private int scrollOffset = 0;
-   private int maxScroll = 0;
-   private boolean draggingSlider = false;
-   private int draggingSliderIndex = -1;
 
-   public IntelHudSettingsGui(IntelHudOverlay hudOverlay, GuiScreen parent) {
-      this.hudOverlay = hudOverlay;
-      this.parent = parent;
-   }
+    private final IntelHudOverlay hudOverlay;
+    private final GuiScreen parent;
 
-   public void func_73863_a(int mouseX, int mouseY, float partialTicks) {
-      func_73734_a(0, 0, this.field_146294_l, this.field_146295_m, -872415232);
-      ScaledResolution sr = new ScaledResolution(this.field_146297_k);
-      int sw = sr.func_78326_a();
-      int sh = sr.func_78328_b();
-      int popupX = (sw - 280) / 2;
-      int popupY = (sh - 420) / 2;
-      RoundedUtils.drawRoundedRect((float)popupX, (float)popupY, 280.0F, 420.0F, 6.0F, -301331950);
-      RoundedUtils.drawRoundedRect((float)popupX, (float)popupY, 280.0F, 36.0F, 6.0F, -15395555);
-      func_73734_a(popupX, popupY + 30, popupX + 280, popupY + 36, -15395555);
-      GlStateManager.func_179094_E();
-      GlStateManager.func_179109_b((float)(popupX + 12), (float)(popupY + 12), 0.0F);
-      GlStateManager.func_179152_a(1.1F, 1.1F, 1.0F);
-      this.field_146297_k.field_71466_p.func_175065_a("HUD Overlay", 0.0F, 0.0F, -1470024, false);
-      GlStateManager.func_179121_F();
-      int closeX = popupX + 280 - 28;
-      int closeY = popupY + 10;
-      boolean closeHover = mouseX >= closeX && mouseX < closeX + 18 && mouseY >= closeY && mouseY < closeY + 18;
-      this.field_146297_k.field_71466_p.func_175065_a("X", (float)(closeX + 5), (float)(closeY + 5), closeHover ? -48060 : -2236946, false);
-      GlStateManager.func_179094_E();
-      GL11.glEnable(3089);
-      int scale = sr.func_78325_e();
-      int contentY = popupY + 46;
-      int contentH = 364;
-      GL11.glScissor(popupX * scale, (sh - contentY - contentH) * scale, 280 * scale, contentH * scale);
-      int y = contentY - this.scrollOffset + 12;
-      int innerX = popupX + 12;
-      int innerW = 256;
-      y = this.drawToggle(innerX, y, innerW, "Enabled", this.hudOverlay.isEnabled(), mouseX, mouseY);
-      y += 6;
-      this.drawDivider(innerX, y, innerW);
-      y += 12;
-      this.drawLabel(innerX, y, "POSITION");
-      y += 16;
-      y = this.drawSlider(innerX, y, innerW, "X Position", this.hudOverlay.getPosX(), 0, 1920, mouseX, mouseY, 0);
-      y = this.drawSlider(innerX, y, innerW, "Y Position", this.hudOverlay.getPosY(), 0, 1080, mouseX, mouseY, 1);
-      y += 6;
-      this.drawDivider(innerX, y, innerW);
-      y += 12;
-      this.drawLabel(innerX, y, "DISPLAY");
-      y += 16;
-      y = this.drawSlider(innerX, y, innerW, "Scale", (int)(this.hudOverlay.getScale() * 100.0F), 50, 200, mouseX, mouseY, 2);
-      y = this.drawSlider(innerX, y, innerW, "Max Players", this.hudOverlay.getMaxPlayers(), 1, 20, mouseX, mouseY, 3);
-      y = this.drawSlider(innerX, y, innerW, "Background Opacity", this.hudOverlay.getBgOpacity(), 0, 255, mouseX, mouseY, 4);
-      y = this.drawSlider(innerX, y, innerW, "Border Opacity", this.hudOverlay.getBorderOpacity(), 0, 255, mouseX, mouseY, 5);
-      y += 6;
-      this.drawDivider(innerX, y, innerW);
-      y += 12;
-      this.drawLabel(innerX, y, "COLUMNS");
-      y += 20;
-      y = this.drawToggle(innerX, y, innerW, "Player Heads", this.hudOverlay.getShowHeads(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "Star", this.hudOverlay.getShowStar(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "FKDR", this.hudOverlay.getShowFkdr(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "WLR", this.hudOverlay.getShowWlr(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "Winstreak", this.hudOverlay.getShowStreak(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "Urchin Icon", this.hudOverlay.getShowUrchin(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "Threat Score", this.hudOverlay.getShowThreat(), mouseX, mouseY);
-      y = this.drawToggle(innerX, y, innerW, "Team Colors", this.hudOverlay.getShowTeamColor(), mouseX, mouseY);
-      y += 8;
-      this.drawDivider(innerX, y, innerW);
-      y += 16;
-      this.drawLabel(innerX, y, "SORTING");
-      y += 20;
-      y = this.drawDropdown(innerX, y, innerW, "Sort By", new String[]{"Threat", "FKDR", "Name"}, this.hudOverlay.getSortMode().equals("threat") ? 0 : (this.hudOverlay.getSortMode().equals("fkdr") ? 1 : 2), mouseX, mouseY);
-      int contentHeight = y - (contentY + 12) + 12;
-      this.maxScroll = Math.max(0, contentHeight - contentH + 24);
-      GL11.glDisable(3089);
-      GlStateManager.func_179121_F();
-      super.func_73863_a(mouseX, mouseY, partialTicks);
-   }
+    private static final int POPUP_W  = 280;
+    private static final int POPUP_H  = 500;
+    private static final int PAD      = 12;
+    private static final int SLIDER_H = 28;
+    private static final int TOGGLE_H = 24;
 
-   private void drawLabel(int x, int y, String text) {
-      this.field_146297_k.field_71466_p.func_175065_a(text, (float)x, (float)y, -7829351, false);
-   }
+    private static final int BG_POPUP  = 0xEE0A0A12;
+    private static final int BG_HEADER = 0xFF15151D;
+    private static final int ACCENT    = GuiColors.ACCENT;
+    private static final int TEXT_ON   = 0xFFDDDDEE;
+    private static final int TEXT_DIM  = 0xFF888899;
+    private static final int DIVIDER   = 0x33FFFFFF;
 
-   private void drawDivider(int x, int y, int w) {
-      func_73734_a(x, y, x + w, y + 1, 872415231);
-   }
+    // Slider IDs
+    private static final int S_POS_X  = 0;
+    private static final int S_POS_Y  = 1;
+    private static final int S_SCALE  = 2;
+    private static final int S_MAX_P  = 3;
+    private static final int S_BG_OP  = 4;
+    private static final int S_BORDER = 5;
 
-   private int drawToggle(int x, int y, int w, String label, boolean value, int mx, int my) {
-      boolean hover = mx >= x && mx < x + w && my >= y && my < y + 24;
-      this.field_146297_k.field_71466_p.func_175065_a(label, (float)x, (float)(y + 8), hover ? -2236946 : -7829351, false);
-      int toggleW = 40;
-      int toggleH = 20;
-      int toggleX = x + w - toggleW;
-      int toggleY = y + 4;
-      int bgColor = value ? 1156157880 : 860111957;
-      RoundedUtils.drawRoundedRect((float)toggleX, (float)toggleY, (float)toggleW, (float)toggleH, (float)(toggleH / 2), bgColor);
-      int knobSize = 16;
-      int knobX = value ? toggleX + toggleW - knobSize - 2 : toggleX + 2;
-      int knobY = toggleY + 2;
-      RoundedUtils.drawRoundedRect((float)knobX, (float)knobY, (float)knobSize, (float)knobSize, (float)(knobSize / 2), value ? -1470024 : -10066313);
-      return y + 24;
-   }
+    private int  scrollOffset = 0;
+    private int  maxScroll    = 0;
+    private boolean dragging  = false;
+    private int  dragId       = -1;
+    private int  dragBarX     = 0;
+    private int  dragBarW     = 0;
 
-   private int drawSlider(int x, int y, int w, String label, int value, int min, int max, int mx, int my, int sliderIndex) {
-      this.field_146297_k.field_71466_p.func_175065_a(label, (float)x, (float)y, -2236946, false);
-      y += 10;
-      String valStr = String.valueOf(value);
-      this.field_146297_k.field_71466_p.func_175065_a(valStr, (float)(x + w - this.field_146297_k.field_71466_p.func_78256_a(valStr)), (float)y, -1470024, false);
-      int barW = w - 30;
-      int barH = 8;
-      func_73734_a(x, y, x + barW, y + barH, 1715749956);
-      float pct = (float)(value - min) / (float)(max - min);
-      int fillW = Math.max(2, (int)((float)barW * pct));
-      func_73734_a(x, y, x + fillW, y + barH, -1470024);
-      int knobSize = 12;
-      int knobX = x + fillW - knobSize / 2;
-      int knobY = y - 2;
-      func_73734_a(knobX, knobY, knobX + knobSize, knobY + knobSize, -1);
-      func_73734_a(knobX + 2, knobY + 2, knobX + knobSize - 2, knobY + knobSize - 2, -1470024);
-      return y + 20;
-   }
+    public IntelHudSettingsGui(IntelHudOverlay hudOverlay, GuiScreen parent) {
+        this.hudOverlay = hudOverlay;
+        this.parent = parent;
+    }
 
-   private int drawDropdown(int x, int y, int w, String label, String[] options, int selected, int mx, int my) {
-      this.field_146297_k.field_71466_p.func_175065_a(label, (float)x, (float)y, -7829351, false);
-      y += 12;
-      int btnH = 24;
-      boolean hover = mx >= x && mx < x + w && my >= y && my < y + btnH;
-      RoundedUtils.drawRoundedRect((float)x, (float)y, (float)w, (float)btnH, 4.0F, hover ? 1157627903 : 587202559);
-      this.field_146297_k.field_71466_p.func_175065_a(options[selected], (float)(x + 12), (float)(y + 8), -2236946, false);
-      this.field_146297_k.field_71466_p.func_175065_a("v", (float)(x + w - 20), (float)(y + 8), -7829351, false);
-      return y + btnH + 8;
-   }
+    // ── Slider math — always integer, 1 step per pixel when range fits ────────
 
-   protected void func_73864_a(int mouseX, int mouseY, int mouseButton) throws IOException {
-      ScaledResolution sr = new ScaledResolution(this.field_146297_k);
-      int sw = sr.func_78326_a();
-      int sh = sr.func_78328_b();
-      int popupX = (sw - 280) / 2;
-      int popupY = (sh - 420) / 2;
-      int closeX = popupX + 280 - 28;
-      int closeY = popupY + 10;
-      if (mouseX >= closeX && mouseX < closeX + 18 && mouseY >= closeY && mouseY < closeY + 18) {
-         this.saveAndClose();
-      } else if (mouseX >= popupX && mouseX <= popupX + 280 && mouseY >= popupY && mouseY <= popupY + 420) {
-         int contentY = popupY + 46;
-         int y = contentY - this.scrollOffset + 12;
-         int innerX = popupX + 12;
-         int innerW = 256;
-         if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-            this.hudOverlay.setEnabled(!this.hudOverlay.isEnabled());
-         } else {
-            y += 58;
-            if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-               int val = (int)((float)(mouseX - innerX) / (float)innerW * 1920.0F);
-               this.hudOverlay.setPosition(Math.max(0, Math.min(1920, val)), this.hudOverlay.getPosY());
-               this.draggingSlider = true;
-               this.draggingSliderIndex = 0;
-            } else {
-               y += 28;
-               if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-                  int val = (int)((float)(mouseX - innerX) / (float)innerW * 1080.0F);
-                  this.hudOverlay.setPosition(this.hudOverlay.getPosX(), Math.max(0, Math.min(1080, val)));
-                  this.draggingSlider = true;
-                  this.draggingSliderIndex = 1;
-               } else {
-                  y += 62;
-                  if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-                     int val = 50 + (int)((float)(mouseX - innerX) / (float)innerW * 150.0F);
-                     this.hudOverlay.setScale(Math.max(0.5F, Math.min(2.0F, (float)val / 100.0F)));
-                     this.draggingSlider = true;
-                     this.draggingSliderIndex = 2;
-                  } else {
-                     y += 28;
-                     if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-                        int val = 1 + (int)((float)(mouseX - innerX) / (float)innerW * 19.0F);
-                        this.hudOverlay.setMaxPlayers(Math.max(1, Math.min(20, val)));
-                        this.draggingSlider = true;
-                        this.draggingSliderIndex = 3;
-                     } else {
-                        y += 28;
-                        if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-                           int val = (int)((float)(mouseX - innerX) / (float)innerW * 255.0F);
-                           this.hudOverlay.setBgOpacity(Math.max(0, Math.min(255, val)));
-                           this.draggingSlider = true;
-                           this.draggingSliderIndex = 4;
-                        } else {
-                           y += 28;
-                           if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 28) {
-                              int val = (int)((float)(mouseX - innerX) / (float)innerW * 255.0F);
-                              this.hudOverlay.setBorderOpacity(Math.max(0, Math.min(255, val)));
-                              this.draggingSlider = true;
-                              this.draggingSliderIndex = 5;
-                           } else {
-                              y += 62;
-                              if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                 this.hudOverlay.setShowHeads(!this.hudOverlay.getShowHeads());
-                              } else {
-                                 y += 24;
-                                 if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                    this.hudOverlay.setShowStar(!this.hudOverlay.getShowStar());
-                                 } else {
-                                    y += 24;
-                                    if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                       this.hudOverlay.setShowFkdr(!this.hudOverlay.getShowFkdr());
-                                    } else {
-                                       y += 24;
-                                       if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                          this.hudOverlay.setShowWlr(!this.hudOverlay.getShowWlr());
-                                       } else {
-                                          y += 24;
-                                          if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                             this.hudOverlay.setShowStreak(!this.hudOverlay.getShowStreak());
-                                          } else {
-                                             y += 24;
-                                             if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                                this.hudOverlay.setShowUrchin(!this.hudOverlay.getShowUrchin());
-                                             } else {
-                                                y += 24;
-                                                if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                                   this.hudOverlay.setShowThreat(!this.hudOverlay.getShowThreat());
-                                                } else {
-                                                   y += 24;
-                                                   if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + 24) {
-                                                      this.hudOverlay.setShowTeamColor(!this.hudOverlay.getShowTeamColor());
-                                                   } else {
-                                                      y += 68;
-                                                      if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y + 12 && mouseY < y + 12 + 24) {
-                                                         String mode = this.hudOverlay.getSortMode();
-                                                         String newMode = mode.equals("threat") ? "fkdr" : (mode.equals("fkdr") ? "name" : "threat");
-                                                         this.hudOverlay.setSortMode(newMode);
-                                                      } else {
-                                                         super.func_73864_a(mouseX, mouseY, mouseButton);
-                                                      }
-                                                   }
-                                                }
-                                             }
-                                          }
-                                       }
-                                    }
-                                 }
-                              }
-                           }
-                        }
-                     }
-                  }
-               }
-            }
-         }
-      } else {
-         this.saveAndClose();
-      }
-   }
+    private int barW(int iw, int max) {
+        // Reserve space for the value label on the right
+        return iw - mc.fontRendererObj.getStringWidth(String.valueOf(max)) - 8;
+    }
 
-   protected void func_146286_b(int mouseX, int mouseY, int state) {
-      this.draggingSlider = false;
-      this.draggingSliderIndex = -1;
-      super.func_146286_b(mouseX, mouseY, state);
-   }
+    private int pixelToVal(int mx, int bx, int bw, int min, int max) {
+        float pct = Math.max(0f, Math.min(1f, (mx - bx) / (float) bw));
+        return min + Math.round(pct * (max - min));
+    }
 
-   protected void func_146273_a(int mouseX, int mouseY, int clickedMouseButton, long timeSinceLastClick) {
-      if (this.draggingSlider && this.draggingSliderIndex >= 0) {
-         ScaledResolution sr = new ScaledResolution(this.field_146297_k);
-         int sw = sr.func_78326_a();
-         int popupX = (sw - 280) / 2;
-         int innerX = popupX + 12;
-         int innerW = 226;
-         switch (this.draggingSliderIndex) {
-            case 0:
-               int valX = (int)((float)(mouseX - innerX) / (float)innerW * 1920.0F);
-               this.hudOverlay.setPosition(Math.max(0, Math.min(1920, valX)), this.hudOverlay.getPosY());
-               break;
-            case 1:
-               int valY = (int)((float)(mouseX - innerX) / (float)innerW * 1080.0F);
-               this.hudOverlay.setPosition(this.hudOverlay.getPosX(), Math.max(0, Math.min(1080, valY)));
-               break;
-            case 2:
-               int valScale = 50 + (int)((float)(mouseX - innerX) / (float)innerW * 150.0F);
-               this.hudOverlay.setScale(Math.max(0.5F, Math.min(2.0F, (float)valScale / 100.0F)));
-               break;
-            case 3:
-               int valMax = 1 + (int)((float)(mouseX - innerX) / (float)innerW * 19.0F);
-               this.hudOverlay.setMaxPlayers(Math.max(1, Math.min(20, valMax)));
-               break;
-            case 4:
-               int valOpacity = (int)((float)(mouseX - innerX) / (float)innerW * 255.0F);
-               this.hudOverlay.setBgOpacity(Math.max(0, Math.min(255, valOpacity)));
-               break;
-            case 5:
-               int valBorder = (int)((float)(mouseX - innerX) / (float)innerW * 255.0F);
-               this.hudOverlay.setBorderOpacity(Math.max(0, Math.min(255, valBorder)));
-         }
+    private void applySlider(int id, int mx, int bx, int bw) {
+        switch (id) {
+            case S_POS_X:  hudOverlay.setPosition(pixelToVal(mx,bx,bw,0,1920), hudOverlay.getPosY()); break;
+            case S_POS_Y:  hudOverlay.setPosition(hudOverlay.getPosX(), pixelToVal(mx,bx,bw,0,1080)); break;
+            case S_SCALE:  hudOverlay.setScale(pixelToVal(mx,bx,bw,50,200) / 100f); break;
+            case S_MAX_P:  hudOverlay.setMaxPlayers(pixelToVal(mx,bx,bw,1,20)); break;
+            case S_BG_OP:  hudOverlay.setBgOpacity(pixelToVal(mx,bx,bw,0,255)); break;
+            case S_BORDER: hudOverlay.setBorderOpacity(pixelToVal(mx,bx,bw,0,255)); break;
+        }
+    }
 
-      }
-   }
+    // ── Render ────────────────────────────────────────────────────────────────
 
-   public void func_146274_d() throws IOException {
-      super.func_146274_d();
-      int dw = Mouse.getEventDWheel();
-      if (dw != 0) {
-         this.scrollOffset -= dw > 0 ? 20 : -20;
-         this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, this.maxScroll));
-      }
+    @Override
+    public void drawScreen(int mx, int my, float pt) {
+        drawRect(0, 0, width, height, 0xCC000000);
 
-   }
+        ScaledResolution sr = new ScaledResolution(mc);
+        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
+        int px = (sw - POPUP_W) / 2, py = (sh - POPUP_H) / 2;
 
-   public boolean func_73868_f() {
-      return false;
-   }
+        RoundedUtils.drawRoundedRect(px, py, POPUP_W, POPUP_H, 6, BG_POPUP);
+        RoundedUtils.drawRoundedRect(px, py, POPUP_W, 36, 6, BG_HEADER);
+        drawRect(px, py + 30, px + POPUP_W, py + 36, BG_HEADER);
 
-   private void saveAndClose() {
-      LobbyIntel lobbyIntel = (LobbyIntel)Myau.moduleManager.getModule("LobbyIntel");
-      if (lobbyIntel != null) {
-         lobbyIntel.saveHudSettings();
-      }
+        GlStateManager.pushMatrix();
+        GlStateManager.translate(px + PAD, py + 12, 0);
+        GlStateManager.scale(1.1f, 1.1f, 1f);
+        mc.fontRendererObj.drawString("HUD Overlay Settings", 0, 0, ACCENT, false);
+        GlStateManager.popMatrix();
 
-      this.field_146297_k.func_147108_a(this.parent);
-   }
+        int cx = px + POPUP_W - 28, cy = py + 10;
+        boolean ch = mx >= cx && mx < cx + 18 && my >= cy && my < cy + 18;
+        mc.fontRendererObj.drawString("X", cx + 5, cy + 5, ch ? 0xFFFF4444 : TEXT_ON, false);
+
+        // Scrollable region
+        GlStateManager.pushMatrix();
+        GL11.glEnable(GL11.GL_SCISSOR_TEST);
+        int sf = sr.getScaleFactor();
+        int contentY = py + 46, contentH = POPUP_H - 56;
+        GL11.glScissor(px * sf, (sh - contentY - contentH) * sf, POPUP_W * sf, contentH * sf);
+
+        int y  = contentY - scrollOffset + PAD;
+        int ix = px + PAD;
+        int iw = POPUP_W - PAD * 2;
+
+        y = drawToggle(ix, y, iw, "Enabled", hudOverlay.isEnabled(), mx, my);
+        y += 6; div(ix, y, iw); y += 12;
+
+        label(ix, y, "POSITION"); y += 16;
+        y = slider(ix, y, iw, "X Position",         hudOverlay.getPosX(),              0,   1920, S_POS_X,  mx, my);
+        y = slider(ix, y, iw, "Y Position",         hudOverlay.getPosY(),              0,   1080, S_POS_Y,  mx, my);
+        y += 6; div(ix, y, iw); y += 12;
+
+        label(ix, y, "DISPLAY"); y += 16;
+        y = slider(ix, y, iw, "Scale %",            (int)(hudOverlay.getScale()*100),  50,  200,  S_SCALE,  mx, my);
+        y = slider(ix, y, iw, "Max Players",        hudOverlay.getMaxPlayers(),         1,   20,   S_MAX_P,  mx, my);
+        y = slider(ix, y, iw, "Background Opacity", hudOverlay.getBgOpacity(),          0,   255,  S_BG_OP,  mx, my);
+        y = slider(ix, y, iw, "Border Opacity",     hudOverlay.getBorderOpacity(),      0,   255,  S_BORDER, mx, my);
+        y += 6; div(ix, y, iw); y += 12;
+
+        label(ix, y, "COLUMNS"); y += 20;
+        y = drawToggle(ix, y, iw, "Player Heads",  hudOverlay.getShowHeads(),     mx, my);
+        y = drawToggle(ix, y, iw, "Star",          hudOverlay.getShowStar(),      mx, my);
+        y = drawToggle(ix, y, iw, "FKDR",          hudOverlay.getShowFkdr(),      mx, my);
+        y = drawToggle(ix, y, iw, "WLR",           hudOverlay.getShowWlr(),       mx, my);
+        y = drawToggle(ix, y, iw, "Winstreak",     hudOverlay.getShowStreak(),    mx, my);
+        y = drawToggle(ix, y, iw, "Tags",          hudOverlay.getShowUrchin(),    mx, my);
+        y = drawToggle(ix, y, iw, "Threat Score",  hudOverlay.getShowThreat(),    mx, my);
+        y = drawToggle(ix, y, iw, "Team Colors",   hudOverlay.getShowTeamColor(), mx, my);
+        y += 8; div(ix, y, iw); y += 16;
+
+        label(ix, y, "SORTING"); y += 20;
+        y = dropdown(ix, y, iw, "Sort By",
+                new String[]{"Threat", "FKDR", "Name"},
+                hudOverlay.getSortMode().equals("threat") ? 0 : hudOverlay.getSortMode().equals("fkdr") ? 1 : 2,
+                mx, my);
+
+        maxScroll = Math.max(0, (y - (contentY + PAD) + PAD) - contentH + PAD * 2);
+
+        GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        GlStateManager.popMatrix();
+
+        super.drawScreen(mx, my, pt);
+    }
+
+    // ── Widget helpers ────────────────────────────────────────────────────────
+
+    private void label(int x, int y, String t) {
+        mc.fontRendererObj.drawString(t, x, y, TEXT_DIM, false);
+    }
+
+    private void div(int x, int y, int w) {
+        drawRect(x, y, x + w, y + 1, DIVIDER);
+    }
+
+    private int slider(int x, int y, int w, String lbl, int val, int min, int max,
+                       int id, int mx, int my) {
+        mc.fontRendererObj.drawString(lbl, x, y, TEXT_ON, false);
+        y += 10;
+
+        String vs = String.valueOf(val);
+        mc.fontRendererObj.drawString(vs, x + w - mc.fontRendererObj.getStringWidth(vs), y, ACCENT, false);
+
+        int bw = barW(w, max);
+        int bh = 8;
+        drawRect(x, y, x + bw, y + bh, 0x66444444);
+        float pct = (val - min) / (float)(max - min);
+        int fw = Math.max(2, (int)(bw * pct));
+        drawRect(x, y, x + fw, y + bh, ACCENT);
+        // Knob
+        int kx = x + fw - 5, ky = y - 2;
+        drawRect(kx, ky, kx + 10, ky + 12, 0xFFFFFFFF);
+        drawRect(kx + 2, ky + 2, kx + 8, ky + 10, ACCENT);
+
+        return y + 20;
+    }
+
+    private int drawToggle(int x, int y, int w, String lbl, boolean val, int mx, int my) {
+        boolean hov = mx >= x && mx < x + w && my >= y && my < y + TOGGLE_H;
+        mc.fontRendererObj.drawString(lbl, x, y + 8, hov ? TEXT_ON : TEXT_DIM, false);
+        int tw = 40, th = 20, tx = x + w - tw, ty = y + 4;
+        RoundedUtils.drawRoundedRect(tx, ty, tw, th, th / 2, val ? (ACCENT & 0x00FFFFFF) | 0x44000000 : 0x33444455);
+        int ks = 16, kx = val ? tx + tw - ks - 2 : tx + 2;
+        RoundedUtils.drawRoundedRect(kx, ty + 2, ks, ks, ks / 2, val ? ACCENT : 0xFF666677);
+        return y + TOGGLE_H;
+    }
+
+    private int dropdown(int x, int y, int w, String lbl, String[] opts, int sel, int mx, int my) {
+        mc.fontRendererObj.drawString(lbl, x, y, TEXT_DIM, false);
+        y += 12;
+        boolean hov = mx >= x && mx < x + w && my >= y && my < y + 24;
+        RoundedUtils.drawRoundedRect(x, y, w, 24, 4, hov ? 0x44FFFFFF : 0x22FFFFFF);
+        mc.fontRendererObj.drawString(opts[sel], x + 12, y + 8, TEXT_ON, false);
+        mc.fontRendererObj.drawString("v", x + w - 20, y + 8, TEXT_DIM, false);
+        return y + 32;
+    }
+
+    // ── Mouse ─────────────────────────────────────────────────────────────────
+
+    @Override
+    protected void mouseClicked(int mx, int my, int btn) throws IOException {
+        ScaledResolution sr = new ScaledResolution(mc);
+        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
+        int px = (sw - POPUP_W) / 2, py = (sh - POPUP_H) / 2;
+
+        int cx = px + POPUP_W - 28, cy = py + 10;
+        if (mx >= cx && mx < cx + 18 && my >= cy && my < cy + 18) { saveAndClose(); return; }
+        if (mx < px || mx > px + POPUP_W || my < py || my > py + POPUP_H) { saveAndClose(); return; }
+
+        int y  = py + 46 - scrollOffset + PAD;
+        int ix = px + PAD;
+        int iw = POPUP_W - PAD * 2;
+
+        // Enabled toggle
+        if (hit(mx, my, ix, y, iw, TOGGLE_H)) { hudOverlay.setEnabled(!hudOverlay.isEnabled()); return; }
+        y += TOGGLE_H + 6 + 12 + 16;
+
+        // Position sliders
+        if (tryDrag(mx, my, ix, iw, y, S_POS_X, 1920)) return; y += SLIDER_H;
+        if (tryDrag(mx, my, ix, iw, y, S_POS_Y, 1080)) return; y += SLIDER_H;
+        y += 6 + 12 + 16;
+
+        // Display sliders
+        if (tryDrag(mx, my, ix, iw, y, S_SCALE,  200)) return; y += SLIDER_H;
+        if (tryDrag(mx, my, ix, iw, y, S_MAX_P,   20)) return; y += SLIDER_H;
+        if (tryDrag(mx, my, ix, iw, y, S_BG_OP,  255)) return; y += SLIDER_H;
+        if (tryDrag(mx, my, ix, iw, y, S_BORDER, 255)) return; y += SLIDER_H;
+        y += 6 + 12 + 16 + 20;
+
+        // Column toggles
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowHeads(!hudOverlay.getShowHeads());         return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowStar(!hudOverlay.getShowStar());           return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowFkdr(!hudOverlay.getShowFkdr());           return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowWlr(!hudOverlay.getShowWlr());             return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowStreak(!hudOverlay.getShowStreak());       return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowUrchin(!hudOverlay.getShowUrchin());       return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowThreat(!hudOverlay.getShowThreat());       return; } y+=TOGGLE_H;
+        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowTeamColor(!hudOverlay.getShowTeamColor()); return; } y+=TOGGLE_H+8+16+20;
+
+        // Sort dropdown
+        if (hit(mx, my, ix, y + 12, iw, 24)) {
+            String m = hudOverlay.getSortMode();
+            hudOverlay.setSortMode(m.equals("threat") ? "fkdr" : m.equals("fkdr") ? "name" : "threat");
+        }
+
+        super.mouseClicked(mx, my, btn);
+    }
+
+    /** Returns true and starts dragging if the mouse is on this slider's bar. */
+    private boolean tryDrag(int mx, int my, int ix, int iw, int y, int id, int max) {
+        int bx = ix, bw = barW(iw, max);
+        // bar is at y+10, height 8
+        if (mx >= bx && mx <= bx + bw && my >= y + 10 && my < y + 18) {
+            applySlider(id, mx, bx, bw);
+            dragging  = true;
+            dragId    = id;
+            dragBarX  = bx;
+            dragBarW  = bw;
+            return true;
+        }
+        return false;
+    }
+
+    private boolean hit(int mx, int my, int x, int y, int w, int h) {
+        return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    @Override
+    protected void mouseReleased(int mx, int my, int state) {
+        dragging = false; dragId = -1;
+        super.mouseReleased(mx, my, state);
+    }
+
+    @Override
+    protected void mouseClickMove(int mx, int my, int btn, long t) {
+        if (dragging && dragId >= 0) applySlider(dragId, mx, dragBarX, dragBarW);
+    }
+
+    @Override
+    public void handleMouseInput() throws IOException {
+        super.handleMouseInput();
+        int dw = Mouse.getEventDWheel();
+        if (dw != 0) {
+            scrollOffset -= dw > 0 ? 20 : -20;
+            scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+        }
+    }
+
+    @Override
+    public boolean doesGuiPauseGame() { return false; }
+
+    private void saveAndClose() {
+        LobbyIntel li = (LobbyIntel) Myau.moduleManager.getModule("LobbyIntel");
+        if (li != null) li.saveHudSettings();
+        mc.displayGuiScreen(parent);
+    }
 }
