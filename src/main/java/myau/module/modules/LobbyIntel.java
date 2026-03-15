@@ -161,13 +161,18 @@ public class LobbyIntel extends Module {
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
         if (!autoScan.getValue()) return;
-        // Re-scan on every world load (catches new BW game joins)
         scannedThisSession = false;
+        // Small delay so the server IP is available before we check
         mc.addScheduledTask(() -> {
             if (!scannedThisSession) {
                 scannedThisSession = true;
                 if (autoKey.getValue()) tryAutoDetectKey();
-                IntelManager.getInstance().scanLobby();
+                // Only scan if on Hypixel — avoids wasting API calls on other servers
+                if (IntelManager.isOnHypixel()) {
+                    IntelManager.getInstance().scanLobby();
+                } else {
+                    myau.ui.intel.IntelManager.dbg("[Intel] Skipping scan — not on Hypixel");
+                }
             }
         });
     }
