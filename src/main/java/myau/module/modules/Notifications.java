@@ -8,13 +8,9 @@ import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
-import myau.util.RenderUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
-import net.minecraft.client.renderer.Tessellator;
-import net.minecraft.client.renderer.WorldRenderer;
-import net.minecraft.client.renderer.vertex.DefaultVertexFormats;
 import org.lwjgl.opengl.GL11;
 
 import java.util.List;
@@ -22,34 +18,27 @@ import java.util.List;
 public class Notifications extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting   duration = register(new SliderSetting("Duration", 3.0, 1.0, 10.0, 0.5));
+    public final SliderSetting   duration = register(new SliderSetting("Duration",  3.0, 1.0, 10.0, 0.5));
     public final DropdownSetting position = register(new DropdownSetting("Position", 0,
             "Bottom Right", "Top Right", "Bottom Left", "Top Left"));
     public final BooleanSetting  anim     = register(new BooleanSetting("Animation", true));
 
-    public final SliderSetting pillR = register(new SliderSetting(" Pill Red",   220,  0, 255, 1));
-    public final SliderSetting pillG = register(new SliderSetting(" Pill Green",  80,  0, 255, 1));
-    public final SliderSetting pillB = register(new SliderSetting(" Pill Blue",   30,  0, 255, 1));
+    // ── Layout ────────────────────────────────────────────────────────────────
+    private static final int   H          = 28;   // card height
+    private static final int   ACCENT_W   = 3;    // left color stripe width
+    private static final int   PAD_LEFT   = 8;    // padding after accent stripe
+    private static final int   PAD_RIGHT  = 12;   // right padding
+    private static final int   MARGIN     = 12;   // screen edge margin
+    private static final int   GAP        = 5;    // gap between notifications
+    private static final float CORNER_R   = 5f;
+    private static final float ANIM_IN    = 220f;
+    private static final float ANIM_OUT   = 280f;
 
-    public final SliderSetting bgR = register(new SliderSetting(" BG Red",    18,  0, 255, 1));
-    public final SliderSetting bgG = register(new SliderSetting(" BG Green",  18,  0, 255, 1));
-    public final SliderSetting bgB = register(new SliderSetting(" BG Blue",   18,  0, 255, 1));
-    public final SliderSetting bgA = register(new SliderSetting(" BG Alpha", 210,  0, 255, 1));
-
-    public final SliderSetting msgR = register(new SliderSetting(" Text Red",   210, 0, 255, 1));
-    public final SliderSetting msgG = register(new SliderSetting(" Text Green", 210, 0, 255, 1));
-    public final SliderSetting msgB = register(new SliderSetting(" Text Blue",  210, 0, 255, 1));
-
-    private static final String LABEL    = "Spirit";
-    private static final int    H        = 26;
-    private static final int    PILL_PAD = 7;
-    private static final int    MSG_PAD  = 9;
-    private static final int    MARGIN   = 10;
-    private static final int    GAP      = 5;
-    private static final int    R        = 4; // corner radius
-
-    private static final float ANIM_IN  = 200f;
-    private static final float ANIM_OUT = 250f;
+    // ── Colors ────────────────────────────────────────────────────────────────
+    private static final int BG      = 0xEE0D0D0D; // near-black background
+    private static final int PINK    = 0xFFE991B8; // default accent (Spirit pink)
+    private static final int WHITE   = 0xFFEEEEFF;
+    private static final int DIM     = 0xFF888899;
 
     public Notifications() { super("Notifications", true); }
 
@@ -59,147 +48,168 @@ public class Notifications extends Module {
         List<NotificationManager.NotificationEntry> active = Myau.notificationManager.getActive();
         if (active.isEmpty()) return;
 
-        ScaledResolution sr = new ScaledResolution(mc);
+        ScaledResolution sr  = new ScaledResolution(mc);
         int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int pos = position.getIndex();
-        boolean fromRight  = pos == 0 || pos == 1;
-        boolean fromBottom = pos == 0 || pos == 2;
-
-        int labelW = mc.fontRendererObj.getStringWidth(LABEL);
-        int pillW  = labelW + PILL_PAD * 2;
+        int pos         = position.getIndex();
+        boolean right   = pos == 0 || pos == 1;
+        boolean bottom  = pos == 0 || pos == 2;
 
         for (int i = 0; i < active.size(); i++) {
             NotificationManager.NotificationEntry n = active.get(i);
-            String msg  = n.message;
-            int msgW    = mc.fontRendererObj.getStringWidth(msg);
-            int toastW  = pillW + MSG_PAD + msgW + MSG_PAD;
 
             long  age   = n.getAge();
             long  total = n.durationMillis;
             float alpha = computeAlpha(age, total);
             float slide = computeSlide(age, total);
-            float off   = anim.getValue() ? (toastW + MARGIN + 20) * (1f - slide) : 0f;
 
-            float x = fromRight ? sw - MARGIN - toastW + off : MARGIN - off;
-            float y = fromBottom ? sh - MARGIN - H - i * (H + GAP)
-                                 : MARGIN + i * (H + GAP);
+            // Card width based on message
+            int msgW   = mc.fontRendererObj.getStringWidth(n.message);
+            int cardW  = ACCENT_W + PAD_LEFT + msgW + PAD_RIGHT;
+            int minW   = 120;
+            if (cardW < minW) cardW = minW;
 
-            int bgColor   = argb((int)bgA.getValue(), (int)bgR.getValue(), (int)bgG.getValue(), (int)bgB.getValue(), alpha);
-            int pillColor = argb(255, (int)pillR.getValue(), (int)pillG.getValue(), (int)pillB.getValue(), alpha);
-            int textWhite = argb(255, 255, 255, 255, alpha);
-            int msgColor  = argb(255, (int)msgR.getValue(), (int)msgG.getValue(), (int)msgB.getValue(), alpha);
+            float slideOff = anim.getValue() ? (cardW + MARGIN + 20) * (1f - slide) : 0f;
+            float x = right  ? sw - MARGIN - cardW + slideOff : MARGIN - slideOff;
+            float y = bottom ? sh - MARGIN - H - i * (H + GAP)
+                             : MARGIN + i * (H + GAP);
 
-            // ── Setup GL ─────────────────────────────────────────────────────
+            // Accent color — use notification's own color if set, else Spirit pink
+            int accentRaw = n.color == 0xFFFFFF ? PINK : (0xFF000000 | n.color);
+            int accent    = withAlpha(accentRaw, alpha);
+            int bg        = withAlpha(BG, alpha);
+            int textCol   = withAlpha(WHITE, alpha);
+            int dimCol    = withAlpha(DIM, alpha);
+
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(x, y, 0);
+
+            // ── Shadow ────────────────────────────────────────────────────────
+            solidRect(-2, -2, cardW + 4, H + 4, withAlpha(0xFF000000, alpha * 0.3f));
+
+            // ── Card background ───────────────────────────────────────────────
+            roundedRect(0, 0, cardW, H, CORNER_R, bg);
+
+            // ── Accent left stripe ─────────────────────────────────────────────
+            // Draw as a rounded rect on the left, clipped to card
+            roundedRect(0, 0, ACCENT_W + CORNER_R, H, CORNER_R, accent); // fills corners
+            solidRect(ACCENT_W, 0, CORNER_R, H, bg);                      // square off right side
+
+            // ── Progress bar at bottom — shrinks as notification expires ──────
+            float progress = total > 0 ? Math.max(0f, 1f - (float) age / total) : 1f;
+            int barW = (int)((cardW - ACCENT_W) * progress);
+            if (barW > 0) {
+                solidRect(ACCENT_W, H - 2, barW, 2, withAlpha(accent, alpha * 0.5f));
+            }
+
+            // ── Thin top highlight line ───────────────────────────────────────
+            solidRect(ACCENT_W, 0, cardW - ACCENT_W, 1, withAlpha(0xFFFFFFFF, alpha * 0.06f));
+
+            // ── Text ──────────────────────────────────────────────────────────
+            GlStateManager.enableTexture2D();
             GlStateManager.enableBlend();
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-            GlStateManager.disableTexture2D();
             GlStateManager.disableDepth();
-            GlStateManager.disableAlpha();
-
-            // ── Full toast background: only round the outer corners ───────────
-            // Left corners rounded, right corners rounded, all done with arcs
-            drawRoundedRect(x, y, toastW, H, R, bgColor);
-
-            // ── Pill: left corners rounded, right edge FLAT (square) ──────────
-            drawRectLeftRounded(x, y, pillW, H, R, pillColor);
-
-            // ── Restore GL for text ───────────────────────────────────────────
-            GlStateManager.enableTexture2D();
-            GlStateManager.enableDepth();
-            GlStateManager.enableAlpha();
-            GlStateManager.color(1f, 1f, 1f, 1f);
 
             int fontH = mc.fontRendererObj.FONT_HEIGHT;
-            float ty  = y + (H - fontH) / 2f;
+            int ty    = (H - fontH) / 2;
 
-            mc.fontRendererObj.drawString(LABEL, x + (pillW - labelW) / 2f, ty, textWhite, false);
-            mc.fontRendererObj.drawString(msg,   x + pillW + MSG_PAD,        ty, msgColor,  false);
+            mc.fontRendererObj.drawString(n.message, ACCENT_W + PAD_LEFT, ty, textCol, true);
 
+            GlStateManager.enableDepth();
             GlStateManager.disableBlend();
+            GL11.glColor4f(1, 1, 1, 1);
+
+            GlStateManager.popMatrix();
         }
     }
 
-    /** Full rounded rect — all 4 corners arc'd */
-    private void drawRoundedRect(float x, float y, float w, float h, int r, int color) {
-        float[] c = colorF(color);
-        Tessellator t = Tessellator.getInstance();
-        WorldRenderer wr = t.getWorldRenderer();
-        GL11.glColor4f(c[0], c[1], c[2], c[3]);
+    // ── GL helpers ────────────────────────────────────────────────────────────
 
-        // Center fill
-        drawQuad(wr, t, x+r, y, x+w-r, y+h, color);
-        drawQuad(wr, t, x,   y+r, x+r, y+h-r, color);
-        drawQuad(wr, t, x+w-r, y+r, x+w, y+h-r, color);
+    private void solidRect(float x, float y, float w, float h, int color) {
+        float a = (color >> 24 & 0xFF) / 255f;
+        float r = (color >> 16 & 0xFF) / 255f;
+        float g = (color >> 8  & 0xFF) / 255f;
+        float b = (color       & 0xFF) / 255f;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(r, g, b, a);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(x,     y);
+        GL11.glVertex2f(x + w, y);
+        GL11.glVertex2f(x + w, y + h);
+        GL11.glVertex2f(x,     y + h);
+        GL11.glEnd();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
+    }
+
+    private void roundedRect(float x, float y, float w, float h, float r, int color) {
+        float a = (color >> 24 & 0xFF) / 255f;
+        float rf = (color >> 16 & 0xFF) / 255f;
+        float gf = (color >> 8  & 0xFF) / 255f;
+        float bf = (color       & 0xFF) / 255f;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(rf, gf, bf, a);
+
+        // Center strips
+        quad(x + r, y,     x + w - r, y + h);
+        quad(x,     y + r, x + r,     y + h - r);
+        quad(x + w - r, y + r, x + w, y + h - r);
 
         // Corners
-        drawArc(wr, t, x+r,   y+r,   r, 180, 270, color); // top-left
-        drawArc(wr, t, x+w-r, y+r,   r, 270, 360, color); // top-right
-        drawArc(wr, t, x+r,   y+h-r, r,  90, 180, color); // bottom-left
-        drawArc(wr, t, x+w-r, y+h-r, r,   0,  90, color); // bottom-right
+        arc(x + r,     y + r,     r, 180, 270);
+        arc(x + w - r, y + r,     r, 270, 360);
+        arc(x + r,     y + h - r, r,  90, 180);
+        arc(x + w - r, y + h - r, r,   0,  90);
+
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
-    /** Rect with only LEFT side rounded, right side flat */
-    private void drawRectLeftRounded(float x, float y, float w, float h, int r, int color) {
-        Tessellator t = Tessellator.getInstance();
-        WorldRenderer wr = t.getWorldRenderer();
-
-        // Center fill
-        drawQuad(wr, t, x+r, y, x+w, y+h, color);
-        drawQuad(wr, t, x,   y+r, x+r, y+h-r, color);
-
-        // Only left corners
-        drawArc(wr, t, x+r, y+r,   r, 180, 270, color); // top-left
-        drawArc(wr, t, x+r, y+h-r, r,  90, 180, color); // bottom-left
+    private void quad(float x1, float y1, float x2, float y2) {
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(x1, y1); GL11.glVertex2f(x2, y1);
+        GL11.glVertex2f(x2, y2); GL11.glVertex2f(x1, y2);
+        GL11.glEnd();
     }
 
-    private void drawQuad(WorldRenderer wr, Tessellator t, float x1, float y1, float x2, float y2, int color) {
-        float[] c = colorF(color);
-        GlStateManager.disableTexture2D();
-        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_COLOR);
-        wr.pos(x1, y1, 0).color(c[0], c[1], c[2], c[3]).endVertex();
-        wr.pos(x1, y2, 0).color(c[0], c[1], c[2], c[3]).endVertex();
-        wr.pos(x2, y2, 0).color(c[0], c[1], c[2], c[3]).endVertex();
-        wr.pos(x2, y1, 0).color(c[0], c[1], c[2], c[3]).endVertex();
-        t.draw();
-    }
-
-    private void drawArc(WorldRenderer wr, Tessellator t, float cx, float cy,
-                         int r, int startDeg, int endDeg, int color) {
-        float[] c = colorF(color);
-        GlStateManager.disableTexture2D();
-        wr.begin(GL11.GL_TRIANGLE_FAN, DefaultVertexFormats.POSITION_COLOR);
-        wr.pos(cx, cy, 0).color(c[0], c[1], c[2], c[3]).endVertex();
-        for (int deg = startDeg; deg <= endDeg; deg += 3) {
-            double rad = Math.toRadians(deg);
-            wr.pos(cx + Math.cos(rad) * r, cy + Math.sin(rad) * r, 0)
-              .color(c[0], c[1], c[2], c[3]).endVertex();
+    private void arc(float cx, float cy, float r, int start, int end) {
+        GL11.glBegin(GL11.GL_TRIANGLE_FAN);
+        GL11.glVertex2f(cx, cy);
+        for (int d = start; d <= end; d += 4) {
+            double rad = Math.toRadians(d);
+            GL11.glVertex2f(cx + (float) Math.cos(rad) * r, cy + (float) Math.sin(rad) * r);
         }
-        t.draw();
+        GL11.glEnd();
     }
 
-    private float[] colorF(int color) {
-        return new float[]{
-            ((color >> 16) & 0xFF) / 255f,
-            ((color >>  8) & 0xFF) / 255f,
-            ( color        & 0xFF) / 255f,
-            ((color >> 24) & 0xFF) / 255f
-        };
+    // ── Color helpers ─────────────────────────────────────────────────────────
+
+    private int withAlpha(int color, float alpha) {
+        int a = Math.max(0, Math.min(255, (int)(((color >> 24) & 0xFF) * alpha)));
+        return (a << 24) | (color & 0x00FFFFFF);
     }
 
-    private int argb(int a, int r, int g, int b, float alpha) {
-        return (Math.max(0, Math.min(255, (int)(a * alpha))) << 24)
-             | (r << 16) | (g << 8) | b;
-    }
+    // ── Animation ─────────────────────────────────────────────────────────────
 
     private float computeSlide(long age, long total) {
-        if (age < ANIM_IN) { float t = age / ANIM_IN; return 1f-(1f-t)*(1f-t)*(1f-t); }
-        if (total > 0 && total - age < ANIM_OUT) { float t = (total-age)/ANIM_OUT; return t*t*t; }
+        if (age < ANIM_IN) {
+            float t = age / ANIM_IN;
+            return 1f - (1f - t) * (1f - t) * (1f - t); // ease-out cubic
+        }
+        if (total > 0 && total - age < ANIM_OUT) {
+            float t = (total - age) / ANIM_OUT;
+            return t * t * t; // ease-in cubic
+        }
         return 1f;
     }
 
     private float computeAlpha(long age, long total) {
-        if (age < ANIM_IN) return Math.min(1f, age / ANIM_IN * 2f);
-        if (total > 0 && total - age < ANIM_OUT) return Math.max(0f, (total-age) / ANIM_OUT);
+        if (age < ANIM_IN)  return Math.min(1f, age / ANIM_IN * 1.5f);
+        if (total > 0 && total - age < ANIM_OUT) return Math.max(0f, (total - age) / ANIM_OUT);
         return 1f;
     }
 }
