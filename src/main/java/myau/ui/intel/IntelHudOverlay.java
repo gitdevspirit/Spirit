@@ -47,6 +47,7 @@ public class IntelHudOverlay {
     private float   scale         = 1.0f;
     private int     maxPlayers    = 10;
     private int     bgOpacity     = 180;
+    private int     borderOpacity = 100;
     private boolean showHeads     = true;
     private boolean showStar      = true;
     private boolean showFkdr      = true;
@@ -68,7 +69,8 @@ public class IntelHudOverlay {
     public void setPosition(int x, int y)   { posX = x; posY = y; }
     public void setScale(float v)           { scale = Math.max(0.5f, Math.min(2f, v)); }
     public void setMaxPlayers(int v)        { maxPlayers = Math.max(1, Math.min(20, v)); }
-    public void setBgOpacity(int v)         { bgOpacity = Math.max(0, Math.min(255, v)); }
+    public void setBgOpacity(int v)         { bgOpacity     = Math.max(0, Math.min(255, v)); }
+    public void setBorderOpacity(int v)     { borderOpacity = Math.max(0, Math.min(255, v)); }
     public void setShowHeads(boolean v)     { showHeads = v; }
     public void setShowStar(boolean v)      { showStar = v; }
     public void setShowFkdr(boolean v)      { showFkdr = v; }
@@ -84,7 +86,8 @@ public class IntelHudOverlay {
     public int     getPosY()          { return posY; }
     public float   getScale()         { return scale; }
     public int     getMaxPlayers()    { return maxPlayers; }
-    public int     getBgOpacity()     { return bgOpacity; }
+    public int     getBgOpacity()      { return bgOpacity; }
+    public int     getBorderOpacity()  { return borderOpacity; }
     public boolean getShowHeads()     { return showHeads; }
     public boolean getShowStar()      { return showStar; }
     public boolean getShowFkdr()      { return showFkdr; }
@@ -164,11 +167,10 @@ public class IntelHudOverlay {
         GlStateManager.translate(posX, posY, 0);
         GlStateManager.scale(scale, scale, 1f);
 
-        // ── Frosted glass blur effect ─────────────────────────────────────────
-        BlurShadowRenderer.renderFrostedGlass(0, 0, W, H, CORNER_R, 8, bgOpacity);
+        // ── Frosted glass blur (fixed strength, looks best at 8) ────────────────
+        BlurShadowRenderer.renderFrostedGlass(0, 0, W, H, CORNER_R, 8, 160);
 
-        // ── Dark overlay on top of blur ───────────────────────────────────────
-        // This is the actual background — semi-transparent dark over the blur
+        // ── Dark overlay — bgOpacity controls how dark/opaque the panel is ─────
         solidRect(0, 0, W, H, (bgOpacity << 24) | 0x06060D);
 
         // ── Pink top shimmer line ──────────────────────────────────────────────
@@ -177,7 +179,8 @@ public class IntelHudOverlay {
         // ── Header section ────────────────────────────────────────────────────
         solidRect(0, 0, W, HEADER_H, 0x220D0D1A);
         // Header bottom divider
-        gradRect(4, HEADER_H, W - 4, 1, 0x66E991B8, 0x00E991B8);
+        int divAlpha = Math.min(255, borderOpacity + 30);
+        gradRect(4, HEADER_H, W - 4, 1, (divAlpha << 24) | 0xE991B8, 0x00E991B8);
 
         // ── Column headers ────────────────────────────────────────────────────
         int hx = PAD_X;
@@ -190,7 +193,7 @@ public class IntelHudOverlay {
         if (showFkdr)   { colDiv(hx, HEADER_H); drawHeaderText("FKDR",   hx, headerTextY, COL_FKDR);   hx += COL_FKDR; }
         if (showWlr)    { colDiv(hx, HEADER_H); drawHeaderText("WLR",    hx, headerTextY, COL_WLR);    hx += COL_WLR; }
         if (showStreak) { colDiv(hx, HEADER_H); drawHeaderText("WS",     hx, headerTextY, COL_WS);     hx += COL_WS; }
-        if (showUrchin) { colDiv(hx, HEADER_H); drawHeaderText("FLAG",   hx, headerTextY, COL_URCHIN); hx += COL_URCHIN; }
+        if (showUrchin) { colDiv(hx, HEADER_H); drawHeaderText("TAGS",   hx, headerTextY, COL_URCHIN); hx += COL_URCHIN; }
         if (showThreat) { colDiv(hx, HEADER_H); drawHeaderText("THREAT", hx, headerTextY, COL_THREAT); }
 
         // ── Rows ──────────────────────────────────────────────────────────────
@@ -213,7 +216,8 @@ public class IntelHudOverlay {
         }
 
         // ── Outer pink border ─────────────────────────────────────────────────
-        RoundedUtils.drawRoundedOutline(0, 0, W, H, CORNER_R, 1f, 0x44E991B8);
+        int borderColor = (borderOpacity << 24) | 0xE991B8;
+        RoundedUtils.drawRoundedOutline(0, 0, W, H, CORNER_R, 1f, borderColor);
 
         GlStateManager.disableDepth();
         GlStateManager.popMatrix();
