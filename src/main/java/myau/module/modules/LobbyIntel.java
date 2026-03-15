@@ -39,7 +39,8 @@ public class LobbyIntel extends Module {
     public final IntProperty     hudPosY         = new IntProperty("hud-y", 100, 0, 2160);
     public final FloatProperty   hudScale        = new FloatProperty("hud-scale", 1.0f, 0.5f, 2.0f);
     public final IntProperty     hudMaxPlayers   = new IntProperty("hud-max-players", 10, 1, 20);
-    public final IntProperty     hudBgOpacity    = new IntProperty("hud-bg-opacity", 200, 0, 255);
+    public final IntProperty     hudBgOpacity     = new IntProperty("hud-bg-opacity",     180, 0, 255);
+    public final IntProperty     hudBorderOpacity = new IntProperty("hud-border-opacity", 100, 0, 255);
     public final BooleanProperty hudShowHeads    = new BooleanProperty("hud-show-heads", true);
     public final BooleanProperty hudShowStar     = new BooleanProperty("hud-show-star", true);
     public final BooleanProperty hudShowFkdr     = new BooleanProperty("hud-show-fkdr", true);
@@ -86,6 +87,7 @@ public class LobbyIntel extends Module {
         hudOverlay.setScale(hudScale.getValue());
         hudOverlay.setMaxPlayers(hudMaxPlayers.getValue());
         hudOverlay.setBgOpacity(hudBgOpacity.getValue());
+        hudOverlay.setBorderOpacity(hudBorderOpacity.getValue());
         hudOverlay.setShowHeads(hudShowHeads.getValue());
         hudOverlay.setShowStar(hudShowStar.getValue());
         hudOverlay.setShowFkdr(hudShowFkdr.getValue());
@@ -106,6 +108,7 @@ public class LobbyIntel extends Module {
         hudScale.setValue(hudOverlay.getScale());
         hudMaxPlayers.setValue(hudOverlay.getMaxPlayers());
         hudBgOpacity.setValue(hudOverlay.getBgOpacity());
+        hudBorderOpacity.setValue(hudOverlay.getBorderOpacity());
         hudShowHeads.setValue(hudOverlay.getShowHeads());
         hudShowStar.setValue(hudOverlay.getShowStar());
         hudShowFkdr.setValue(hudOverlay.getShowFkdr());
