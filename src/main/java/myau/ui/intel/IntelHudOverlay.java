@@ -209,7 +209,7 @@ public class IntelHudOverlay {
         int headerTextY = (HEADER_H - mc.fontRendererObj.FONT_HEIGHT) / 2;
         drawSortHeader("NAME", hx, headerTextY, COL_NAME, "name"); hx += COL_NAME;
         // Clickable sort headers — highlighted when active, underlined
-        if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("✫",      hx, headerTextY, COL_STAR,   "star");   hx += COL_STAR; }
+        if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("STAR",   hx, headerTextY, COL_STAR,   "star");   hx += COL_STAR; }
         if (showFkdr)   { colDiv(hx, HEADER_H); drawSortHeader("FKDR",   hx, headerTextY, COL_FKDR,   "fkdr");   hx += COL_FKDR; }
         if (showWlr)    { colDiv(hx, HEADER_H); drawSortHeader("WLR",    hx, headerTextY, COL_WLR,    "wlr");    hx += COL_WLR; }
         if (showStreak) { colDiv(hx, HEADER_H); drawSortHeader("WS",     hx, headerTextY, COL_WS,     "streak"); hx += COL_WS; }
@@ -246,7 +246,8 @@ public class IntelHudOverlay {
 
     private void drawRow(IntelPlayer p, int rowY) {
         int cx = PAD_X;
-        int midY = rowY + (ROW_H - mc.fontRendererObj.FONT_HEIGHT) / 2;
+        int fontH = mc.fontRendererObj.FONT_HEIGHT;
+        int midY = rowY + (ROW_H - fontH) / 2;
 
         // Team stripe
         if (showTeamColor) {
@@ -268,7 +269,7 @@ public class IntelHudOverlay {
 
         // Star
         if (showStar) {
-            drawCell(p.loading ? "-" : "\u272b" + p.star,
+            drawCell(p.loading ? "-" : "*" + p.star,
                      cx, midY, COL_STAR,
                      p.loading ? TEXT_DIM : prestigeColor(p.star));
             cx += COL_STAR;
