@@ -136,8 +136,8 @@ public class IntelHudSettingsGui extends GuiScreen {
 
         label(ix, y, "SORTING"); y += 20;
         y = dropdown(ix, y, iw, "Sort By",
-                new String[]{"Threat", "FKDR", "Name"},
-                hudOverlay.getSortMode().equals("threat") ? 0 : hudOverlay.getSortMode().equals("fkdr") ? 1 : 2,
+                new String[]{"Threat", "FKDR", "Star", "Name"},
+                hudOverlay.getSortMode().equals("threat") ? 0 : hudOverlay.getSortMode().equals("fkdr") ? 1 : hudOverlay.getSortMode().equals("star") ? 2 : 3,
                 mx, my);
 
         // Add extra bottom padding so the last item is fully scrollable into view
@@ -247,7 +247,7 @@ public class IntelHudSettingsGui extends GuiScreen {
         // Sort dropdown
         if (hit(mx, my, ix, y + 12, iw, 24)) {
             String m = hudOverlay.getSortMode();
-            hudOverlay.setSortMode(m.equals("threat") ? "fkdr" : m.equals("fkdr") ? "name" : "threat");
+            hudOverlay.setSortMode(m.equals("threat") ? "fkdr" : m.equals("fkdr") ? "star" : m.equals("star") ? "name" : "threat");
         }
 
         super.mouseClicked(mx, my, btn);
