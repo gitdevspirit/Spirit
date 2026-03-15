@@ -169,6 +169,10 @@ public class LobbyIntel extends Module {
         return hudOverlay;
     }
 
+    public IntelGui getGui() {
+        return gui;
+    }
+
     /** Scan the log file for a Hypixel API key */
     public void tryAutoDetectKey() {
         if (!autoKey.getValue()) return;
@@ -241,63 +245,77 @@ public class LobbyIntel extends Module {
             });
         }
 
-        // Detect final kills and remove player from overlay
-        // Hypixel format: "FINAL KILL! PlayerName was killed by OtherPlayer"
-        // or "FINAL KILL! PlayerName fell into the void"
+        // Detect final kills — remove player from overlay immediately
+        // Hypixel formats (unformatted):
+        //   "PlayerName was killed by OtherPlayer. FINAL KILL!"
+        //   "PlayerName fell into the void. FINAL KILL!"
+        //   "PlayerName was blown up by OtherPlayer. FINAL KILL!"
+        //   "PlayerName drowned. FINAL KILL!" etc.
+        // The killed player is always the first word(s) before the verb
         if (message.contains("FINAL KILL!")) {
-            // Extract the killed player name
-            // Patterns: "FINAL KILL! Name was..." or "FINAL KILL! Name fell..."
-            Pattern killPattern = Pattern.compile("FINAL KILL! (\\w+) (?:was|fell|died)");
-            Matcher matcher = killPattern.matcher(message);
-            
+            // Match: word(s) at start, followed by " was "," fell "," drowned"," died"," hit"," got"
+            Pattern killPattern = Pattern.compile("^([A-Za-z0-9_]+) (?:was |fell |drowned|died|hit |got )");
+            Matcher matcher = killPattern.matcher(message.trim());
             if (matcher.find()) {
                 String killedPlayer = matcher.group(1);
                 removePlayerFromOverlay(killedPlayer);
+                IntelManager.dbg("[Intel] Final kill: " + killedPlayer);
             }
         }
         
-        // Detect /who command response and add players
-        // Hypixel format: "ONLINE: Player1, Player2, Player3, ..."
+        // Detect /who response — "ONLINE: Player1, Player2, ..."
+        // When this arrives: REPLACE the entire overlay with only these real player names,
+        // discarding any obfuscated/bot entries that came from the tab list scan.
         if (message.startsWith("ONLINE:")) {
-            String playerList = message.substring(7).trim(); // Remove "ONLINE:"
-            String[] players = playerList.split(",\\s*");
-            
-            int addedCount = 0;
-            for (String playerName : players) {
-                // Clean up any extra formatting
-                playerName = playerName.replaceAll("[^a-zA-Z0-9_]", "").trim();
-                if (!playerName.isEmpty() && !playerName.equals(mc.thePlayer.getName())) {
-                    if (addPlayerToOverlay(playerName)) {
-                        addedCount++;
-                    }
-                }
+            String playerList = message.substring(7).trim();
+            String[] parts = playerList.split(",\\s*");
+
+            java.util.List<String> realNames = new java.util.ArrayList<>();
+            for (String raw : parts) {
+                String name = raw.replaceAll("[^a-zA-Z0-9_]", "").trim();
+                if (!name.isEmpty()) realNames.add(name);
             }
-            
-            if (addedCount > 0) {
-                ChatUtil.sendFormatted("&7[Intel] &aAdded " + addedCount + " players from /who command");
+
+            if (!realNames.isEmpty()) {
+                IntelManager manager = IntelManager.getInstance();
+
+                // Clear ALL current players (removes obfuscated tab-list entries)
+                manager.getPlayers().clear();
+
+                // Re-add only the real names from /who, preserving any already-fetched stats
+                for (String name : realNames) {
+                    if (name.equalsIgnoreCase(mc.thePlayer != null ? mc.thePlayer.getName() : "")) continue;
+                    manager.addManualPlayer(name);
+                }
+
+                ChatUtil.sendFormatted("&7[Intel] &aReplaced player list with " + realNames.size() + " real players from /who");
+                IntelManager.dbg("[Intel] /who replaced list: " + realNames);
             }
         }
     }
     
     /**
-     * Remove a player from the overlay by name
+     * Remove a player from the overlay by name (final kill / eliminated)
      */
     private void removePlayerFromOverlay(String playerName) {
         IntelManager manager = IntelManager.getInstance();
         boolean removed = false;
-        
-        // Remove from main players list
+
         for (int i = manager.getPlayers().size() - 1; i >= 0; i--) {
-            IntelPlayer p = manager.getPlayers().get(i);
-            if (p.name.equalsIgnoreCase(playerName)) {
+            if (manager.getPlayers().get(i).name.equalsIgnoreCase(playerName)) {
                 manager.getPlayers().remove(i);
                 removed = true;
                 break;
             }
         }
-        
+        // Also remove from manual players if added via /who or search
+        manager.removeManualPlayer(playerName);
+
         if (removed) {
-            ChatUtil.sendFormatted("&7[Intel] &cRemoved " + playerName + " (Final Kill)");
+            // Refresh both GUI and HUD overlay
+            java.util.List<IntelPlayer> refreshed = new java.util.ArrayList<>(manager.getPlayers());
+            if (getGui() != null) getGui().setPlayers(refreshed);
+            if (getHudOverlay() != null) getHudOverlay().setPlayers(refreshed);
         }
     }
     
