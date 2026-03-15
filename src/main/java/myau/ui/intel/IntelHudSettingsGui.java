@@ -111,6 +111,7 @@ public class IntelHudSettingsGui extends GuiScreen {
         y = drawSlider(innerX, y, innerW, "Scale", (int)(hudOverlay.getScale() * 100), 50, 200, mouseX, mouseY, 2);
         y = drawSlider(innerX, y, innerW, "Max Players", hudOverlay.getMaxPlayers(), 1, 20, mouseX, mouseY, 3);
         y = drawSlider(innerX, y, innerW, "Background Opacity", hudOverlay.getBgOpacity(), 0, 255, mouseX, mouseY, 4);
+        y = drawSlider(innerX, y, innerW, "Border Opacity", hudOverlay.getBorderOpacity(), 0, 255, mouseX, mouseY, 5);
         y += 6;
         drawDivider(innerX, y, innerW);
         y += 12;
@@ -305,6 +306,14 @@ public class IntelHudSettingsGui extends GuiScreen {
             draggingSliderIndex = 4;
             return;
         }
+        y += SLIDER_HEIGHT;
+        if (mouseX >= innerX && mouseX < innerX + innerW && mouseY >= y && mouseY < y + SLIDER_HEIGHT) {
+            int val = (int)((mouseX - innerX) / (float)innerW * 255);
+            hudOverlay.setBorderOpacity(Math.max(0, Math.min(255, val)));
+            draggingSlider = true;
+            draggingSliderIndex = 5;
+            return;
+        }
         y += SLIDER_HEIGHT + 6 + 12 + 16;
         
         // Column toggles
@@ -396,6 +405,10 @@ public class IntelHudSettingsGui extends GuiScreen {
             case 4: // Background Opacity
                 int valOpacity = (int)((mouseX - innerX) / (float)innerW * 255);
                 hudOverlay.setBgOpacity(Math.max(0, Math.min(255, valOpacity)));
+                break;
+            case 5: // Border Opacity
+                int valBorder = (int)((mouseX - innerX) / (float)innerW * 255);
+                hudOverlay.setBorderOpacity(Math.max(0, Math.min(255, valBorder)));
                 break;
         }
     }
