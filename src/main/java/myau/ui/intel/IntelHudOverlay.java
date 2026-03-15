@@ -59,6 +59,10 @@ public class IntelHudOverlay {
     private String  sortMode      = "threat";
 
     private List<IntelPlayer> players = new ArrayList<>();
+    // Tracks last render positions of sort-clickable headers for click detection
+    private int lastRenderX = 0, lastRenderY = 0;
+    private int[] colHeaderX = new int[7]; // star,fkdr,wlr,ws,tags,threat positions
+    private int colHeaderY = 0, colHeaderH = 0;
     private final java.util.Map<String, ResourceLocation> skinCache   = new java.util.HashMap<>();
     private final java.util.Map<String, Boolean>          skinIsSheet = new java.util.HashMap<>();
 
@@ -204,12 +208,13 @@ public class IntelHudOverlay {
 
         int headerTextY = (HEADER_H - mc.fontRendererObj.FONT_HEIGHT) / 2;
         drawHeaderText("NAME",   hx, headerTextY, COL_NAME);   hx += COL_NAME;
-        if (showStar)   { colDiv(hx, HEADER_H); drawHeaderText("✫",      hx, headerTextY, COL_STAR);   hx += COL_STAR; }
-        if (showFkdr)   { colDiv(hx, HEADER_H); drawHeaderText("FKDR",   hx, headerTextY, COL_FKDR);   hx += COL_FKDR; }
-        if (showWlr)    { colDiv(hx, HEADER_H); drawHeaderText("WLR",    hx, headerTextY, COL_WLR);    hx += COL_WLR; }
-        if (showStreak) { colDiv(hx, HEADER_H); drawHeaderText("WS",     hx, headerTextY, COL_WS);     hx += COL_WS; }
-        if (showUrchin) { colDiv(hx, HEADER_H); drawHeaderText("TAGS",   hx, headerTextY, COL_URCHIN); hx += COL_URCHIN; }
-        if (showThreat) { colDiv(hx, HEADER_H); drawHeaderText("THREAT", hx, headerTextY, COL_THREAT); }
+        // Clickable sort headers — highlighted when active, underlined
+        if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("✫",      hx, headerTextY, COL_STAR,   "star");   hx += COL_STAR; }
+        if (showFkdr)   { colDiv(hx, HEADER_H); drawSortHeader("FKDR",   hx, headerTextY, COL_FKDR,   "fkdr");   hx += COL_FKDR; }
+        if (showWlr)    { colDiv(hx, HEADER_H); drawSortHeader("WLR",    hx, headerTextY, COL_WLR,    "wlr");    hx += COL_WLR; }
+        if (showStreak) { colDiv(hx, HEADER_H); drawSortHeader("WS",     hx, headerTextY, COL_WS,     "streak"); hx += COL_WS; }
+        if (showUrchin) { colDiv(hx, HEADER_H); drawSortHeader("TAGS",   hx, headerTextY, COL_URCHIN, "urchin"); hx += COL_URCHIN; }
+        if (showThreat) { colDiv(hx, HEADER_H); drawSortHeader("THREAT", hx, headerTextY, COL_THREAT, "threat"); }
 
         // ── Rows ──────────────────────────────────────────────────────────────
         int rowY = HEADER_H + PAD_Y;
@@ -303,18 +308,19 @@ public class IntelHudOverlay {
             }
             cx += COL_URCHIN;
         }
-        // Threat — number + mini bar
+        // Threat — number aligned same as all other cells + mini bar at very bottom
         if (showThreat) {
             int threat = (int) p.threatScore;
             int tc = threatColor(threat);
+            // Draw number at same midY as every other cell
             drawCell(p.loading ? "-" : String.valueOf(threat),
-                     cx, midY - 2, COL_THREAT,
+                     cx, midY, COL_THREAT,
                      p.loading ? TEXT_DIM : tc);
 
             if (!p.loading) {
                 float ratio = Math.min(1f, threat / 100f);
                 int bx = cx + 3;
-                int by = rowY + ROW_H - 4;
+                int by = rowY + ROW_H - 3;
                 int bw = COL_THREAT - 6;
                 solidRect(bx, by, bw, 2, 0xFF111111);
                 if (ratio > 0) {
@@ -331,6 +337,43 @@ public class IntelHudOverlay {
         GlStateManager.enableBlend();
         GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
         GlStateManager.disableDepth();
+    }
+
+    private void drawSortHeader(String text, int x, int y, int colW, String mode) {
+        boolean active = sortMode.equals(mode);
+        int tw = mc.fontRendererObj.getStringWidth(text);
+        int tx = x + (colW - tw) / 2;
+        GlStateManager.enableTexture2D();
+        mc.fontRendererObj.drawString(text, tx, y, active ? ACCENT : TEXT_DIM, false);
+        if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
+    }
+
+    /** Call from LobbyIntel mouse handler to cycle sort by clicking column headers. */
+    public boolean handleClick(int mx, int my) {
+        if (!enabled) return false;
+        int lx = (int)((mx - posX) / scale);
+        int ly = (int)((my - posY) / scale);
+        if (lx < 0 || lx > totalWidth() || ly < 0 || ly >= HEADER_H) return false;
+
+        int cx2 = PAD_X;
+        if (showTeamColor) cx2 += 4;
+        if (showHeads)     cx2 += HEAD_S + 4;
+        cx2 += COL_NAME;
+
+        String[] modes  = { "star",    "fkdr",   "wlr",    "streak",  "urchin",   "threat"  };
+        int[]    widths = { COL_STAR,  COL_FKDR, COL_WLR,  COL_WS,   COL_URCHIN, COL_THREAT };
+        boolean[] shown = { showStar,  showFkdr, showWlr,  showStreak,showUrchin, showThreat };
+
+        for (int i = 0; i < modes.length; i++) {
+            if (!shown[i]) continue;
+            if (lx >= cx2 && lx < cx2 + widths[i]) {
+                sortMode = modes[i];
+                sortPlayers();
+                return true;
+            }
+            cx2 += widths[i];
+        }
+        return false;
     }
 
     private void drawHeaderText(String text, int x, int y, int colW) {
