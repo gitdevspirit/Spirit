@@ -110,9 +110,23 @@ public class IntelHudOverlay {
 
     private void sortPlayers() {
         switch (sortMode) {
-            case "fkdr": players.sort((a, b) -> Double.compare(b.fkdr, a.fkdr)); break;
-            case "name": players.sort(Comparator.comparing(p -> p.name)); break;
-            default:     players.sort((a, b) -> Double.compare(b.threatScore, a.threatScore)); break;
+            case "fkdr":
+                players.sort((a, b) -> {
+                    int c = Double.compare(b.fkdr, a.fkdr);
+                    return c != 0 ? c : Double.compare(b.threatScore, a.threatScore);
+                });
+                break;
+            case "name":
+                players.sort(Comparator.comparing(p -> p.name));
+                break;
+            default: // threat
+                players.sort((a, b) -> {
+                    // Loading players go to bottom, sorted players at top
+                    if (a.loading && !b.loading) return 1;
+                    if (!a.loading && b.loading) return -1;
+                    return Double.compare(b.threatScore, a.threatScore);
+                });
+                break;
         }
     }
 
@@ -159,6 +173,7 @@ public class IntelHudOverlay {
         List<IntelPlayer> display = getDisplayPlayers();
         if (display.isEmpty()) return;
 
+        sortPlayers(); // re-sort each frame so newly loaded stats reorder immediately
         int count = Math.min(display.size(), maxPlayers);
         int W = totalWidth();
         int H = HEADER_H + PAD_Y + count * ROW_H + PAD_Y;
@@ -242,7 +257,7 @@ public class IntelHudOverlay {
 
         // Name
         enableText();
-        int nameColor = p.cheater ? 0xFFFF5566 : TEXT_WHITE;
+        int nameColor = p.cheater ? 0xFFFF5566 : 0xFFCCCCDD;
         mc.fontRendererObj.drawString(p.name, cx, midY, nameColor, true);
         cx += COL_NAME;
 
