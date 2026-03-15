@@ -55,6 +55,9 @@ public class LobbyIntel extends Module {
     public final TextProperty logPath = new TextProperty("log-path",
             System.getProperty("user.home") + detectDefaultLogPath());
 
+    // API key — persisted across sessions
+    public final TextProperty savedApiKey = new TextProperty("hypixel-api-key", "");
+
     private final IntelGui gui = new IntelGui();
     private final IntelHudOverlay hudOverlay = new IntelHudOverlay();
     private boolean scannedThisSession = false;
@@ -65,6 +68,10 @@ public class LobbyIntel extends Module {
         IntelManager.getInstance().setHudOverlay(hudOverlay);
         // Try to auto-detect key on startup
         tryAutoDetectKey();
+        // Load saved API key from config (overrides auto-detect if present)
+        if (!savedApiKey.getValue().isEmpty()) {
+            IntelManager.hypixelApiKey = savedApiKey.getValue();
+        }
         // Load HUD settings from properties
         loadHudSettings();
     }
@@ -204,6 +211,7 @@ public class LobbyIntel extends Module {
 
                 if (lastKey != null && !lastKey.equals(IntelManager.hypixelApiKey)) {
                     IntelManager.hypixelApiKey = lastKey;
+                    savedApiKey.setValue(lastKey);
                     // Notify in chat
                     net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
                         myau.util.ChatUtil.sendFormatted("&7[Intel] &aAuto-detected Hypixel API key from log.");
