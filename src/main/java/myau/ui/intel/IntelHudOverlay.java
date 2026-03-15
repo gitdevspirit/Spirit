@@ -345,7 +345,7 @@ public class IntelHudOverlay {
         int tw = mc.fontRendererObj.getStringWidth(text);
         int tx = x + (colW - tw) / 2;
         GlStateManager.enableTexture2D();
-        mc.fontRendererObj.drawString(text, tx, y, active ? ACCENT : TEXT_DIM, false);
+        mc.fontRendererObj.drawString(text, tx, y, active ? ACCENT : TEXT_WHITE, false);
         if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
     }
 
@@ -357,7 +357,7 @@ public class IntelHudOverlay {
         GlStateManager.pushMatrix();
         GlStateManager.translate(tx, y - (s - 1f) * mc.fontRendererObj.FONT_HEIGHT / 2f, 0);
         GlStateManager.scale(s, s, 1f);
-        mc.fontRendererObj.drawString(text, 0, 0, active ? ACCENT : TEXT_DIM, false);
+        mc.fontRendererObj.drawString(text, 0, 0, active ? ACCENT : TEXT_WHITE, false);
         GlStateManager.popMatrix();
         if (active) solidRect(x + 2, HEADER_H - 3, colW - 4, 1, ACCENT);
     }
