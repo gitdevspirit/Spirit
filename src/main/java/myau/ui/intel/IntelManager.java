@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
@@ -32,14 +31,15 @@ public class IntelManager {
 
     private static final String URCHIN_URL  = "https://urchin.ws/player";
 
-    private final ExecutorService pool = Executors.newFixedThreadPool(6);
+    private final ExecutorService pool = Executors.newFixedThreadPool(3);
     private volatile boolean fetching = false;
 
-    // Hypixel rate limiter: Use 200ms delay (was working before)
-    // This gives us 5 req/sec = 300 req/min which Hypixel tolerates with bursts
-    private final Semaphore hypixelSlots = new Semaphore(1);
+    // Hypixel rate limiter — strictly sequential, one request every 250ms
+    // Hypixel allows 300 req/min with key = ~200ms between requests
+    // We use 250ms to stay safely under the limit even under load
+    private final java.util.concurrent.locks.ReentrantLock hypixelLock = new java.util.concurrent.locks.ReentrantLock(true); // fair queue
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 200L; // 200ms like before - was working!
+    private static final long HYPIXEL_INTERVAL_MS = 250L;
 
     // UUID cache for skin lookups of non-lobby players
     private final Map<String, String> uuidCache = new HashMap<>();
@@ -149,7 +149,22 @@ public class IntelManager {
             if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
 
-        // Fetch Hypixel per player
+        // Pre-fetch all UUIDs in parallel first (no rate limit needed for Mojang)
+        // This way when the Hypixel queue gets to each player the UUID is already cached
+        final List<IntelPlayer> playersRef = new ArrayList<>(players);
+        pool.submit(() -> {
+            // UUID fetches can run concurrently — Mojang allows it
+            java.util.concurrent.ExecutorService uuidPool = Executors.newFixedThreadPool(4);
+            for (IntelPlayer p : playersRef) {
+                final IntelPlayer fp = p;
+                uuidPool.submit(() -> fetchAndCacheUuid(fp.name));
+            }
+            uuidPool.shutdown();
+            try { uuidPool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignored) {}
+            dbg("[Intel] UUID pre-fetch complete for " + playersRef.size() + " players");
+        });
+
+        // Fetch Hypixel per player — rate limited via hypixelLock
         for (IntelPlayer p : players) {
             final IntelPlayer fp = p;
             pool.submit(() -> {
@@ -293,13 +308,13 @@ public class IntelManager {
     /** Official Hypixel API v2 — used when API key is configured */
     private boolean fetchHypixelApi(IntelPlayer p) {
         try {
-            hypixelSlots.acquire();
+            hypixelLock.lock();
             try {
                 long now  = System.currentTimeMillis();
                 long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
                 if (wait > 0) Thread.sleep(wait);
                 lastHypixelRequest.set(System.currentTimeMillis());
-            } finally { hypixelSlots.release(); }
+            } finally { hypixelLock.unlock(); }
 
             String uuid = fetchAndCacheUuid(p.name);
             if (uuid == null) return false;
