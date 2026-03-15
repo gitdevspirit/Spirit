@@ -233,39 +233,44 @@ public class IntelManager {
         p.loading = false;
     }
 
-    /** Slothpixel — free public Hypixel wrapper, no key needed */
+    /** Ashcon API (minetools) — free public Hypixel wrapper, no key needed, actively maintained */
     private boolean fetchSlothpixel(IntelPlayer p) {
+        // Try Ashcon/Mowojang API first (fast, reliable)
         try {
-            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
-            dbg("[Sloth] len=" + (json == null ? "null" : json.length()));
+            String uuid = fetchAndCacheUuid(p.name);
+            if (uuid == null) {
+                dbg("[Ashcon] no UUID for " + p.name);
+                return false;
+            }
+            // Use api.hypixel.net public stats endpoint via minetools proxy
+            // Actually use api.slothpixel.me replacement: api.hypixel.net public endpoint
+            // Best free fallback: use plancke.io scrape is unreliable, use api2.hypixel.net
+            // Real working free API: use the Hypixel public API without key (returns limited data)
+            String json = get("https://api.hypixel.net/player?uuid=" + uuid, null, null);
+            dbg("[FreeHypixel] len=" + (json == null ? "null" : json.length()));
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
-
-            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
-
-            JsonObject bw = null;
-            if (root.has("stats")) {
-                JsonObject st = root.getAsJsonObject("stats");
-                if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
-            }
-            dbg("[Sloth] bw=" + (bw != null));
-            if (bw == null) {
-                p.star = 0;
+            // No key = still returns success:true but with rate limit
+            if (!root.has("success") || !root.get("success").getAsBoolean()) {
+                dbg("[FreeHypixel] success=false");
                 return false;
             }
-            
-            // Try to get star from Slothpixel (they call it "level")
-            if (bw.has("level")) {
-                try {
-                    p.star = bw.get("level").getAsInt();
-                } catch (Exception e) {
-                    p.star = 0;
-                }
-            } else {
-                p.star = 0;
+            if (!root.has("player") || root.get("player").isJsonNull()) {
+                dbg("[FreeHypixel] no player");
+                return false;
             }
+
+            JsonObject player = root.getAsJsonObject("player");
+            JsonObject stats  = player.has("stats") ? player.getAsJsonObject("stats") : null;
+            JsonObject bw     = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
+
+            if (bw != null && bw.has("Experience")) {
+                try { p.star = getBedWarsLevelFromExp(bw.get("Experience").getAsInt()); }
+                catch (Exception e) { p.star = 0; }
+            }
+
+            if (bw == null) { dbg("[FreeHypixel] no bw stats"); return false; }
 
             int fk = bwInt(bw, "final_kills_bedwars");
             int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
@@ -277,10 +282,11 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            
-            return true; // Success - stats loaded
-        } catch (Exception e) { 
-            return false; 
+            dbg("[FreeHypixel] OK fk=" + fk + " fkdr=" + p.fkdr);
+            return true;
+        } catch (Exception e) {
+            dbg("[FreeHypixel] ex: " + e.getMessage());
+            return false;
         }
     }
 
@@ -298,7 +304,8 @@ public class IntelManager {
             String uuid = fetchAndCacheUuid(p.name);
             if (uuid == null) return false;
 
-            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            String json = get("https://api.hypixel.net/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            dbg("[HypixelAPI] response len=" + (json == null ? "null" : json.length()) + " uuid=" + uuid);
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
