@@ -27,12 +27,12 @@ public class IntelHudOverlay {
     private static final float CORNER_R = 6f;
 
     // Column widths
-    private static final int COL_NAME   = 100;
+    private static final int COL_NAME   = 90;
     private static final int COL_STAR   = 38;
     private static final int COL_FKDR   = 38;
-    private static final int COL_WLR    = 34;
-    private static final int COL_WS     = 28;
-    private static final int COL_URCHIN = 28;
+    private static final int COL_WLR    = 36;
+    private static final int COL_WS     = 32;
+    private static final int COL_URCHIN = 36;
     private static final int COL_THREAT = 44;
 
     // ── Colors ────────────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ public class IntelHudOverlay {
         if (showHeads)     hx += HEAD_S + 4;
 
         int headerTextY = (HEADER_H - mc.fontRendererObj.FONT_HEIGHT) / 2;
-        drawHeaderText("NAME",   hx, headerTextY, COL_NAME);   hx += COL_NAME;
+        drawSortHeader("NAME", hx, headerTextY, COL_NAME, "name"); hx += COL_NAME;
         // Clickable sort headers — highlighted when active, underlined
         if (showStar)   { colDiv(hx, HEADER_H); drawSortHeader("✫",      hx, headerTextY, COL_STAR,   "star");   hx += COL_STAR; }
         if (showFkdr)   { colDiv(hx, HEADER_H); drawSortHeader("FKDR",   hx, headerTextY, COL_FKDR,   "fkdr");   hx += COL_FKDR; }
@@ -360,6 +360,11 @@ public class IntelHudOverlay {
         if (showHeads)     cx2 += HEAD_S + 4;
         cx2 += COL_NAME;
 
+        // Check NAME column first
+        if (lx >= PAD_X + (showTeamColor ? 4 : 0) + (showHeads ? HEAD_S + 4 : 0)
+                && lx < PAD_X + (showTeamColor ? 4 : 0) + (showHeads ? HEAD_S + 4 : 0) + COL_NAME) {
+            sortMode = "name"; sortPlayers(); return true;
+        }
         String[] modes  = { "star",    "fkdr",   "wlr",    "streak",  "urchin",   "threat"  };
         int[]    widths = { COL_STAR,  COL_FKDR, COL_WLR,  COL_WS,   COL_URCHIN, COL_THREAT };
         boolean[] shown = { showStar,  showFkdr, showWlr,  showStreak,showUrchin, showThreat };
