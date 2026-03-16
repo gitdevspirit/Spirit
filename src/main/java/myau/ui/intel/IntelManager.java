@@ -165,9 +165,12 @@ public class IntelManager {
             dbg("[Intel] UUID pre-fetch complete for " + playersRef.size() + " players");
         });
 
-        // Fetch Hypixel with staggered delay — one request every 300ms
-        // Keeps us well under Hypixel's rate limit even for full 16-player lobbies (~5s total)
-        final List<IntelPlayer> staggerRef = new ArrayList<>(players);
+        // Build fetch list — in focus mode, filter out obvious bots/obfuscated names first
+        // so we spend API calls on real players only
+        List<IntelPlayer> fetchList = buildFetchList(new ArrayList<>(players));
+
+        // Fetch with staggered delay — 300ms between requests
+        final List<IntelPlayer> staggerRef = fetchList;
         pool.submit(() -> {
             for (int i = 0; i < staggerRef.size(); i++) {
                 final IntelPlayer fp = staggerRef.get(i);
@@ -178,6 +181,13 @@ public class IntelManager {
                 if (gui != null) gui.setPlayers(refreshed);
                 if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
             }
+            // Mark any skipped players as done loading so they don't spin forever
+            for (IntelPlayer p : players) {
+                if (p.loading) { p.loading = false; }
+            }
+            List<IntelPlayer> final2 = new ArrayList<>(players);
+            if (gui != null) gui.setPlayers(final2);
+            if (hudOverlay != null) hudOverlay.setPlayers(final2);
         });
 
         fetching = false;
@@ -192,6 +202,59 @@ public class IntelManager {
         if (gui != null) gui.setPlayers(new ArrayList<>());
         if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>());
         dbg("[Intel] Cleared all players");
+    }
+
+    // ── Fetch list builder ───────────────────────────────────────────────────────
+
+    /** 
+     * Builds the list of players to actually fetch stats for.
+     * In focus mode: filters out obfuscated names, limits to focusCount real players.
+     * Always fetches everyone if focus mode is off.
+     */
+    private List<IntelPlayer> buildFetchList(List<IntelPlayer> all) {
+        // Check focus mode setting from LobbyIntel
+        int focusCount = 30; // default — fetch everyone up to 30
+        boolean focus = false;
+        try {
+            myau.module.modules.LobbyIntel li = (myau.module.modules.LobbyIntel)
+                myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
+            if (li != null) {
+                focus = li.focusMode.getValue();
+                focusCount = (int) li.focusCount.getValue();
+            }
+        } catch (Exception ignored) {}
+
+        if (!focus) return all; // no filtering, fetch everyone
+
+        // Filter: keep only players with normal-looking names (real players)
+        // Obfuscated/bot names typically contain non-ASCII chars or are very short
+        List<IntelPlayer> real = new ArrayList<>();
+        for (IntelPlayer p : all) {
+            if (isLikelyRealPlayer(p.name)) real.add(p);
+        }
+
+        // Cap to focusCount
+        if (real.size() > focusCount) real = real.subList(0, focusCount);
+
+        // Mark skipped players as not loading immediately
+        for (IntelPlayer p : all) {
+            boolean included = false;
+            for (IntelPlayer r : real) { if (r == p) { included = true; break; } }
+            if (!included) p.loading = false;
+        }
+
+        dbg("[Intel] Focus mode: fetching " + real.size() + "/" + all.size() + " players");
+        return real;
+    }
+
+    /** Returns true if the name looks like a real Minecraft username */
+    private boolean isLikelyRealPlayer(String name) {
+        if (name == null || name.length() < 3 || name.length() > 16) return false;
+        // Real usernames: only a-z, A-Z, 0-9, underscore
+        for (char c : name.toCharArray()) {
+            if (!Character.isLetterOrDigit(c) && c != '_') return false;
+        }
+        return true;
     }
 
     // ── Hypixel ───────────────────────────────────────────────────────────────
