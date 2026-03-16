@@ -62,9 +62,8 @@ public class BedwarsTag extends Module {
             // If intel-only mode and no data yet, skip
             if (onlyIntel.getValue() && (intel == null || intel.loading)) continue;
 
-            // Build tag string
-            String tag = buildTag(intel);
-            if (tag == null || tag.isEmpty()) continue;
+            // Skip if no data and intel-only mode
+            if (onlyIntel.getValue() && (intel == null || intel.loading)) continue;
 
             // ── 3D billboard setup (same as NameTags) ─────────────────────────
             double px = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
@@ -74,7 +73,7 @@ public class BedwarsTag extends Module {
 
             // Position above head — offset above vanilla nametag
             double nametagY = py + player.getEyeHeight() + (player.isSneaking() ? 0.225 : 0.4);
-            double tagOffset = 0.28; // how far above the nametag
+            double tagOffset = 0.0; // sit right at nametag position
 
             GlStateManager.pushMatrix();
             GlStateManager.translate(px, nametagY + tagOffset, pz);
@@ -90,61 +89,73 @@ public class BedwarsTag extends Module {
                     * 0.0065 * scale.getValue();
             GlStateManager.scale(-tagScale, -tagScale, 1.0);
 
-            int tagColor = getTagColor(intel);
-            int w = mc.fontRendererObj.getStringWidth(tag);
-            float tx = -w / 2f;
+            String[] parts = buildParts(intel, player.getName());
+            String starPart   = parts[0]; // e.g. "☆8"
+            String namePart   = parts[1]; // e.g. "BadAiiim"
+            String urchinPart = parts[2]; // e.g. "CC" or ""
+
+            int starColor   = getStarColor(intel);
+            int nameColor   = 0xFFFFFFFF;
+            int urchinColor = getUrchinColor(intel);
+
+            int gap = 3;
+            int starW   = mc.fontRendererObj.getStringWidth(starPart);
+            int nameW   = mc.fontRendererObj.getStringWidth(namePart);
+            int urchinW = urchinPart.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(urchinPart) + gap;
+            int totalW  = starW + gap + nameW + (urchinW > 0 ? gap + urchinW : 0);
+
             float ty = -(float) mc.fontRendererObj.FONT_HEIGHT;
+            float tx = -totalW / 2f;
 
             // Background
             if (background.getValue()) {
                 RenderUtil.enableRenderState();
-                RenderUtil.drawRect(tx - 1, ty - 1, tx + w + 1, 0, 0x55000000);
+                RenderUtil.drawRect(tx - 1, ty - 1, tx + totalW + 1, 0, 0x66000000);
                 RenderUtil.disableRenderState();
             }
 
             GlStateManager.disableDepth();
-            mc.fontRendererObj.drawString(tag, tx, ty, tagColor, true);
+            // Star (prestige color)
+            mc.fontRendererObj.drawString(starPart, tx, ty, starColor, true);
+            // Name (white)
+            mc.fontRendererObj.drawString(namePart, tx + starW + gap, ty, nameColor, true);
+            // Urchin tag (colored)
+            if (!urchinPart.isEmpty()) {
+                mc.fontRendererObj.drawString(urchinPart, tx + starW + gap + nameW + gap, ty, urchinColor, true);
+            }
             GlStateManager.enableDepth();
 
             GlStateManager.popMatrix();
         }
     }
 
-    private String buildTag(IntelPlayer intel) {
-        if (intel == null || intel.loading) {
-            // Show placeholder if not intel-only
-            return showStar.getValue() ? "☆?" : null;
+    // Returns [starText, name, urchinTag] — rendered separately with different colors
+    private String[] buildParts(IntelPlayer intel, String playerName) {
+        String star   = (intel == null || intel.loading) ? "☆?" : "☆" + intel.star;
+        String name   = playerName;
+        String urchin = "";
+
+        if (intel != null && !intel.loading && intel.cheater && intel.urchinType != null) {
+            if      (intel.urchinType.contains("blatant"))   urchin = "BC";
+            else if (intel.urchinType.contains("confirmed")) urchin = "CC";
+            else if (intel.urchinType.contains("sniper"))    urchin = "S";
+            else                                              urchin = "C";
         }
 
-        StringBuilder sb = new StringBuilder();
-
-        if (showStar.getValue()) {
-            sb.append("☆").append(intel.star);
-        }
-
-        if (showFkdr.getValue()) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append(String.format("%.1f", intel.fkdr));
-        }
-
-        if (showThreat.getValue()) {
-            if (sb.length() > 0) sb.append(" ");
-            sb.append((int) intel.threatScore);
-        }
-
-        return sb.toString();
+        return new String[]{ star, name, urchin };
     }
 
-    private int getTagColor(IntelPlayer intel) {
+    private int getStarColor(IntelPlayer intel) {
         if (intel == null || intel.loading) return 0xFFAAAAAA;
+        return prestigeColor(intel.star);
+    }
 
-        // Use prestige color for the star
-        if (showStar.getValue()) return prestigeColor(intel.star);
-
-        // Threat color if showing threat
-        if (showThreat.getValue()) return threatColor((int) intel.threatScore);
-
-        return 0xFFFFFFFF;
+    private int getUrchinColor(IntelPlayer intel) {
+        if (intel == null || intel.urchinType == null) return 0xFFFF8844;
+        if (intel.urchinType.contains("blatant"))   return 0xFFFF3344;
+        if (intel.urchinType.contains("confirmed")) return 0xFFDD44DD;
+        if (intel.urchinType.contains("sniper"))    return 0xFFFF1122;
+        return 0xFFFF8844;
     }
 
     private int prestigeColor(int s) {
