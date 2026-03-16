@@ -148,20 +148,77 @@ public class IntelHudOverlay {
                     myau.module.modules.LobbyIntel.class);
             if (li == null || !li.hideTeammates.getValue()) return new ArrayList<>(players);
 
-            String myName = mc.thePlayer != null ? mc.thePlayer.getName() : null;
-            String myTeam = null;
-            if (myName != null)
-                for (IntelPlayer p : players)
-                    if (p.name.equals(myName)) { myTeam = p.team; break; }
+            // Detect MY team color directly from MY tab list entry
+            // This works even if I'm nicked, and works in Castle/40v40
+            String myTeamColor = getMyTeamColorFromTab();
 
             List<IntelPlayer> out = new ArrayList<>();
             for (IntelPlayer p : players) {
-                if (myName != null && p.name.equals(myName)) continue;
-                if (myTeam != null && myTeam.equals(p.team)) continue;
+                // Always hide self
+                if (mc.thePlayer != null && p.name.equalsIgnoreCase(mc.thePlayer.getName())) continue;
+
+                // If we know our team color, hide anyone with the same tab color
+                if (myTeamColor != null) {
+                    String pColor = getTabColor(p.name);
+                    if (myTeamColor.equals(pColor)) continue;
+                } else if (p.team != null) {
+                    // Fallback: use stored team from IntelPlayer
+                    String myTeam = getMyTeamFromIntelList();
+                    if (myTeam != null && myTeam.equals(p.team)) continue;
+                }
+
                 out.add(p);
             }
             return out;
         } catch (Exception e) { return new ArrayList<>(players); }
+    }
+
+    /** Get MY team color code by looking up MY own tab list entry */
+    private String getMyTeamColorFromTab() {
+        if (mc.thePlayer == null || mc.getNetHandler() == null) return null;
+        try {
+            net.minecraft.client.network.NetworkPlayerInfo myInfo =
+                mc.getNetHandler().getPlayerInfo(mc.thePlayer.getName());
+            if (myInfo == null) return null;
+            String dn = myInfo.getDisplayName() != null
+                ? myInfo.getDisplayName().getFormattedText() : "";
+            return extractColorCode(dn);
+        } catch (Exception e) { return null; }
+    }
+
+    /** Get any player's tab color by their name */
+    private String getTabColor(String name) {
+        if (mc.getNetHandler() == null) return null;
+        try {
+            net.minecraft.client.network.NetworkPlayerInfo info =
+                mc.getNetHandler().getPlayerInfo(name);
+            if (info == null) return null;
+            String dn = info.getDisplayName() != null
+                ? info.getDisplayName().getFormattedText() : "";
+            return extractColorCode(dn);
+        } catch (Exception e) { return null; }
+    }
+
+    /** Extract the first Minecraft color code from a formatted string */
+    private String extractColorCode(String formatted) {
+        for (int i = 0; i < formatted.length() - 1; i++) {
+            if (formatted.charAt(i) == '§') { // §
+                char code = formatted.charAt(i + 1);
+                // Only color codes (not formatting like bold/italic)
+                if ("0123456789abcdef".indexOf(code) >= 0) {
+                    return String.valueOf(code);
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Fallback: find my team from the intel player list by name match */
+    private String getMyTeamFromIntelList() {
+        if (mc.thePlayer == null) return null;
+        for (IntelPlayer p : players)
+            if (p.name.equalsIgnoreCase(mc.thePlayer.getName())) return p.team;
+        return null;
     }
 
     private int totalWidth() {
