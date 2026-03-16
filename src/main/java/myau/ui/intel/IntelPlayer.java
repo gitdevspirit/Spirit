@@ -18,6 +18,9 @@ public class IntelPlayer {
     public int    bedsBroken  = 0;
     public int    wins        = 0;
 
+    // Nick detection
+    public boolean isNicked    = false;  // true if name has no Hypixel account
+
     // Urchin
     public boolean cheater     = false;
     public String  urchinTag   = null;    // display string: "Confirmed cheater — ac and legitscaff..."
