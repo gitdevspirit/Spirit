@@ -99,10 +99,10 @@ public class BedwarsTag extends Module {
             int urchinColor = getUrchinColor(intel);
 
             int gap = 3;
-            int starW   = mc.fontRendererObj.getStringWidth(starPart);
             int nameW   = mc.fontRendererObj.getStringWidth(namePart);
-            int urchinW = urchinPart.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(urchinPart) + gap;
-            int totalW  = starW + gap + nameW + (urchinW > 0 ? gap + urchinW : 0);
+            int starW   = mc.fontRendererObj.getStringWidth(starPart);
+            int urchinW = urchinPart.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(urchinPart);
+            int totalW  = nameW + gap + starW + (urchinW > 0 ? gap + urchinW : 0);
 
             float ty = -(float) mc.fontRendererObj.FONT_HEIGHT;
             float tx = -totalW / 2f;
@@ -115,13 +115,13 @@ public class BedwarsTag extends Module {
             }
 
             GlStateManager.disableDepth();
-            // Star (prestige color)
-            mc.fontRendererObj.drawString(starPart, tx, ty, starColor, true);
-            // Name (white)
-            mc.fontRendererObj.drawString(namePart, tx + starW + gap, ty, nameColor, true);
-            // Urchin tag (colored)
+            // Name (white) on left
+            mc.fontRendererObj.drawString(namePart, tx, ty, nameColor, true);
+            // Star (prestige color) after name
+            mc.fontRendererObj.drawString(starPart, tx + nameW + gap, ty, starColor, true);
+            // Urchin tag (colored) on far right
             if (!urchinPart.isEmpty()) {
-                mc.fontRendererObj.drawString(urchinPart, tx + starW + gap + nameW + gap, ty, urchinColor, true);
+                mc.fontRendererObj.drawString(urchinPart, tx + nameW + gap + starW + gap, ty, urchinColor, true);
             }
             GlStateManager.enableDepth();
 
