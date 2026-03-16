@@ -135,7 +135,9 @@ public class BedwarsTag extends Module {
         String name   = playerName;
         String urchin = "";
 
-        if (intel != null && !intel.loading && intel.cheater && intel.urchinType != null) {
+        if (intel != null && !intel.loading && intel.isNicked) {
+            urchin = "N"; // nicked
+        } else if (intel != null && !intel.loading && intel.cheater && intel.urchinType != null) {
             if      (intel.urchinType.contains("blatant"))   urchin = "BC";
             else if (intel.urchinType.contains("confirmed")) urchin = "CC";
             else if (intel.urchinType.contains("sniper"))    urchin = "S";
@@ -151,7 +153,9 @@ public class BedwarsTag extends Module {
     }
 
     private int getUrchinColor(IntelPlayer intel) {
-        if (intel == null || intel.urchinType == null) return 0xFFFF8844;
+        if (intel == null) return 0xFFFF8844;
+        if (intel.isNicked) return 0xFFFF4444; // red for nick
+        if (intel.urchinType == null) return 0xFFFF8844;
         if (intel.urchinType.contains("blatant"))   return 0xFFFF3344;
         if (intel.urchinType.contains("confirmed")) return 0xFFDD44DD;
         if (intel.urchinType.contains("sniper"))    return 0xFFFF1122;
