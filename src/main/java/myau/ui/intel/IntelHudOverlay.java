@@ -376,21 +376,21 @@ public class IntelHudOverlay {
         int starW  = (int)(mc.fontRendererObj.getStringWidth(star) * starScale);
         int numW   = mc.fontRendererObj.getStringWidth(numText);
         int gap    = 1;
-        int totalW = starW + gap + numW;
+        int totalW = numW + gap + starW;
         int startX = x + (colW - totalW) / 2;
 
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
 
-        // Draw star scaled - keep same baseline as number
+        // Draw number first
+        mc.fontRendererObj.drawString(numText, startX, y, color, true);
+
+        // Draw star icon to the right of number
         GlStateManager.pushMatrix();
-        GlStateManager.translate(startX, y, 0);
+        GlStateManager.translate(startX + numW + gap, y, 0);
         GlStateManager.scale(starScale, starScale, 1f);
         mc.fontRendererObj.drawString(star, 0, 0, color, true);
         GlStateManager.popMatrix();
-
-        // Draw number at normal size
-        mc.fontRendererObj.drawString(numText, startX + starW + gap, y, color, true);
     }
 
     /** Call from LobbyIntel mouse handler to cycle sort by clicking column headers. */
