@@ -627,14 +627,22 @@ public class IntelManager {
     private String detectTeam(NetworkPlayerInfo info) {
         try {
             String dn = info.getDisplayName() != null ? info.getDisplayName().getFormattedText() : "";
-            if (dn.contains("§c")) return "red";
-            if (dn.contains("§9")) return "blue";
-            if (dn.contains("§a")) return "green";
-            if (dn.contains("§e")) return "yellow";
-            if (dn.contains("§b")) return "aqua";
-            if (dn.contains("§f")) return "white";
-            if (dn.contains("§d")) return "pink";
-            if (dn.contains("§8")) return "gray";
+            // Store the raw color code character so tab-based comparison works
+            // BedWars + Castle + 40v40 all use these
+            if (dn.contains("§c")) return "red";       // §c
+            if (dn.contains("§9")) return "blue";      // §9
+            if (dn.contains("§a")) return "green";     // §a
+            if (dn.contains("§e")) return "yellow";    // §e
+            if (dn.contains("§b")) return "aqua";      // §b
+            if (dn.contains("§f")) return "white";     // §f
+            if (dn.contains("§d")) return "pink";      // §d
+            if (dn.contains("§8")) return "gray";      // §8
+            if (dn.contains("§6")) return "orange";    // §6 gold/orange
+            if (dn.contains("§5")) return "purple";    // §5 dark purple
+            if (dn.contains("§3")) return "dark_aqua"; // §3 dark aqua
+            if (dn.contains("§2")) return "dark_green";// §2 dark green
+            if (dn.contains("§4")) return "dark_red";  // §4 dark red
+            if (dn.contains("§1")) return "dark_blue"; // §1 dark blue
         } catch (Exception ignored) {}
         return null;
     }
