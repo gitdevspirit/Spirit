@@ -67,14 +67,45 @@ public class LobbyIntel extends Module {
         super("LobbyIntel", true); // Start enabled so packet events work
         IntelManager.getInstance().setGui(gui);
         IntelManager.getInstance().setHudOverlay(hudOverlay);
-        // Try to auto-detect key on startup
-        tryAutoDetectKey();
-        // Load saved API key from config (overrides auto-detect if present)
-        if (!savedApiKey.getValue().isEmpty()) {
-            IntelManager.hypixelApiKey = savedApiKey.getValue();
+        // Load key from dedicated file first (most reliable)
+        loadApiKeyFromFile();
+        // Try to auto-detect key from log if none saved
+        if (IntelManager.hypixelApiKey.isEmpty()) {
+            tryAutoDetectKey();
         }
         // Load HUD settings from properties
         loadHudSettings();
+    }
+
+    /** Save API key to a dedicated file — independent of the main config */
+    public void saveApiKeyToFile() {
+        if (IntelManager.hypixelApiKey.isEmpty()) return;
+        try {
+            java.io.File dir = new java.io.File("./config/Myau/");
+            dir.mkdirs();
+            java.io.File keyFile = new java.io.File(dir, "intel-key.txt");
+            java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(keyFile));
+            pw.println(IntelManager.hypixelApiKey);
+            pw.close();
+        } catch (Exception ignored) {}
+    }
+
+    /** Load API key from dedicated file on startup */
+    private void loadApiKeyFromFile() {
+        try {
+            java.io.File keyFile = new java.io.File("./config/Myau/intel-key.txt");
+            if (!keyFile.exists()) return;
+            java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(keyFile));
+            String key = br.readLine();
+            br.close();
+            if (key != null) {
+                key = key.trim();
+                if (key.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+                    IntelManager.hypixelApiKey = key;
+                    IntelManager.dbg("[Intel] Loaded API key from file");
+                }
+            }
+        } catch (Exception ignored) {}
     }
     
     public void loadHudSettings() {
@@ -228,6 +259,7 @@ public class LobbyIntel extends Module {
                 if (lastKey != null && !lastKey.equals(IntelManager.hypixelApiKey)) {
                     IntelManager.hypixelApiKey = lastKey;
                     savedApiKey.setValue(lastKey);
+                    saveApiKeyToFile();
                     // Notify in chat
                     net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
                         myau.util.ChatUtil.sendFormatted("&7[Intel] &aAuto-detected Hypixel API key from log.");
