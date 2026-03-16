@@ -70,6 +70,7 @@ public class ModuleRegistry {
         renderModules.add(Myau.moduleManager.getModule(FullBright.class));
         renderModules.add(Myau.moduleManager.getModule(Tracers.class));
         renderModules.add(Myau.moduleManager.getModule(NameTags.class));
+        renderModules.add(Myau.moduleManager.getModule(BedWarsTag.class));
         renderModules.add(Myau.moduleManager.getModule(Xray.class));
         renderModules.add(Myau.moduleManager.getModule(TargetHUD.class));
         renderModules.add(Myau.moduleManager.getModule(Indicators.class));
