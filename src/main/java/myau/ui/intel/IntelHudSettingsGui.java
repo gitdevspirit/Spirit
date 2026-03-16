@@ -67,7 +67,7 @@ public class IntelHudSettingsGui extends GuiScreen {
             case S_POS_X:  hudOverlay.setPosition(pixelToVal(mx,bx,bw,0,1920), hudOverlay.getPosY()); break;
             case S_POS_Y:  hudOverlay.setPosition(hudOverlay.getPosX(), pixelToVal(mx,bx,bw,0,1080)); break;
             case S_SCALE:  hudOverlay.setScale(pixelToVal(mx,bx,bw,50,200) / 100f); break;
-            case S_MAX_P:  hudOverlay.setMaxPlayers(pixelToVal(mx,bx,bw,1,20)); break;
+            case S_MAX_P:  hudOverlay.setMaxPlayers(pixelToVal(mx,bx,bw,1,80)); break;
             case S_BG_OP:  hudOverlay.setBgOpacity(pixelToVal(mx,bx,bw,0,255)); break;
             case S_BORDER: hudOverlay.setBorderOpacity(pixelToVal(mx,bx,bw,0,255)); break;
         }
@@ -118,7 +118,7 @@ public class IntelHudSettingsGui extends GuiScreen {
 
         label(ix, y, "DISPLAY"); y += 16;
         y = slider(ix, y, iw, "Scale %",            (int)(hudOverlay.getScale()*100),  50,  200,  S_SCALE,  mx, my);
-        y = slider(ix, y, iw, "Max Players",        hudOverlay.getMaxPlayers(),         1,   20,   S_MAX_P,  mx, my);
+        y = slider(ix, y, iw, "Max Players",        hudOverlay.getMaxPlayers(),         1,   80,   S_MAX_P,  mx, my);
         y = slider(ix, y, iw, "Background Opacity", hudOverlay.getBgOpacity(),          0,   255,  S_BG_OP,  mx, my);
         y = slider(ix, y, iw, "Border Opacity",     hudOverlay.getBorderOpacity(),      0,   255,  S_BORDER, mx, my);
         y += 6; div(ix, y, iw); y += 12;
