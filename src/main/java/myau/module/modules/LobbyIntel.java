@@ -28,6 +28,8 @@ public class LobbyIntel extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final BooleanSetting autoScan    = register(new BooleanSetting("Auto Scan on Join", true));
+    public final BooleanSetting focusMode   = register(new BooleanSetting("Focus Mode", false));
+    public final myau.module.SliderSetting  focusCount  = register(new myau.module.SliderSetting("Focus Count", 10, 1, 30, 1));
     public final BooleanSetting autoKey     = register(new BooleanSetting("Auto Detect API Key", true));
     public final BooleanSetting notifyCheaters = register(new BooleanSetting("Notify Cheaters", false));
     public final BooleanSetting hideTeammates  = register(new BooleanSetting("Hide Teammates", false));
