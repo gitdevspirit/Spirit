@@ -493,11 +493,15 @@ public class IntelManager {
         invalidKeyNotified = true;
         // Clear the invalid key
         hypixelApiKey = "";
-        // Save blank key back to LobbyIntel property
+        // Remove from both property and key file
         try {
             myau.module.modules.LobbyIntel li = (myau.module.modules.LobbyIntel)
                 myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
-            if (li != null) li.savedApiKey.setValue("");
+            if (li != null) {
+                li.savedApiKey.setValue("");
+                // Delete key file so it doesn't reload on next launch
+                new java.io.File("./config/Myau/intel-key.txt").delete();
+            }
         } catch (Exception ignored) {}
         // Notify in chat
         net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
