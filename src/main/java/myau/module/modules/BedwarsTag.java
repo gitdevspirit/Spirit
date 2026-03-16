@@ -24,7 +24,7 @@ import java.util.List;
  * Renders a BedWars star tag above players' heads using stats
  * already cached in IntelManager — no extra API calls needed.
  */
-public class BedWarsTag extends Module {
+public class BedwarsTag extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
     public final BooleanSetting showStar   = register(new BooleanSetting("Show Star",    true));
@@ -36,7 +36,7 @@ public class BedWarsTag extends Module {
     public final BooleanSetting background = register(new BooleanSetting("Background",    true));
     public final BooleanSetting onlyIntel  = register(new BooleanSetting("Intel Only",    false));
 
-    public BedWarsTag() { super("BedWarsTag", false); }
+    public BedwarsTag() { super("BedWarsTag", false); }
 
     @EventTarget
     public void onRender3D(Render3DEvent event) {
