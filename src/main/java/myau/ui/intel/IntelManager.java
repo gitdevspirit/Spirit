@@ -106,6 +106,7 @@ public class IntelManager {
 
     public void scanLobby() {
         players.clear();
+        manualPlayers.clear(); // clear stale data from previous game
         fetching = true;
 
         Minecraft mc = Minecraft.getMinecraft();
@@ -184,6 +185,15 @@ public class IntelManager {
 
     public void refresh() { scanLobby(); }
 
+    /** Full reset — clears both lists. Call on new game start. */
+    public void clearAll() {
+        players.clear();
+        manualPlayers.clear();
+        if (gui != null) gui.setPlayers(new ArrayList<>());
+        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>());
+        dbg("[Intel] Cleared all players");
+    }
+
     // ── Hypixel ───────────────────────────────────────────────────────────────
 
     /** Fetches UUID from Mojang (with playerdb.co fallback) and caches it. */
@@ -237,17 +247,31 @@ public class IntelManager {
 
     private void fetchHypixel(IntelPlayer p) {
         boolean got = false;
-        
+
         // If we have Hypixel API key, use it first (more accurate, has stars)
         if (!hypixelApiKey.isEmpty()) {
             got = fetchHypixelApi(p);
         }
-        
-        // Fallback to Slothpixel if Hypixel API failed or no key
+
+        // Fallback if no key or API failed
         if (!got) {
             got = fetchSlothpixel(p);
         }
-        
+
+        // If we couldn't get any stats AND UUID lookup failed → likely nicked
+        // A nicked player has no Mojang account matching their display name
+        if (!got) {
+            String uuid = getCachedUuid(p.name);
+            if (uuid == null) {
+                // Try to fetch UUID — if it fails, they're nicked
+                uuid = fetchAndCacheUuid(p.name);
+                if (uuid == null) {
+                    p.isNicked = true;
+                    dbg("[Intel] Nicked: " + p.name + " (no UUID)");
+                }
+            }
+        }
+
         p.loading = false;
     }
 
