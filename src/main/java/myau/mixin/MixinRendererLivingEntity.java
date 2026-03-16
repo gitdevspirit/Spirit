@@ -4,6 +4,7 @@ import myau.Myau;
 import myau.event.EventManager;
 import myau.event.types.EventType;
 import myau.events.RenderLivingEvent;
+import myau.module.modules.BedwarsTag;
 import myau.module.modules.ESP;
 import myau.module.modules.NameTags;
 import net.minecraft.client.renderer.entity.Render;
@@ -54,11 +55,17 @@ public abstract class MixinRendererLivingEntity<T extends EntityLivingBase> exte
             NameTags nameTags = (NameTags) Myau.moduleManager.modules.get(NameTags.class);
             if (nameTags.isEnabled() && nameTags.shouldRenderTags(entityLivingBase)) {
                 callbackInfoReturnable.setReturnValue(false);
-            } else {
-                ESP esp = (ESP) Myau.moduleManager.modules.get(ESP.class);
-                if (esp.isEnabled() && !esp.isOutlineEnabled()) {
-                    callbackInfoReturnable.setReturnValue(false);
-                }
+                return;
+            }
+            BedwarsTag bedwarsTag = (BedwarsTag) Myau.moduleManager.modules.get(BedwarsTag.class);
+            if (bedwarsTag != null && bedwarsTag.isEnabled()
+                    && entityLivingBase instanceof net.minecraft.entity.player.EntityPlayer) {
+                callbackInfoReturnable.setReturnValue(false);
+                return;
+            }
+            ESP esp = (ESP) Myau.moduleManager.modules.get(ESP.class);
+            if (esp.isEnabled() && !esp.isOutlineEnabled()) {
+                callbackInfoReturnable.setReturnValue(false);
             }
         }
     }
