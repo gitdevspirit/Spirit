@@ -46,11 +46,12 @@ public class IntelKeyCommand extends Command {
         // Reset invalid-key flag so it retries with the new key
         IntelManager.getInstance().resetInvalidKeyFlag();
 
-        // Persist to config via LobbyIntel property
+        // Persist via both the property system and dedicated key file
         try {
             LobbyIntel li = (LobbyIntel) Myau.moduleManager.getModule(LobbyIntel.class);
             if (li != null) {
                 li.savedApiKey.setValue(key);
+                li.saveApiKeyToFile();
             }
         } catch (Exception ignored) {}
 
