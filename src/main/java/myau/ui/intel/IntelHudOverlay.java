@@ -72,7 +72,7 @@ public class IntelHudOverlay {
     public void setEnabled(boolean v)       { enabled = v; }
     public void setPosition(int x, int y)   { posX = x; posY = y; }
     public void setScale(float v)           { scale = Math.max(0.5f, Math.min(2f, v)); }
-    public void setMaxPlayers(int v)        { maxPlayers = Math.max(1, Math.min(20, v)); }
+    public void setMaxPlayers(int v)        { maxPlayers = Math.max(1, Math.min(80, v)); }
     public void setBgOpacity(int v)         { bgOpacity     = Math.max(0, Math.min(255, v)); }
     public void setBorderOpacity(int v)     { borderOpacity = Math.max(0, Math.min(255, v)); }
     public void setShowHeads(boolean v)     { showHeads = v; }
@@ -304,16 +304,18 @@ public class IntelHudOverlay {
             drawCell(p.loading ? "-" : String.valueOf(p.winstreak), cx, midY, COL_WS, wsc);
             cx += COL_WS;
         }
-        // Urchin flag
+        // Tags column: nick flag + urchin flag
         if (showUrchin) {
-            if (p.cheater && p.urchinType != null) {
-                String icon; int ic;
+            String icon = null; int ic = 0xFFFFFFFF;
+            if (p.isNicked) {
+                icon = "N"; ic = 0xFFFF4444; // red N for nicked
+            } else if (p.cheater && p.urchinType != null) {
                 if      (p.urchinType.contains("blatant"))   { icon = "BC"; ic = 0xFFFF3344; }
                 else if (p.urchinType.contains("confirmed")) { icon = "CC"; ic = 0xFFDD44DD; }
                 else if (p.urchinType.contains("sniper"))    { icon = "S";  ic = 0xFFFF1122; }
                 else                                          { icon = "C";  ic = 0xFFFF8844; }
-                drawCell(icon, cx, midY, COL_URCHIN, ic);
             }
+            if (icon != null) drawCell(icon, cx, midY, COL_URCHIN, ic);
             cx += COL_URCHIN;
         }
         // Threat — number aligned same as all other cells + mini bar at very bottom
