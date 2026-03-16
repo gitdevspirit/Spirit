@@ -210,8 +210,9 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onLoadWorld(LoadWorldEvent event) {
-        // Reset scan flag on every world change so we re-scan the next game
+        // Reset scan flag and clear stale player data on every world change
         scannedThisSession = false;
+        IntelManager.getInstance().clearAll();
         if (autoKey.getValue()) tryAutoDetectKey();
     }
 
@@ -292,6 +293,7 @@ public class LobbyIntel extends Module {
             IntelManager.dbg("[Intel] BedWars game start detected — scanning lobby");
             mc.addScheduledTask(() -> {
                 if (autoKey.getValue()) tryAutoDetectKey();
+                IntelManager.getInstance().clearAll(); // wipe stale data from prev game
                 IntelManager.getInstance().scanLobby();
             });
         }
