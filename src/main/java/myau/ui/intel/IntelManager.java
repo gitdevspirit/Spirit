@@ -31,6 +31,12 @@ public class IntelManager {
 
     private static final String URCHIN_URL  = "https://urchin.ws/player";
 
+    // Ghost Intel API — your own tag system
+    // Set your Railway URL and API key here
+    public  static String ghostIntelUrl    = "ghost-intel-bot-production.up.railway.app";
+    public  static String ghostIntelApiKey = "ownerspirit365"; // set via .intelkey or config
+    public  static boolean ghostIntelEnabled = true;
+
     private final ExecutorService pool = Executors.newFixedThreadPool(3);
     private volatile boolean fetching = false;
 
@@ -141,6 +147,7 @@ public class IntelManager {
         final List<IntelPlayer> batchRef = new ArrayList<>(players);
         pool.submit(() -> {
             fetchUrchinBatch(batchRef);
+            fetchGhostIntelTags(batchRef); // Ghost Intel tags
             // Notify any cheaters found
             for (IntelPlayer p : batchRef) {
                 if (p.cheater) notifyCheater(p);
@@ -536,6 +543,67 @@ public class IntelManager {
                         break;
                     }
                 }
+            }
+        } catch (Exception ignored) {}
+    }
+
+    // ── Ghost Intel Tags ──────────────────────────────────────────────────────
+    private void fetchGhostIntelTags(List<IntelPlayer> batch) {
+        if (!ghostIntelEnabled || ghostIntelUrl.isEmpty() || batch.isEmpty()) return;
+        try {
+            for (IntelPlayer p : batch) {
+                if (p.name == null || p.name.isEmpty()) continue;
+                String url = ghostIntelUrl + "/api/tags/" + p.name;
+                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
+                        new java.net.URL(url).openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(4000);
+                conn.setReadTimeout(4000);
+                conn.setRequestProperty("Accept", "application/json");
+                if (!ghostIntelApiKey.isEmpty())
+                    conn.setRequestProperty("x-api-key", ghostIntelApiKey);
+
+                if (conn.getResponseCode() != 200) continue;
+
+                java.io.BufferedReader br = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream()));
+                StringBuilder sb2 = new StringBuilder();
+                String line;
+                while ((line = br.readLine()) != null) sb2.append(line);
+                br.close();
+
+                JsonObject root = new JsonParser().parse(sb2.toString()).getAsJsonObject();
+                if (!root.has("tags")) continue;
+                com.google.gson.JsonArray tags = root.getAsJsonArray("tags");
+                if (tags.size() == 0) continue;
+
+                // Use Ghost Intel tags — add to existing urchin data or set fresh
+                JsonObject tag    = tags.get(0).getAsJsonObject();
+                String type       = tag.has("type")   ? tag.get("type").getAsString()   : "C";
+                String reason     = tag.has("reason") && !tag.get("reason").isJsonNull()
+                                  ? tag.get("reason").getAsString() : "";
+
+                // Map Ghost Intel tag types to display
+                String display;
+                switch (type) {
+                    case "BC":  display = "Blatant Cheater";  break;
+                    case "VC":  display = "Verified Cheater"; break;
+                    case "CC":  display = "Closet Cheater";   break;
+                    case "S":   display = "Sniper";           break;
+                    case "C":   display = "Caution";          break;
+                    case "A":   display = "Account";          break;
+                    default:    display = type;               break;
+                }
+
+                // Only override Urchin if not already cheater, or if BC/VC
+                if (!p.cheater || type.equals("BC") || type.equals("VC")) {
+                    p.cheater      = true;
+                    p.urchinTag    = display + (reason.isEmpty() ? "" : " — " + reason);
+                    p.urchinType   = type.toLowerCase();
+                    p.urchinReason = reason.toLowerCase();
+                    p.computeThreat();
+                }
+                dbg("[GhostIntel] Tagged " + p.name + " as [" + type + "]");
             }
         } catch (Exception ignored) {}
     }
