@@ -62,9 +62,6 @@ public class BedwarsTag extends Module {
             // If intel-only mode and no data yet, skip
             if (onlyIntel.getValue() && (intel == null || intel.loading)) continue;
 
-            // Skip if no data and intel-only mode
-            if (onlyIntel.getValue() && (intel == null || intel.loading)) continue;
-
             // ── 3D billboard setup (same as NameTags) ─────────────────────────
             double px = RenderUtil.lerpDouble(player.posX, player.lastTickPosX, event.getPartialTicks()) - rm.getRenderPosX();
             double py = RenderUtil.lerpDouble(player.posY, player.lastTickPosY, event.getPartialTicks()) - rm.getRenderPosY();
