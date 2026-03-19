@@ -17,6 +17,7 @@ public class IntelPlayer {
     public int    finalKills  = 0;
     public int    bedsBroken  = 0;
     public int    wins        = 0;
+    public boolean isNicked   = false;  // Player is using a nick
 
     // Urchin
     public boolean cheater     = false;
