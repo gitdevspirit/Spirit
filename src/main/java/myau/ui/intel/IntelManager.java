@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.Map;
@@ -28,24 +29,19 @@ public class IntelManager {
 
     public static String hypixelApiKey = "";
     public static String urchinApiKey  = "68DE_lQ0UprVJX8q5k7TIeeZV938J2EfDAF08Q_07s0";
+    public static String ghostApiKey   = "ownerspirit365"; // Ghost Intel API key (optional for now)
 
-    private static final String URCHIN_URL  = "https://urchin.ws/player";
+    private static final String URCHIN_URL = "https://urchin.ws/player";
+    private static final String GHOST_URL  = "https://ghost-intel-bot-production.up.railway.app/api/tags";
 
-    // Ghost Intel API — your own tag system
-    // Set your Railway URL and API key here
-    public  static String ghostIntelUrl    = "ghost-intel-bot-production.up.railway.app";
-    public  static String ghostIntelApiKey = "ownerspirit365"; // set via .intelkey or config
-    public  static boolean ghostIntelEnabled = true;
-
-    private final ExecutorService pool = Executors.newFixedThreadPool(3);
+    private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
 
-    // Hypixel rate limiter — strictly sequential, one request every 250ms
-    // Hypixel allows 300 req/min with key = ~200ms between requests
-    // We use 250ms to stay safely under the limit even under load
-    private final java.util.concurrent.locks.ReentrantLock hypixelLock = new java.util.concurrent.locks.ReentrantLock(true); // fair queue
+    // Hypixel rate limiter: Use 200ms delay (was working before)
+    // This gives us 5 req/sec = 300 req/min which Hypixel tolerates with bursts
+    private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 250L;
+    private static final long HYPIXEL_INTERVAL_MS = 200L; // 200ms like before - was working!
 
     // UUID cache for skin lookups of non-lobby players
     private final Map<String, String> uuidCache = new HashMap<>();
@@ -112,7 +108,6 @@ public class IntelManager {
 
     public void scanLobby() {
         players.clear();
-        manualPlayers.clear(); // clear stale data from previous game
         fetching = true;
 
         Minecraft mc = Minecraft.getMinecraft();
@@ -143,126 +138,36 @@ public class IntelManager {
         }
         if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>(players));
 
-        // Fetch Urchin for all players in one batch request
+        // Fetch Urchin and Ghost Intel for all players
         final List<IntelPlayer> batchRef = new ArrayList<>(players);
         pool.submit(() -> {
             fetchUrchinBatch(batchRef);
-            fetchGhostIntelTags(batchRef); // Ghost Intel tags
+            fetchGhostBatch(batchRef);  // Fetch Ghost Intel tags
             // Notify any cheaters found
             for (IntelPlayer p : batchRef) {
-                if (p.cheater) notifyCheater(p);
+                if (p.cheater || p.ghostTagged) notifyCheater(p);
             }
             List<IntelPlayer> refreshed = new ArrayList<>(players);
             if (gui != null) gui.setPlayers(refreshed);
             if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
 
-        // Pre-fetch all UUIDs in parallel first (no rate limit needed for Mojang)
-        // This way when the Hypixel queue gets to each player the UUID is already cached
-        final List<IntelPlayer> playersRef = new ArrayList<>(players);
-        pool.submit(() -> {
-            // UUID fetches can run concurrently — Mojang allows it
-            java.util.concurrent.ExecutorService uuidPool = Executors.newFixedThreadPool(4);
-            for (IntelPlayer p : playersRef) {
-                final IntelPlayer fp = p;
-                uuidPool.submit(() -> fetchAndCacheUuid(fp.name));
-            }
-            uuidPool.shutdown();
-            try { uuidPool.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS); } catch (Exception ignored) {}
-            dbg("[Intel] UUID pre-fetch complete for " + playersRef.size() + " players");
-        });
-
-        // Build fetch list — in focus mode, filter out obvious bots/obfuscated names first
-        // so we spend API calls on real players only
-        List<IntelPlayer> fetchList = buildFetchList(new ArrayList<>(players));
-
-        // Fetch with staggered delay — 300ms between requests
-        final List<IntelPlayer> staggerRef = fetchList;
-        pool.submit(() -> {
-            for (int i = 0; i < staggerRef.size(); i++) {
-                final IntelPlayer fp = staggerRef.get(i);
-                try { if (i > 0) Thread.sleep(300L); } catch (InterruptedException ignored) {}
+        // Fetch Hypixel per player
+        for (IntelPlayer p : players) {
+            final IntelPlayer fp = p;
+            pool.submit(() -> {
                 fetchHypixel(fp);
                 fp.computeThreat();
                 List<IntelPlayer> refreshed = new ArrayList<>(players);
                 if (gui != null) gui.setPlayers(refreshed);
                 if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
-            }
-            // Mark any skipped players as done loading so they don't spin forever
-            for (IntelPlayer p : players) {
-                if (p.loading) { p.loading = false; }
-            }
-            List<IntelPlayer> final2 = new ArrayList<>(players);
-            if (gui != null) gui.setPlayers(final2);
-            if (hudOverlay != null) hudOverlay.setPlayers(final2);
-        });
+            });
+        }
 
         fetching = false;
     }
 
     public void refresh() { scanLobby(); }
-
-    /** Full reset — clears both lists. Call on new game start. */
-    public void clearAll() {
-        players.clear();
-        manualPlayers.clear();
-        if (gui != null) gui.setPlayers(new ArrayList<>());
-        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>());
-        dbg("[Intel] Cleared all players");
-    }
-
-    // ── Fetch list builder ───────────────────────────────────────────────────────
-
-    /** 
-     * Builds the list of players to actually fetch stats for.
-     * In focus mode: filters out obfuscated names, limits to focusCount real players.
-     * Always fetches everyone if focus mode is off.
-     */
-    private List<IntelPlayer> buildFetchList(List<IntelPlayer> all) {
-        // Check focus mode setting from LobbyIntel
-        int focusCount = 30; // default — fetch everyone up to 30
-        boolean focus = false;
-        try {
-            myau.module.modules.LobbyIntel li = (myau.module.modules.LobbyIntel)
-                myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
-            if (li != null) {
-                focus = li.focusMode.getValue();
-                focusCount = (int) li.focusCount.getValue();
-            }
-        } catch (Exception ignored) {}
-
-        if (!focus) return all; // no filtering, fetch everyone
-
-        // Filter: keep only players with normal-looking names (real players)
-        // Obfuscated/bot names typically contain non-ASCII chars or are very short
-        List<IntelPlayer> real = new ArrayList<>();
-        for (IntelPlayer p : all) {
-            if (isLikelyRealPlayer(p.name)) real.add(p);
-        }
-
-        // Cap to focusCount
-        if (real.size() > focusCount) real = real.subList(0, focusCount);
-
-        // Mark skipped players as not loading immediately
-        for (IntelPlayer p : all) {
-            boolean included = false;
-            for (IntelPlayer r : real) { if (r == p) { included = true; break; } }
-            if (!included) p.loading = false;
-        }
-
-        dbg("[Intel] Focus mode: fetching " + real.size() + "/" + all.size() + " players");
-        return real;
-    }
-
-    /** Returns true if the name looks like a real Minecraft username */
-    private boolean isLikelyRealPlayer(String name) {
-        if (name == null || name.length() < 3 || name.length() > 16) return false;
-        // Real usernames: only a-z, A-Z, 0-9, underscore
-        for (char c : name.toCharArray()) {
-            if (!Character.isLetterOrDigit(c) && c != '_') return false;
-        }
-        return true;
-    }
 
     // ── Hypixel ───────────────────────────────────────────────────────────────
 
@@ -317,72 +222,55 @@ public class IntelManager {
 
     private void fetchHypixel(IntelPlayer p) {
         boolean got = false;
-
+        
         // If we have Hypixel API key, use it first (more accurate, has stars)
         if (!hypixelApiKey.isEmpty()) {
+            System.out.println("[Intel] Fetching " + p.name + " from Hypixel API...");
             got = fetchHypixelApi(p);
+            System.out.println("[Intel] " + p.name + ": fkdr=" + p.fkdr + " star=" + p.star + " fk=" + p.finalKills + " wins=" + p.wins);
         }
-
-        // Fallback if no key or API failed
+        
+        // Fallback to Slothpixel if Hypixel API failed or no key
         if (!got) {
             got = fetchSlothpixel(p);
         }
-
-        // If we couldn't get any stats AND UUID lookup failed → likely nicked
-        // A nicked player has no Mojang account matching their display name
-        if (!got) {
-            String uuid = getCachedUuid(p.name);
-            if (uuid == null) {
-                // Try to fetch UUID — if it fails, they're nicked
-                uuid = fetchAndCacheUuid(p.name);
-                if (uuid == null) {
-                    p.isNicked = true;
-                    dbg("[Intel] Nicked: " + p.name + " (no UUID)");
-                }
-            }
-        }
-
+        
         p.loading = false;
     }
 
-    /** Ashcon API (minetools) — free public Hypixel wrapper, no key needed, actively maintained */
+    /** Slothpixel — free public Hypixel wrapper, no key needed */
     private boolean fetchSlothpixel(IntelPlayer p) {
-        // Try Ashcon/Mowojang API first (fast, reliable)
         try {
-            String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) {
-                dbg("[Ashcon] no UUID for " + p.name);
-                return false;
-            }
-            // Use api.hypixel.net public stats endpoint via minetools proxy
-            // Actually use api.slothpixel.me replacement: api.hypixel.net public endpoint
-            // Best free fallback: use plancke.io scrape is unreliable, use api2.hypixel.net
-            // Real working free API: use the Hypixel public API without key (returns limited data)
-            String json = get("https://api.hypixel.net/player?uuid=" + uuid, null, null);
-            dbg("[FreeHypixel] len=" + (json == null ? "null" : json.length()));
+            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
+            dbg("[Sloth] len=" + (json == null ? "null" : json.length()));
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            // No key = still returns success:true but with rate limit
-            if (!root.has("success") || !root.get("success").getAsBoolean()) {
-                dbg("[FreeHypixel] success=false");
+            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
+
+            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
+
+            JsonObject bw = null;
+            if (root.has("stats")) {
+                JsonObject st = root.getAsJsonObject("stats");
+                if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
+            }
+            dbg("[Sloth] bw=" + (bw != null));
+            if (bw == null) {
+                p.star = 0;
                 return false;
             }
-            if (!root.has("player") || root.get("player").isJsonNull()) {
-                dbg("[FreeHypixel] no player");
-                return false;
+            
+            // Try to get star from Slothpixel (they call it "level")
+            if (bw.has("level")) {
+                try {
+                    p.star = bw.get("level").getAsInt();
+                } catch (Exception e) {
+                    p.star = 0;
+                }
+            } else {
+                p.star = 0;
             }
-
-            JsonObject player = root.getAsJsonObject("player");
-            JsonObject stats  = player.has("stats") ? player.getAsJsonObject("stats") : null;
-            JsonObject bw     = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
-
-            if (bw != null && bw.has("Experience")) {
-                try { p.star = getBedWarsLevelFromExp(bw.get("Experience").getAsInt()); }
-                catch (Exception e) { p.star = 0; }
-            }
-
-            if (bw == null) { dbg("[FreeHypixel] no bw stats"); return false; }
 
             int fk = bwInt(bw, "final_kills_bedwars");
             int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
@@ -394,47 +282,49 @@ public class IntelManager {
             p.winstreak  = bwInt(bw, "winstreak");
             p.fkdr       = (double) fk / fd;
             p.wlr        = (double) w  / l;
-            dbg("[FreeHypixel] OK fk=" + fk + " fkdr=" + p.fkdr);
-            return true;
-        } catch (Exception e) {
-            dbg("[FreeHypixel] ex: " + e.getMessage());
-            return false;
+            
+            return true; // Success - stats loaded
+        } catch (Exception e) { 
+            return false; 
         }
     }
 
     /** Official Hypixel API v2 — used when API key is configured */
     private boolean fetchHypixelApi(IntelPlayer p) {
         try {
-            hypixelLock.lock();
+            hypixelSlots.acquire();
             try {
                 long now  = System.currentTimeMillis();
                 long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
                 if (wait > 0) Thread.sleep(wait);
                 lastHypixelRequest.set(System.currentTimeMillis());
-            } finally { hypixelLock.unlock(); }
+            } finally { hypixelSlots.release(); }
 
             String uuid = fetchAndCacheUuid(p.name);
-            if (uuid == null) return false;
+            if (uuid == null) {
+                System.err.println("[DEBUG] Could not get UUID for " + p.name);
+                return false;
+            }
+            System.out.println("[DEBUG] " + p.name + " UUID: " + uuid);
 
-            String[] hypixelResponse = getWithCode("https://api.hypixel.net/player?uuid=" + uuid, "API-Key", hypixelApiKey);
-            int httpCode = hypixelResponse[0] == null ? 0 : Integer.parseInt(hypixelResponse[0]);
-            String json = hypixelResponse[1];
-            dbg("[HypixelAPI] http=" + httpCode + " len=" + (json == null ? "null" : json.length()) + " uuid=" + uuid);
-            if (httpCode == 403 || httpCode == 401) { notifyInvalidKey(); return false; }
-            if (json == null) return false;
+            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            if (json == null) {
+                System.err.println("[DEBUG] Null API response for " + p.name);
+                return false;
+            }
+            System.out.println("[DEBUG] Got API response for " + p.name + " (" + json.length() + " chars)");
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
             if (!root.has("success") || !root.get("success").getAsBoolean()) {
-                String cause = root.has("cause") ? root.get("cause").getAsString() : "";
-                dbg("[HypixelAPI] failed cause=" + cause);
-                // Detect invalid/expired key and notify player
-                if (cause.toLowerCase().contains("invalid") || cause.toLowerCase().contains("forbidden")
-                        || cause.toLowerCase().contains("key") || cause.toLowerCase().contains("unauthorized")) {
-                    notifyInvalidKey();
+                if (root.has("cause")) {
+                    System.err.println("[DEBUG] API Error: " + root.get("cause").getAsString());
                 }
                 return false;
             }
-            if (!root.has("player") || root.get("player").isJsonNull()) return false;
+            if (!root.has("player") || root.get("player").isJsonNull()) {
+                System.err.println("[DEBUG] Player object null for " + p.name);
+                return false;
+            }
 
             JsonObject player = root.getAsJsonObject("player");
             if (player.has("networkExp")) {
@@ -444,6 +334,12 @@ public class IntelManager {
 
             JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
             JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
+            
+            System.out.println("[DEBUG] " + p.name + " has stats: " + (stats != null));
+            System.out.println("[DEBUG] " + p.name + " has Bedwars: " + (bw != null));
+            if (bw != null) {
+                System.out.println("[DEBUG] BedWars keys: " + bw.keySet());
+            }
             
             // Calculate accurate BedWars star from Achievement Points
             // Hypixel stores BedWars level as "Experience" in the Bedwars stats
@@ -547,70 +443,47 @@ public class IntelManager {
         } catch (Exception ignored) {}
     }
 
-    // ── Ghost Intel Tags ──────────────────────────────────────────────────────
-    private void fetchGhostIntelTags(List<IntelPlayer> batch) {
-        if (!ghostIntelEnabled || ghostIntelUrl.isEmpty() || batch.isEmpty()) return;
-        try {
-            for (IntelPlayer p : batch) {
-                if (p.name == null || p.name.isEmpty()) continue;
-                String url = ghostIntelUrl + "/api/tags/" + p.name;
-                java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
-                        new java.net.URL(url).openConnection();
-                conn.setRequestMethod("GET");
-                conn.setConnectTimeout(4000);
-                conn.setReadTimeout(4000);
-                conn.setRequestProperty("Accept", "application/json");
-                if (!ghostIntelApiKey.isEmpty())
-                    conn.setRequestProperty("x-api-key", ghostIntelApiKey);
-
-                if (conn.getResponseCode() != 200) continue;
-
-                java.io.BufferedReader br = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(conn.getInputStream()));
-                StringBuilder sb2 = new StringBuilder();
-                String line;
-                while ((line = br.readLine()) != null) sb2.append(line);
-                br.close();
-
-                JsonObject root = new JsonParser().parse(sb2.toString()).getAsJsonObject();
-                if (!root.has("tags")) continue;
-                com.google.gson.JsonArray tags = root.getAsJsonArray("tags");
-                if (tags.size() == 0) continue;
-
-                // Use Ghost Intel tags — add to existing urchin data or set fresh
-                JsonObject tag    = tags.get(0).getAsJsonObject();
-                String type       = tag.has("type")   ? tag.get("type").getAsString()   : "C";
-                String reason     = tag.has("reason") && !tag.get("reason").isJsonNull()
-                                  ? tag.get("reason").getAsString() : "";
-
-                // Map Ghost Intel tag types to display
-                String display;
-                switch (type) {
-                    case "BC":  display = "Blatant Cheater";  break;
-                    case "VC":  display = "Verified Cheater"; break;
-                    case "CC":  display = "Closet Cheater";   break;
-                    case "S":   display = "Sniper";           break;
-                    case "C":   display = "Caution";          break;
-                    case "A":   display = "Account";          break;
-                    default:    display = type;               break;
-                }
-
-                // Only override Urchin if not already cheater, or if BC/VC
-                if (!p.cheater || type.equals("BC") || type.equals("VC")) {
-                    p.cheater      = true;
-                    p.urchinTag    = display + (reason.isEmpty() ? "" : " — " + reason);
-                    p.urchinType   = type.toLowerCase();
-                    p.urchinReason = reason.toLowerCase();
-                    p.computeThreat();
-                }
-                dbg("[GhostIntel] Tagged " + p.name + " as [" + type + "]");
-            }
-        } catch (Exception ignored) {}
-    }
-
     // Single-player wrapper (used by debug command)
     private void fetchUrchin(IntelPlayer p) {
         fetchUrchinBatch(java.util.Collections.singletonList(p));
+    }
+
+    /** Fetch Ghost Intel tags for a batch of players */
+    private void fetchGhostBatch(List<IntelPlayer> batch) {
+        if (batch.isEmpty()) return;
+        
+        // Ghost Intel doesn't have batch API, so fetch individually
+        for (IntelPlayer p : batch) {
+            try {
+                String url = GHOST_URL + "/" + p.name;
+                if (!ghostApiKey.isEmpty()) {
+                    url += "?key=" + ghostApiKey;
+                }
+                
+                String json = get(url, null, null);
+                if (json == null) continue;
+                
+                JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+                if (!root.has("tags")) continue;
+                
+                JsonElement tagsElement = root.get("tags");
+                if (!tagsElement.isJsonArray()) continue;
+                
+                com.google.gson.JsonArray tags = tagsElement.getAsJsonArray();
+                if (tags.size() == 0) continue;
+                
+                // Get the first (most recent) tag
+                JsonObject tag = tags.get(0).getAsJsonObject();
+                p.ghostTagged = true;
+                p.ghostType = tag.has("type") ? tag.get("type").getAsString() : "tagged";
+                p.ghostReason = tag.has("reason") ? tag.get("reason").getAsString() : "";
+                
+                System.out.println("[Ghost Intel] " + p.name + " tagged: " + p.ghostType + " - " + p.ghostReason);
+                
+            } catch (Exception e) {
+                // Silently fail for individual players
+            }
+        }
     }
 
     /** Returns cached UUID for a player name, or null if not yet known */
@@ -631,56 +504,20 @@ public class IntelManager {
             Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
             if (notifModule == null || !notifModule.isEnabled()) return;
             long dur = (long)(notifModule.duration.getValue() * 1000.0);
-            Myau.notificationManager.add("⚑ " + p.name + " flagged by Urchin", dur, 0xFFFF3344);
+            
+            // Determine source of flag
+            String source = "";
+            if (p.ghostTagged && p.cheater) source = "Ghost Intel + Urchin";
+            else if (p.ghostTagged) source = "Ghost Intel";
+            else if (p.cheater) source = "Urchin";
+            
+            if (!source.isEmpty()) {
+                Myau.notificationManager.add("⚑ " + p.name + " flagged by " + source, dur, 0xFFFF3344);
+            }
         } catch (Exception ignored) {}
     }
 
     // ── HTTP helpers ──────────────────────────────────────────────────────────
-
-    // Tracks if we already notified this session to avoid spam
-    private volatile boolean invalidKeyNotified = false;
-
-    /** Call after setting a new key so the next request retries properly */
-    public void resetInvalidKeyFlag() { invalidKeyNotified = false; }
-
-    private void notifyInvalidKey() {
-        if (invalidKeyNotified) return;
-        invalidKeyNotified = true;
-        // Clear the invalid key
-        hypixelApiKey = "";
-        // Remove from both property and key file
-        try {
-            myau.module.modules.LobbyIntel li = (myau.module.modules.LobbyIntel)
-                myau.Myau.moduleManager.getModule(myau.module.modules.LobbyIntel.class);
-            if (li != null) {
-                li.savedApiKey.setValue("");
-                // Delete key file so it doesn't reload on next launch
-                new java.io.File("./config/Myau/intel-key.txt").delete();
-            }
-        } catch (Exception ignored) {}
-        // Notify in chat
-        net.minecraft.client.Minecraft.getMinecraft().addScheduledTask(() -> {
-            myau.util.ChatUtil.sendFormatted(
-                "&7[Intel] &cYour Hypixel API key is invalid or expired! " +
-                "Run &e/api new &cin Hypixel to generate a new one.");
-        });
-        dbg("[HypixelAPI] Key invalidated - notified player");
-    }
-
-    /** Like get() but returns [httpCode, body] so callers can detect 403/401 */
-    private String[] getWithCode(String urlStr, String headerKey, String headerVal) {
-        try {
-            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
-            con.setRequestMethod("GET");
-            con.setConnectTimeout(5000);
-            con.setReadTimeout(5000);
-            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-            if (headerKey != null) con.setRequestProperty(headerKey, headerVal);
-            int code = con.getResponseCode();
-            if (code != 200) return new String[]{String.valueOf(code), null};
-            return new String[]{String.valueOf(code), readStream(con.getInputStream())};
-        } catch (Exception e) { return new String[]{null, null}; }
-    }
 
     private String get(String urlStr, String headerKey, String headerVal) {
         try {
@@ -727,53 +564,62 @@ public class IntelManager {
     }
     
     /**
-     * Calculate BedWars star from Experience points using the correct Hypixel formula.
-     * Each prestige (100 levels) = 487,000 XP total:
-     *   Level 1 =   500 XP  (cumulative    500)
-     *   Level 2 =  1000 XP  (cumulative  1,500)
-     *   Level 3 =  2000 XP  (cumulative  3,500)
-     *   Level 4 =  3500 XP  (cumulative  7,000)
-     *   Levels 5-100 = 5000 XP each (cumulative 487,000 at end of prestige)
+     * Calculate BedWars level (star) from experience points
+     * Hypixel BedWars uses a tiered progression system
      */
     private static int getBedWarsLevelFromExp(int exp) {
-        // XP required to reach the START of each easy level (cumulative)
-        final int[] EASY_CUMULATIVE = { 0, 500, 1500, 3500, 7000 };
-        final int XP_PER_PRESTIGE   = 487000;
-        final int XP_PER_LEVEL      = 5000;
-
-        int prestige  = exp / XP_PER_PRESTIGE;
-        int remainder = exp % XP_PER_PRESTIGE;
-
-        // Check which easy level (1-4) we're in
-        for (int i = 1; i <= 4; i++) {
-            if (remainder < EASY_CUMULATIVE[i]) {
-                return prestige * 100 + (i - 1);
-            }
+        int level = 0;
+        
+        // Levels 0-3: 500 XP per level
+        if (exp < 2000) {
+            return exp / 500;
         }
-
-        // Past the easy levels — each level costs 5000 XP
-        return prestige * 100 + 4 + (remainder - 7000) / XP_PER_LEVEL;
+        level = 4;
+        exp -= 2000;
+        
+        // Levels 4-99: 1000 XP per level  
+        if (exp < 96000) {
+            return level + (exp / 1000);
+        }
+        level = 100;
+        exp -= 96000;
+        
+        // Levels 100-199: 2000 XP per level
+        if (exp < 200000) {
+            return level + (exp / 2000);
+        }
+        level = 200;
+        exp -= 200000;
+        
+        // Levels 200-299: 3000 XP per level
+        if (exp < 300000) {
+            return level + (exp / 3000);
+        }
+        level = 300;
+        exp -= 300000;
+        
+        // Levels 300-399: 4000 XP per level
+        if (exp < 400000) {
+            return level + (exp / 4000);
+        }
+        level = 400;
+        exp -= 400000;
+        
+        // Levels 400+: 5000 XP per level
+        return level + (exp / 5000);
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
         try {
             String dn = info.getDisplayName() != null ? info.getDisplayName().getFormattedText() : "";
-            // Store the raw color code character so tab-based comparison works
-            // BedWars + Castle + 40v40 all use these
-            if (dn.contains("§c")) return "red";       // §c
-            if (dn.contains("§9")) return "blue";      // §9
-            if (dn.contains("§a")) return "green";     // §a
-            if (dn.contains("§e")) return "yellow";    // §e
-            if (dn.contains("§b")) return "aqua";      // §b
-            if (dn.contains("§f")) return "white";     // §f
-            if (dn.contains("§d")) return "pink";      // §d
-            if (dn.contains("§8")) return "gray";      // §8
-            if (dn.contains("§6")) return "orange";    // §6 gold/orange
-            if (dn.contains("§5")) return "purple";    // §5 dark purple
-            if (dn.contains("§3")) return "dark_aqua"; // §3 dark aqua
-            if (dn.contains("§2")) return "dark_green";// §2 dark green
-            if (dn.contains("§4")) return "dark_red";  // §4 dark red
-            if (dn.contains("§1")) return "dark_blue"; // §1 dark blue
+            if (dn.contains("§c")) return "red";
+            if (dn.contains("§9")) return "blue";
+            if (dn.contains("§a")) return "green";
+            if (dn.contains("§e")) return "yellow";
+            if (dn.contains("§b")) return "aqua";
+            if (dn.contains("§f")) return "white";
+            if (dn.contains("§d")) return "pink";
+            if (dn.contains("§8")) return "gray";
         } catch (Exception ignored) {}
         return null;
     }
