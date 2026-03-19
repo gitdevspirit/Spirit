@@ -92,6 +92,13 @@ public class IntelHudOverlay {
     public boolean getShowTeamColor() { return showTeamColor; }
     public String getSortMode() { return sortMode; }
     public int getBgOpacity() { return bgOpacity; }
+    public int getBorderOpacity() { return bgOpacity; } // Border uses same as bg for now
+    
+    public void setBorderOpacity(int opacity) { this.bgOpacity = opacity; } // Border uses same as bg
+    
+    public void handleClick(int mx, int my) {
+        // Mouse click handling - currently unused but required by LobbyIntel
+    }
     
     // ── Data Management ────────────────────────────────────────────────────────
     
@@ -378,13 +385,13 @@ public class IntelHudOverlay {
             // Check Ghost Intel - add if exists
             if (p.ghostTagged && p.ghostType != null) {
                 String ghostIcon = "A"; // default Account
-                int ghostColor = 0xFF00FFFF; // cyan
+                int ghostColor = 0xFFFF69B4; // pink
                 
                 // Map Ghost Intel types to icons and colors (from your Discord bot)
                 String type = p.ghostType.toLowerCase();
                 if (type.contains("account")) {
                     ghostIcon = "A";   // Account
-                    ghostColor = 0xFF00FFFF; // cyan
+                    ghostColor = 0xFFFF69B4; // pink
                 } else if (type.contains("caution")) {
                     ghostIcon = "C";   // Caution
                     ghostColor = 0xFFFFAA00; // yellow/orange
@@ -393,10 +400,10 @@ public class IntelHudOverlay {
                     ghostColor = 0xFFFF8800; // orange
                 } else if (type.contains("blatant")) {
                     ghostIcon = "BC";  // Blatant Cheater
-                    ghostColor = 0xFFFF0000; // red
+                    ghostColor = 0xFFCCAA00; // dark yellow
                 } else if (type.contains("sniper")) {
                     ghostIcon = "S";   // Sniper
-                    ghostColor = 0xFFFF0055; // pink/red
+                    ghostColor = 0xFFFF0000; // red
                 } else if (type.contains("verified")) {
                     ghostIcon = "VC";  // Verified Cheater
                     ghostColor = 0xFFFF00AA; // magenta
