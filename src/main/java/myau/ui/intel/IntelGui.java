@@ -285,8 +285,7 @@ public class IntelGui extends GuiScreen {
         int nameCol = p.cheater ? COL_RED : COL_BRIGHT;
         String namePrefix = p.cheater ? "\u26D4 " : "";
         mc.fontRendererObj.drawString(namePrefix + p.name, nameX, cy + 8, nameCol, false);
-        
-        // Role badges removed
+
         // Level below name
         String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.level;
         mc.fontRendererObj.drawString(lvlStr, nameX, cy + 19, p.loading ? COL_DIM : COL_GOLD, false);
