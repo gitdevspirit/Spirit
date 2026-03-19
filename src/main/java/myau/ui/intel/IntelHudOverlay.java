@@ -242,9 +242,9 @@ public class IntelHudOverlay {
         
         // U header - centered
         if (showUrchin) {
-            int uHeaderW = mc.fontRendererObj.getStringWidth("U");
-            drawText("U", x + (25 - uHeaderW) / 2, headerY, TEXT_DIM);
-            x += 25;
+            int tagsHeaderW = mc.fontRendererObj.getStringWidth("TAGS");
+            drawText("TAGS", x + (35 - tagsHeaderW) / 2, headerY, TEXT_DIM);
+            x += 35;
         }
         
         // THREAT header - centered
@@ -274,7 +274,7 @@ public class IntelHudOverlay {
         if (showFkdr) width += 40;
         if (showWlr) width += 35;
         if (showStreak) width += 30;
-        if (showUrchin) width += 25; // Urchin icon column
+        if (showUrchin) width += 35; // Tags column (Urchin + Ghost Intel)
         if (showThreat) width += 45;
         
         return width;
@@ -384,8 +384,6 @@ public class IntelHudOverlay {
             
             // Check Ghost Intel - add if exists
             if (p.ghostTagged && p.ghostType != null) {
-                System.out.println("[Overlay] Rendering Ghost tag for " + p.name + ": " + p.ghostType);
-                
                 String ghostIcon = "A"; // default Account
                 int ghostColor = 0xFFFF69B4; // pink
                 
@@ -428,10 +426,10 @@ public class IntelHudOverlay {
             // Draw the icon(s) if any
             if (!displayText.isEmpty()) {
                 int iconWidth = mc.fontRendererObj.getStringWidth(displayText);
-                drawText(displayText, currentX + (25 - iconWidth) / 2, y + 4, displayColor);
+                drawText(displayText, currentX + (35 - iconWidth) / 2, y + 4, displayColor);
             }
             
-            currentX += 25;
+            currentX += 35;
         }
         
         // Draw threat score (centered, no bar)
