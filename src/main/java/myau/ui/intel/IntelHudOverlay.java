@@ -384,6 +384,8 @@ public class IntelHudOverlay {
             
             // Check Ghost Intel - add if exists
             if (p.ghostTagged && p.ghostType != null) {
+                System.out.println("[Overlay] Rendering Ghost tag for " + p.name + ": " + p.ghostType);
+                
                 String ghostIcon = "A"; // default Account
                 int ghostColor = 0xFFFF69B4; // pink
                 
