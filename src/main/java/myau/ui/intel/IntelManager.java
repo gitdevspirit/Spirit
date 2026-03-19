@@ -29,7 +29,7 @@ public class IntelManager {
 
     public static String hypixelApiKey = "";
     public static String urchinApiKey  = "68DE_lQ0UprVJX8q5k7TIeeZV938J2EfDAF08Q_07s0";
-    public static String ghostApiKey   = "ownerspirit365"; // Ghost Intel API key (optional for now)
+    public static String ghostApiKey   = ""; // Ghost Intel API key (optional for now)
 
     private static final String URCHIN_URL = "https://urchin.ws/player";
     private static final String GHOST_URL  = "https://ghost-intel-bot-production.up.railway.app/api/tags";
@@ -459,6 +459,8 @@ public class IntelManager {
     private void fetchGhostBatch(List<IntelPlayer> batch) {
         if (batch.isEmpty()) return;
         
+        System.out.println("[Ghost Intel] ===== Fetching tags for " + batch.size() + " players =====");
+        
         // Ghost Intel doesn't have batch API, so fetch individually
         for (IntelPlayer p : batch) {
             try {
@@ -467,17 +469,35 @@ public class IntelManager {
                     url += "?key=" + ghostApiKey;
                 }
                 
+                System.out.println("[Ghost Intel] Fetching: " + url);
+                
                 String json = get(url, null, null);
-                if (json == null) continue;
+                if (json == null) {
+                    System.out.println("[Ghost Intel] NULL response for " + p.name);
+                    continue;
+                }
+                
+                System.out.println("[Ghost Intel] Got response for " + p.name + ": " + json);
                 
                 JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-                if (!root.has("tags")) continue;
+                if (!root.has("tags")) {
+                    System.out.println("[Ghost Intel] No 'tags' field in response for " + p.name);
+                    continue;
+                }
                 
                 JsonElement tagsElement = root.get("tags");
-                if (!tagsElement.isJsonArray()) continue;
+                if (!tagsElement.isJsonArray()) {
+                    System.out.println("[Ghost Intel] 'tags' is not an array for " + p.name);
+                    continue;
+                }
                 
                 com.google.gson.JsonArray tags = tagsElement.getAsJsonArray();
-                if (tags.size() == 0) continue;
+                System.out.println("[Ghost Intel] " + p.name + " has " + tags.size() + " tags");
+                
+                if (tags.size() == 0) {
+                    System.out.println("[Ghost Intel] No tags for " + p.name);
+                    continue;
+                }
                 
                 // Get the first (most recent) tag
                 JsonObject tag = tags.get(0).getAsJsonObject();
@@ -485,12 +505,15 @@ public class IntelManager {
                 p.ghostType = tag.has("type") ? tag.get("type").getAsString() : "tagged";
                 p.ghostReason = tag.has("reason") ? tag.get("reason").getAsString() : "";
                 
-                System.out.println("[Ghost Intel] " + p.name + " tagged: " + p.ghostType + " - " + p.ghostReason);
+                System.out.println("[Ghost Intel] ✓ " + p.name + " tagged as: " + p.ghostType + " - " + p.ghostReason);
                 
             } catch (Exception e) {
-                // Silently fail for individual players
+                System.err.println("[Ghost Intel] ERROR fetching " + p.name + ": " + e.getMessage());
+                e.printStackTrace();
             }
         }
+        
+        System.out.println("[Ghost Intel] ===== Finished fetching tags =====");
     }
 
     /** Returns cached UUID for a player name, or null if not yet known */
