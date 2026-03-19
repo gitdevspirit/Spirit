@@ -169,6 +169,16 @@ public class IntelManager {
 
     public void refresh() { scanLobby(); }
 
+    public void clearAll() {
+        players.clear();
+        if (gui != null) gui.setPlayers(new ArrayList<>());
+        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>());
+    }
+
+    public void resetInvalidKeyFlag() {
+        // Reset any invalid key flags - for future use
+    }
+
     // ── Hypixel ───────────────────────────────────────────────────────────────
 
     /** Fetches UUID from Mojang (with playerdb.co fallback) and caches it. */
@@ -337,9 +347,6 @@ public class IntelManager {
             
             System.out.println("[DEBUG] " + p.name + " has stats: " + (stats != null));
             System.out.println("[DEBUG] " + p.name + " has Bedwars: " + (bw != null));
-            if (bw != null) {
-                System.out.println("[DEBUG] BedWars keys: " + bw.keySet());
-            }
             
             // Calculate accurate BedWars star from Achievement Points
             // Hypixel stores BedWars level as "Experience" in the Bedwars stats
