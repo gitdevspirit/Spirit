@@ -18,14 +18,16 @@ public class IntelPlayer {
     public int    bedsBroken  = 0;
     public int    wins        = 0;
 
-    // Nick detection
-    public boolean isNicked    = false;  // true if name has no Hypixel account
-
     // Urchin
     public boolean cheater     = false;
     public String  urchinTag   = null;    // display string: "Confirmed cheater — ac and legitscaff..."
     public String  urchinType  = null;    // raw type: "confirmed_cheater", "blatant_cheater" etc
     public String  urchinReason = null;   // raw reason text (lowercase): "ac and legitscaff when..."
+
+    // Ghost Intel (Discord bot tags)
+    public boolean ghostTagged = false;   // Has Ghost Intel tag
+    public String  ghostType   = null;    // Tag type from Ghost Intel
+    public String  ghostReason = null;    // Reason from Ghost Intel
 
     // Spirit Client Role
     public PlayerRole role     = null;    // OWNER, BETA, FRIEND, or USER
