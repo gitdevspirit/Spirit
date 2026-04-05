@@ -73,7 +73,6 @@ public class Myau {
         commandManager.register(new myau.command.commands.IntelDebugCommand());
         commandManager.register(new myau.command.commands.IntelPathCommand());
         commandManager.register(new myau.command.commands.RoleCommand());
-        commandManager.register(new myau.command.commands.TestGhostCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
