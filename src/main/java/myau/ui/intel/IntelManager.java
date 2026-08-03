@@ -474,6 +474,25 @@ public class IntelManager {
         return null;
     }
 
+    /**
+     * Fetches a single player's Bedwars stats without touching the lobby
+     * player list, GUI, or HUD — used by commands like .bw that just want
+     * a one-off lookup.
+     */
+    public IntelPlayer fetchStandaloneStats(String name) {
+        IntelPlayer player = new IntelPlayer(name, null);
+
+        try {
+            fetchHypixel(player);
+        } catch (Exception exception) {
+            player.loading = false;
+            dbg("[Intel] standalone stats fetch failed for " + name
+                    + ": " + exception);
+        }
+
+        return player;
+    }
+
     private void fetchHypixel(IntelPlayer player) {
         boolean gotStats = false;
 
@@ -530,18 +549,25 @@ public class IntelManager {
                     : 0;
 
             int finalKills = bwInt(bedwars, "final_kills_bedwars");
+            int rawFinalDeaths = bwInt(bedwars, "final_deaths_bedwars");
 
-            int finalDeaths = bwInt(bedwars, "final_deaths_bedwars");
+            int finalDeaths = rawFinalDeaths;
             if (finalDeaths == 0) finalDeaths = 1;
 
             int wins = bwInt(bedwars, "wins_bedwars");
+            int rawLosses = bwInt(bedwars, "losses_bedwars");
 
-            int losses = bwInt(bedwars, "losses_bedwars");
+            int losses = rawLosses;
             if (losses == 0) losses = 1;
 
             player.finalKills = finalKills;
+            player.finalDeaths = rawFinalDeaths;
             player.bedsBroken = bwInt(bedwars, "beds_broken_bedwars");
+            player.bedsLost = bwInt(bedwars, "beds_lost_bedwars");
+            player.kills = bwInt(bedwars, "kills_bedwars");
+            player.deaths = bwInt(bedwars, "deaths_bedwars");
             player.wins = wins;
+            player.losses = rawLosses;
             player.winstreak = bwInt(bedwars, "winstreak");
             player.fkdr = (double) finalKills / finalDeaths;
             player.wlr = (double) wins / losses;
@@ -632,18 +658,25 @@ public class IntelManager {
             }
 
             int finalKills = bwInt(bedwars, "final_kills_bedwars");
+            int rawFinalDeaths = bwInt(bedwars, "final_deaths_bedwars");
 
-            int finalDeaths = bwInt(bedwars, "final_deaths_bedwars");
+            int finalDeaths = rawFinalDeaths;
             if (finalDeaths == 0) finalDeaths = 1;
 
             int wins = bwInt(bedwars, "wins_bedwars");
+            int rawLosses = bwInt(bedwars, "losses_bedwars");
 
-            int losses = bwInt(bedwars, "losses_bedwars");
+            int losses = rawLosses;
             if (losses == 0) losses = 1;
 
             player.finalKills = finalKills;
+            player.finalDeaths = rawFinalDeaths;
             player.bedsBroken = bwInt(bedwars, "beds_broken_bedwars");
+            player.bedsLost = bwInt(bedwars, "beds_lost_bedwars");
+            player.kills = bwInt(bedwars, "kills_bedwars");
+            player.deaths = bwInt(bedwars, "deaths_bedwars");
             player.wins = wins;
+            player.losses = rawLosses;
             player.winstreak = bwInt(bedwars, "winstreak");
             player.fkdr = (double) finalKills / finalDeaths;
             player.wlr = (double) wins / losses;
