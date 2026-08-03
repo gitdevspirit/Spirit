@@ -1,8 +1,8 @@
 package myau.ui.hud;
 
 import myau.Myau;
-import myau.module.BooleanSetting;
 import myau.module.Module;
+import myau.module.BooleanSetting;
 import myau.module.modules.HUD;
 import myau.module.modules.Pit;
 import myau.ui.clickgui.RoundedUtils;
@@ -78,6 +78,7 @@ public class ArraylistHUD {
         for (Module module : Myau.moduleManager.modules.values()) {
             if (!module.isEnabled() || module.isHidden() || module instanceof Pit) continue;
             if (boundOnly && module.getKey() == 0) continue;
+
             others.add(module);
         }
 
@@ -86,7 +87,9 @@ public class ArraylistHUD {
                     ? " " + fmt(module.getSuffix()[0], lowercase)
                     : "";
 
-            return mc.fontRendererObj.getStringWidth(fmt(module.getName(), lowercase) + detail);
+            return mc.fontRendererObj.getStringWidth(
+                    fmt(module.getName(), lowercase) + detail
+            );
         }).reversed());
 
         for (Module module : others) {
@@ -104,7 +107,10 @@ public class ArraylistHUD {
         for (Row row : rows) {
             String display = (row.isPitSub ? "  " : "") + row.name;
             int width = mc.fontRendererObj.getStringWidth(display + row.detail);
-            if (width > maxW) maxW = width;
+
+            if (width > maxW) {
+                maxW = width;
+            }
         }
 
         int bgW = maxW + padX * 2;
@@ -160,22 +166,51 @@ public class ArraylistHUD {
 
             int textColor = row.isPitSub ? detailRGB : nameRGB;
 
-            mc.fontRendererObj.drawString(display, textX, textY, textColor, shadow);
+            mc.fontRendererObj.drawString(
+                    display,
+                    textX,
+                    textY,
+                    textColor,
+                    shadow
+            );
 
             if (!row.detail.isEmpty()) {
-                mc.fontRendererObj.drawString(row.detail, textX + nameW, textY, detailRGB, shadow);
+                mc.fontRendererObj.drawString(
+                        row.detail,
+                        textX + nameW,
+                        textY,
+                        detailRGB,
+                        shadow
+                );
             }
 
-            if (left) {
-                net.minecraft.client.gui.Gui.drawRect(bgX, rowY, bgX + 2, rowY + lineHeight, nameRGB);
-            } else {
-                net.minecraft.client.gui.Gui.drawRect(
-                        bgX + bgW - 2,
-                        rowY,
-                        bgX + bgW,
-                        rowY + lineHeight,
-                        nameRGB
-                );
+            // The accent is inset from top/bottom to preserve rounded corners.
+            int accentInset = Math.min(
+                    (int) Math.ceil(rounding),
+                    lineHeight / 2
+            );
+
+            int accentTop = rowY + accentInset;
+            int accentBottom = rowY + lineHeight - accentInset;
+
+            if (accentBottom > accentTop) {
+                if (left) {
+                    net.minecraft.client.gui.Gui.drawRect(
+                            bgX,
+                            accentTop,
+                            bgX + 2,
+                            accentBottom,
+                            nameRGB
+                    );
+                } else {
+                    net.minecraft.client.gui.Gui.drawRect(
+                            bgX + bgW - 2,
+                            accentTop,
+                            bgX + bgW,
+                            accentBottom,
+                            nameRGB
+                    );
+                }
             }
         }
 
@@ -207,14 +242,35 @@ public class ArraylistHUD {
         if (radius >= 1) {
             RoundedUtils.drawRoundedRect(x, y, width, height, radius, base);
         } else {
-            net.minecraft.client.gui.Gui.drawRect(x, y, x + width, y + height, base);
+            net.minecraft.client.gui.Gui.drawRect(
+                    x,
+                    y,
+                    x + width,
+                    y + height,
+                    base
+            );
         }
 
         if (useGradient) {
             int inset = Math.max(1, (int) radius);
 
-            drawHorizontalGradient(x + inset, y, x + width - inset, y + height, base, gradient);
-            drawHorizontalGradient(x, y + inset, x + width, y + height - inset, base, gradient);
+            drawHorizontalGradient(
+                    x + inset,
+                    y,
+                    x + width - inset,
+                    y + height,
+                    base,
+                    gradient
+            );
+
+            drawHorizontalGradient(
+                    x,
+                    y + inset,
+                    x + width,
+                    y + height - inset,
+                    base,
+                    gradient
+            );
         }
     }
 
@@ -226,18 +282,19 @@ public class ArraylistHUD {
             int start,
             int end
     ) {
-        float sr = ((start >> 16) & 255) / 255f;
-        float sg = ((start >> 8) & 255) / 255f;
-        float sb = (start & 255) / 255f;
-        float sa = ((start >>> 24) & 255) / 255f;
+        float startRed = ((start >> 16) & 255) / 255f;
+        float startGreen = ((start >> 8) & 255) / 255f;
+        float startBlue = (start & 255) / 255f;
+        float startAlpha = ((start >>> 24) & 255) / 255f;
 
-        float er = ((end >> 16) & 255) / 255f;
-        float eg = ((end >> 8) & 255) / 255f;
-        float eb = (end & 255) / 255f;
-        float ea = ((end >>> 24) & 255) / 255f;
+        float endRed = ((end >> 16) & 255) / 255f;
+        float endGreen = ((end >> 8) & 255) / 255f;
+        float endBlue = (end & 255) / 255f;
+        float endAlpha = ((end >>> 24) & 255) / 255f;
 
         GlStateManager.disableTexture2D();
         GlStateManager.enableBlend();
+
         GlStateManager.tryBlendFuncSeparate(
                 GL11.GL_SRC_ALPHA,
                 GL11.GL_ONE_MINUS_SRC_ALPHA,
@@ -246,13 +303,15 @@ public class ArraylistHUD {
         );
 
         GL11.glBegin(GL11.GL_QUADS);
-        GL11.glColor4f(sr, sg, sb, sa);
+
+        GL11.glColor4f(startRed, startGreen, startBlue, startAlpha);
         GL11.glVertex2f(left, top);
         GL11.glVertex2f(left, bottom);
 
-        GL11.glColor4f(er, eg, eb, ea);
+        GL11.glColor4f(endRed, endGreen, endBlue, endAlpha);
         GL11.glVertex2f(right, bottom);
         GL11.glVertex2f(right, top);
+
         GL11.glEnd();
 
         GlStateManager.enableTexture2D();
