@@ -47,7 +47,7 @@ public abstract class MixinGuiPlayerTabOverlay {
                 .append(String.format(java.util.Locale.ROOT, "%.1f", player.wlr));
 
         String tag = player.getTagBadge();
-        if (!tag.isEmpty()) {
+        if (!tag.isEmpty() && lobbyIntel.tabShowTag.getValue()) {
             stats.append(" §d").append(tag);
         }
 
