@@ -71,6 +71,7 @@ public class Myau {
         commandManager.register(new IntelKeyCommand());
         commandManager.register(new myau.command.commands.UrchinKeyCommand());
         commandManager.register(new myau.command.commands.RemoveIntelPlayerCommand());
+        commandManager.register(new myau.command.commands.AddIntelPlayerCommand());
         commandManager.register(new myau.command.commands.IntelDebugCommand());
         commandManager.register(new myau.command.commands.IntelPathCommand());
         commandManager.register(new myau.command.commands.RoleCommand());
