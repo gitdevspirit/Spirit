@@ -147,6 +147,7 @@ public class Myau {
         moduleManager.modules.put(LongJump.class,        new LongJump());
         moduleManager.modules.put(MCF.class,             new MCF());
         moduleManager.modules.put(NameTags.class,        new NameTags());
+        moduleManager.modules.put(BedwarsTag.class,      new BedwarsTag());
         moduleManager.modules.put(NickHider.class,       new NickHider());
         moduleManager.modules.put(NoFall.class,          new NoFall());
         moduleManager.modules.put(NoHitDelay.class,      new NoHitDelay());
