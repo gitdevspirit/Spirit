@@ -17,288 +17,659 @@ public class IntelHudSettingsGui extends GuiScreen {
     private final IntelHudOverlay hudOverlay;
     private final GuiScreen parent;
 
-    private static final int POPUP_W  = 280;
-    private static final int POPUP_H  = 520;
-    private static final int PAD      = 12;
+    private static final int POPUP_W = 280;
+    private static final int POPUP_H = 520;
+    private static final int PAD = 12;
     private static final int SLIDER_H = 28;
     private static final int TOGGLE_H = 24;
 
-    private static final int BG_POPUP  = 0xEE0A0A12;
+    private static final int BG_POPUP = 0xEE0A0A12;
     private static final int BG_HEADER = 0xFF15151D;
-    private static final int ACCENT    = GuiColors.ACCENT;
-    private static final int TEXT_ON   = 0xFFDDDDEE;
-    private static final int TEXT_DIM  = 0xFF888899;
-    private static final int DIVIDER   = 0x33FFFFFF;
+    private static final int ACCENT = GuiColors.ACCENT;
+    private static final int TEXT_ON = 0xFFDDDDEE;
+    private static final int TEXT_DIM = 0xFF888899;
+    private static final int DIVIDER = 0x33FFFFFF;
 
-    // Slider IDs
-    private static final int S_POS_X  = 0;
-    private static final int S_POS_Y  = 1;
-    private static final int S_SCALE  = 2;
-    private static final int S_MAX_P  = 3;
-    private static final int S_BG_OP  = 4;
+    private static final int S_POS_X = 0;
+    private static final int S_POS_Y = 1;
+    private static final int S_SCALE = 2;
+    private static final int S_MAX_P = 3;
+    private static final int S_BG_OP = 4;
     private static final int S_BORDER = 5;
 
-    private int  scrollOffset = 0;
-    private int  maxScroll    = 0;
-    private boolean dragging  = false;
-    private int  dragId       = -1;
-    private int  dragBarX     = 0;
-    private int  dragBarW     = 0;
+    private int scrollOffset = 0;
+    private int maxScroll = 0;
+    private boolean dragging = false;
+    private int dragId = -1;
+    private int dragBarX = 0;
+    private int dragBarW = 0;
 
     public IntelHudSettingsGui(IntelHudOverlay hudOverlay, GuiScreen parent) {
         this.hudOverlay = hudOverlay;
         this.parent = parent;
     }
 
-    // ── Slider math — always integer, 1 step per pixel when range fits ────────
-
-    private int barW(int iw, int max) {
-        // Reserve space for the value label on the right
-        return iw - mc.fontRendererObj.getStringWidth(String.valueOf(max)) - 8;
+    private int barW(int innerWidth, int max) {
+        return innerWidth - mc.fontRendererObj.getStringWidth(String.valueOf(max)) - 8;
     }
 
-    private int pixelToVal(int mx, int bx, int bw, int min, int max) {
-        float pct = Math.max(0f, Math.min(1f, (mx - bx) / (float) bw));
-        return min + Math.round(pct * (max - min));
+    private int pixelToVal(int mouseX, int barX, int barWidth, int min, int max) {
+        float percentage = Math.max(
+                0f,
+                Math.min(1f, (mouseX - barX) / (float) barWidth)
+        );
+
+        return min + Math.round(percentage * (max - min));
     }
 
-    private void applySlider(int id, int mx, int bx, int bw) {
+    private void applySlider(int id, int mouseX, int barX, int barWidth) {
         switch (id) {
-            case S_POS_X:  hudOverlay.setPosition(pixelToVal(mx,bx,bw,0,1920), hudOverlay.getPosY()); break;
-            case S_POS_Y:  hudOverlay.setPosition(hudOverlay.getPosX(), pixelToVal(mx,bx,bw,0,1080)); break;
-            case S_SCALE:  hudOverlay.setScale(pixelToVal(mx,bx,bw,50,200) / 100f); break;
-            case S_MAX_P:  hudOverlay.setMaxPlayers(pixelToVal(mx,bx,bw,1,80)); break;
-            case S_BG_OP:  hudOverlay.setBgOpacity(pixelToVal(mx,bx,bw,0,255)); break;
-            case S_BORDER: hudOverlay.setBorderOpacity(pixelToVal(mx,bx,bw,0,255)); break;
+            case S_POS_X:
+                hudOverlay.setPosition(
+                        pixelToVal(mouseX, barX, barWidth, 0, 1920),
+                        hudOverlay.getPosY()
+                );
+                break;
+
+            case S_POS_Y:
+                hudOverlay.setPosition(
+                        hudOverlay.getPosX(),
+                        pixelToVal(mouseX, barX, barWidth, 0, 1080)
+                );
+                break;
+
+            case S_SCALE:
+                hudOverlay.setScale(
+                        pixelToVal(mouseX, barX, barWidth, 50, 200) / 100f
+                );
+                break;
+
+            case S_MAX_P:
+                hudOverlay.setMaxPlayers(
+                        pixelToVal(mouseX, barX, barWidth, 1, 80)
+                );
+                break;
+
+            case S_BG_OP:
+                hudOverlay.setBgOpacity(
+                        pixelToVal(mouseX, barX, barWidth, 0, 255)
+                );
+                break;
+
+            case S_BORDER:
+                hudOverlay.setBorderOpacity(
+                        pixelToVal(mouseX, barX, barWidth, 0, 255)
+                );
+                break;
         }
     }
 
-    // ── Render ────────────────────────────────────────────────────────────────
-
     @Override
-    public void drawScreen(int mx, int my, float pt) {
+    public void drawScreen(int mouseX, int mouseY, float partialTicks) {
         drawRect(0, 0, width, height, 0xCC000000);
 
         ScaledResolution sr = new ScaledResolution(mc);
-        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int px = (sw - POPUP_W) / 2, py = (sh - POPUP_H) / 2;
+        int scaledWidth = sr.getScaledWidth();
+        int scaledHeight = sr.getScaledHeight();
 
-        RoundedUtils.drawRoundedRect(px, py, POPUP_W, POPUP_H, 6, BG_POPUP);
-        RoundedUtils.drawRoundedRect(px, py, POPUP_W, 36, 6, BG_HEADER);
-        drawRect(px, py + 30, px + POPUP_W, py + 36, BG_HEADER);
+        int popupX = (scaledWidth - POPUP_W) / 2;
+        int popupY = (scaledHeight - POPUP_H) / 2;
+
+        RoundedUtils.drawRoundedRect(
+                popupX, popupY, POPUP_W, POPUP_H, 6, BG_POPUP
+        );
+
+        RoundedUtils.drawRoundedRect(
+                popupX, popupY, POPUP_W, 36, 6, BG_HEADER
+        );
+
+        drawRect(
+                popupX,
+                popupY + 30,
+                popupX + POPUP_W,
+                popupY + 36,
+                BG_HEADER
+        );
 
         GlStateManager.pushMatrix();
-        GlStateManager.translate(px + PAD, py + 12, 0);
+        GlStateManager.translate(popupX + PAD, popupY + 12, 0);
         GlStateManager.scale(1.1f, 1.1f, 1f);
         mc.fontRendererObj.drawString("HUD Overlay Settings", 0, 0, ACCENT, false);
         GlStateManager.popMatrix();
 
-        int cx = px + POPUP_W - 28, cy = py + 10;
-        boolean ch = mx >= cx && mx < cx + 18 && my >= cy && my < cy + 18;
-        mc.fontRendererObj.drawString("X", cx + 5, cy + 5, ch ? 0xFFFF4444 : TEXT_ON, false);
+        int closeX = popupX + POPUP_W - 28;
+        int closeY = popupY + 10;
 
-        // Scrollable region
+        boolean closeHovered = mouseX >= closeX
+                && mouseX < closeX + 18
+                && mouseY >= closeY
+                && mouseY < closeY + 18;
+
+        mc.fontRendererObj.drawString(
+                "X",
+                closeX + 5,
+                closeY + 5,
+                closeHovered ? 0xFFFF4444 : TEXT_ON,
+                false
+        );
+
         GlStateManager.pushMatrix();
         GL11.glEnable(GL11.GL_SCISSOR_TEST);
-        int sf = sr.getScaleFactor();
-        int contentY = py + 46, contentH = POPUP_H - 56;
-        GL11.glScissor(px * sf, (sh - contentY - contentH) * sf, POPUP_W * sf, contentH * sf);
 
-        int y  = contentY - scrollOffset + PAD;
-        int ix = px + PAD;
-        int iw = POPUP_W - PAD * 2;
+        int scaleFactor = sr.getScaleFactor();
+        int contentY = popupY + 46;
+        int contentHeight = POPUP_H - 56;
 
-        y = drawToggle(ix, y, iw, "Enabled", hudOverlay.isEnabled(), mx, my);
-        y += 6; div(ix, y, iw); y += 12;
+        GL11.glScissor(
+                popupX * scaleFactor,
+                (scaledHeight - contentY - contentHeight) * scaleFactor,
+                POPUP_W * scaleFactor,
+                contentHeight * scaleFactor
+        );
 
-        label(ix, y, "POSITION"); y += 16;
-        y = slider(ix, y, iw, "X Position",         hudOverlay.getPosX(),              0,   1920, S_POS_X,  mx, my);
-        y = slider(ix, y, iw, "Y Position",         hudOverlay.getPosY(),              0,   1080, S_POS_Y,  mx, my);
-        y += 6; div(ix, y, iw); y += 12;
+        int y = contentY - scrollOffset + PAD;
+        int innerX = popupX + PAD;
+        int innerWidth = POPUP_W - PAD * 2;
 
-        label(ix, y, "DISPLAY"); y += 16;
-        y = slider(ix, y, iw, "Scale %",            (int)(hudOverlay.getScale()*100),  50,  200,  S_SCALE,  mx, my);
-        y = slider(ix, y, iw, "Max Players",        hudOverlay.getMaxPlayers(),         1,   80,   S_MAX_P,  mx, my);
-        y = slider(ix, y, iw, "Background Opacity", hudOverlay.getBgOpacity(),          0,   255,  S_BG_OP,  mx, my);
-        y = slider(ix, y, iw, "Border Opacity",     hudOverlay.getBorderOpacity(),      0,   255,  S_BORDER, mx, my);
-        y += 6; div(ix, y, iw); y += 12;
+        y = drawToggle(
+                innerX,
+                y,
+                innerWidth,
+                "Enabled",
+                hudOverlay.isEnabled(),
+                mouseX,
+                mouseY
+        );
 
-        label(ix, y, "COLUMNS"); y += 20;
-        y = drawToggle(ix, y, iw, "Player Heads",  hudOverlay.getShowHeads(),     mx, my);
-        y = drawToggle(ix, y, iw, "Star",          hudOverlay.getShowStar(),      mx, my);
-        y = drawToggle(ix, y, iw, "FKDR",          hudOverlay.getShowFkdr(),      mx, my);
-        y = drawToggle(ix, y, iw, "WLR",           hudOverlay.getShowWlr(),       mx, my);
-        y = drawToggle(ix, y, iw, "Winstreak",     hudOverlay.getShowStreak(),    mx, my);
-        y = drawToggle(ix, y, iw, "Tags",          hudOverlay.getShowUrchin(),    mx, my);
-        y = drawToggle(ix, y, iw, "Threat Score",  hudOverlay.getShowThreat(),    mx, my);
-        y = drawToggle(ix, y, iw, "Team Colors",   hudOverlay.getShowTeamColor(), mx, my);
-        y += 8; div(ix, y, iw); y += 16;
+        y += 6;
+        div(innerX, y, innerWidth);
+        y += 12;
 
-        label(ix, y, "SORTING"); y += 20;
-        y = dropdown(ix, y, iw, "Sort By",
+        label(innerX, y, "POSITION");
+        y += 16;
+
+        y = slider(
+                innerX, y, innerWidth,
+                "X Position",
+                hudOverlay.getPosX(),
+                0, 1920,
+                S_POS_X,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Y Position",
+                hudOverlay.getPosY(),
+                0, 1080,
+                S_POS_Y,
+                mouseX, mouseY
+        );
+
+        y += 6;
+        div(innerX, y, innerWidth);
+        y += 12;
+
+        label(innerX, y, "DISPLAY");
+        y += 16;
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Scale %",
+                (int) (hudOverlay.getScale() * 100),
+                50, 200,
+                S_SCALE,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Max Players",
+                hudOverlay.getMaxPlayers(),
+                1, 80,
+                S_MAX_P,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Background Opacity",
+                hudOverlay.getBgOpacity(),
+                0, 255,
+                S_BG_OP,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Border Opacity",
+                hudOverlay.getBorderOpacity(),
+                0, 255,
+                S_BORDER,
+                mouseX, mouseY
+        );
+
+        y += 6;
+        div(innerX, y, innerWidth);
+        y += 12;
+
+        label(innerX, y, "COLUMNS");
+        y += 20;
+
+        y = drawToggle(innerX, y, innerWidth, "Player Heads",
+                hudOverlay.getShowHeads(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Star",
+                hudOverlay.getShowStar(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Network Level",
+                hudOverlay.getShowLevel(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "FKDR",
+                hudOverlay.getShowFkdr(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "WLR",
+                hudOverlay.getShowWlr(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Winstreak",
+                hudOverlay.getShowStreak(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Tags",
+                hudOverlay.getShowUrchin(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Threat Score",
+                hudOverlay.getShowThreat(), mouseX, mouseY);
+
+        y = drawToggle(innerX, y, innerWidth, "Team Colors",
+                hudOverlay.getShowTeamColor(), mouseX, mouseY);
+
+        y += 8;
+        div(innerX, y, innerWidth);
+        y += 16;
+
+        label(innerX, y, "SORTING");
+        y += 20;
+
+        y = dropdown(
+                innerX,
+                y,
+                innerWidth,
+                "Sort By",
                 new String[]{"Threat", "FKDR", "Star", "Name"},
-                hudOverlay.getSortMode().equals("threat") ? 0 : hudOverlay.getSortMode().equals("fkdr") ? 1 : hudOverlay.getSortMode().equals("star") ? 2 : 3,
-                mx, my);
+                hudOverlay.getSortMode().equals("threat")
+                        ? 0
+                        : hudOverlay.getSortMode().equals("fkdr")
+                                ? 1
+                                : hudOverlay.getSortMode().equals("star")
+                                        ? 2
+                                        : 3,
+                mouseX,
+                mouseY
+        );
 
-        // Add extra bottom padding so the last item is fully scrollable into view
-        int totalContentH = y - contentY + scrollOffset + PAD * 4;
-        maxScroll = Math.max(0, totalContentH - contentH);
+        int totalContentHeight = y - contentY + scrollOffset + PAD * 4;
+        maxScroll = Math.max(0, totalContentHeight - contentHeight);
 
         GL11.glDisable(GL11.GL_SCISSOR_TEST);
         GlStateManager.popMatrix();
 
-        super.drawScreen(mx, my, pt);
+        super.drawScreen(mouseX, mouseY, partialTicks);
     }
 
-    // ── Widget helpers ────────────────────────────────────────────────────────
-
-    private void label(int x, int y, String t) {
-        mc.fontRendererObj.drawString(t, x, y, TEXT_DIM, false);
+    private void label(int x, int y, String text) {
+        mc.fontRendererObj.drawString(text, x, y, TEXT_DIM, false);
     }
 
-    private void div(int x, int y, int w) {
-        drawRect(x, y, x + w, y + 1, DIVIDER);
+    private void div(int x, int y, int width) {
+        drawRect(x, y, x + width, y + 1, DIVIDER);
     }
 
-    private int slider(int x, int y, int w, String lbl, int val, int min, int max,
-                       int id, int mx, int my) {
-        mc.fontRendererObj.drawString(lbl, x, y, TEXT_ON, false);
+    private int slider(
+            int x,
+            int y,
+            int width,
+            String label,
+            int value,
+            int min,
+            int max,
+            int id,
+            int mouseX,
+            int mouseY
+    ) {
+        mc.fontRendererObj.drawString(label, x, y, TEXT_ON, false);
         y += 10;
 
-        String vs = String.valueOf(val);
-        mc.fontRendererObj.drawString(vs, x + w - mc.fontRendererObj.getStringWidth(vs), y, ACCENT, false);
+        String valueText = String.valueOf(value);
 
-        int bw = barW(w, max);
-        int bh = 8;
-        drawRect(x, y, x + bw, y + bh, 0x66444444);
-        float pct = (val - min) / (float)(max - min);
-        int fw = Math.max(2, (int)(bw * pct));
-        drawRect(x, y, x + fw, y + bh, ACCENT);
-        // Knob
-        int kx = x + fw - 5, ky = y - 2;
-        drawRect(kx, ky, kx + 10, ky + 12, 0xFFFFFFFF);
-        drawRect(kx + 2, ky + 2, kx + 8, ky + 10, ACCENT);
+        mc.fontRendererObj.drawString(
+                valueText,
+                x + width - mc.fontRendererObj.getStringWidth(valueText),
+                y,
+                ACCENT,
+                false
+        );
+
+        int barWidth = barW(width, max);
+        int barHeight = 8;
+
+        drawRect(x, y, x + barWidth, y + barHeight, 0x66444444);
+
+        float percentage = (value - min) / (float) (max - min);
+        int fillWidth = Math.max(2, (int) (barWidth * percentage));
+
+        drawRect(x, y, x + fillWidth, y + barHeight, ACCENT);
+
+        int knobX = x + fillWidth - 5;
+        int knobY = y - 2;
+
+        drawRect(knobX, knobY, knobX + 10, knobY + 12, 0xFFFFFFFF);
+        drawRect(knobX + 2, knobY + 2, knobX + 8, knobY + 10, ACCENT);
 
         return y + 20;
     }
 
-    private int drawToggle(int x, int y, int w, String lbl, boolean val, int mx, int my) {
-        boolean hov = mx >= x && mx < x + w && my >= y && my < y + TOGGLE_H;
-        mc.fontRendererObj.drawString(lbl, x, y + 8, hov ? TEXT_ON : TEXT_DIM, false);
-        int tw = 40, th = 20, tx = x + w - tw, ty = y + 4;
-        RoundedUtils.drawRoundedRect(tx, ty, tw, th, th / 2, val ? (ACCENT & 0x00FFFFFF) | 0x44000000 : 0x33444455);
-        int ks = 16, kx = val ? tx + tw - ks - 2 : tx + 2;
-        RoundedUtils.drawRoundedRect(kx, ty + 2, ks, ks, ks / 2, val ? ACCENT : 0xFF666677);
+    private int drawToggle(
+            int x,
+            int y,
+            int width,
+            String label,
+            boolean value,
+            int mouseX,
+            int mouseY
+    ) {
+        boolean hovered = mouseX >= x
+                && mouseX < x + width
+                && mouseY >= y
+                && mouseY < y + TOGGLE_H;
+
+        mc.fontRendererObj.drawString(
+                label,
+                x,
+                y + 8,
+                hovered ? TEXT_ON : TEXT_DIM,
+                false
+        );
+
+        int toggleWidth = 40;
+        int toggleHeight = 20;
+        int toggleX = x + width - toggleWidth;
+        int toggleY = y + 4;
+
+        RoundedUtils.drawRoundedRect(
+                toggleX,
+                toggleY,
+                toggleWidth,
+                toggleHeight,
+                toggleHeight / 2,
+                value
+                        ? (ACCENT & 0x00FFFFFF) | 0x44000000
+                        : 0x33444455
+        );
+
+        int knobSize = 16;
+        int knobX = value
+                ? toggleX + toggleWidth - knobSize - 2
+                : toggleX + 2;
+
+        RoundedUtils.drawRoundedRect(
+                knobX,
+                toggleY + 2,
+                knobSize,
+                knobSize,
+                knobSize / 2,
+                value ? ACCENT : 0xFF666677
+        );
+
         return y + TOGGLE_H;
     }
 
-    private int dropdown(int x, int y, int w, String lbl, String[] opts, int sel, int mx, int my) {
-        mc.fontRendererObj.drawString(lbl, x, y, TEXT_DIM, false);
+    private int dropdown(
+            int x,
+            int y,
+            int width,
+            String label,
+            String[] options,
+            int selected,
+            int mouseX,
+            int mouseY
+    ) {
+        mc.fontRendererObj.drawString(label, x, y, TEXT_DIM, false);
         y += 12;
-        boolean hov = mx >= x && mx < x + w && my >= y && my < y + 24;
-        RoundedUtils.drawRoundedRect(x, y, w, 24, 4, hov ? 0x44FFFFFF : 0x22FFFFFF);
-        mc.fontRendererObj.drawString(opts[sel], x + 12, y + 8, TEXT_ON, false);
-        mc.fontRendererObj.drawString("v", x + w - 20, y + 8, TEXT_DIM, false);
+
+        boolean hovered = mouseX >= x
+                && mouseX < x + width
+                && mouseY >= y
+                && mouseY < y + 24;
+
+        RoundedUtils.drawRoundedRect(
+                x,
+                y,
+                width,
+                24,
+                4,
+                hovered ? 0x44FFFFFF : 0x22FFFFFF
+        );
+
+        mc.fontRendererObj.drawString(options[selected], x + 12, y + 8, TEXT_ON, false);
+        mc.fontRendererObj.drawString("v", x + width - 20, y + 8, TEXT_DIM, false);
+
         return y + 32;
     }
 
-    // ── Mouse ─────────────────────────────────────────────────────────────────
-
     @Override
-    protected void mouseClicked(int mx, int my, int btn) throws IOException {
+    protected void mouseClicked(int mouseX, int mouseY, int button) throws IOException {
         ScaledResolution sr = new ScaledResolution(mc);
-        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
-        int px = (sw - POPUP_W) / 2, py = (sh - POPUP_H) / 2;
+        int scaledWidth = sr.getScaledWidth();
+        int scaledHeight = sr.getScaledHeight();
 
-        int cx = px + POPUP_W - 28, cy = py + 10;
-        if (mx >= cx && mx < cx + 18 && my >= cy && my < cy + 18) { saveAndClose(); return; }
-        if (mx < px || mx > px + POPUP_W || my < py || my > py + POPUP_H) { saveAndClose(); return; }
+        int popupX = (scaledWidth - POPUP_W) / 2;
+        int popupY = (scaledHeight - POPUP_H) / 2;
 
-        int y  = py + 46 - scrollOffset + PAD;
-        int ix = px + PAD;
-        int iw = POPUP_W - PAD * 2;
+        int closeX = popupX + POPUP_W - 28;
+        int closeY = popupY + 10;
 
-        // Enabled toggle
-        if (hit(mx, my, ix, y, iw, TOGGLE_H)) { hudOverlay.setEnabled(!hudOverlay.isEnabled()); return; }
+        if (mouseX >= closeX
+                && mouseX < closeX + 18
+                && mouseY >= closeY
+                && mouseY < closeY + 18) {
+            saveAndClose();
+            return;
+        }
+
+        if (mouseX < popupX
+                || mouseX > popupX + POPUP_W
+                || mouseY < popupY
+                || mouseY > popupY + POPUP_H) {
+            saveAndClose();
+            return;
+        }
+
+        int y = popupY + 46 - scrollOffset + PAD;
+        int innerX = popupX + PAD;
+        int innerWidth = POPUP_W - PAD * 2;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setEnabled(!hudOverlay.isEnabled());
+            return;
+        }
+
         y += TOGGLE_H + 6 + 12 + 16;
 
-        // Position sliders
-        if (tryDrag(mx, my, ix, iw, y, S_POS_X, 1920)) return; y += SLIDER_H;
-        if (tryDrag(mx, my, ix, iw, y, S_POS_Y, 1080)) return; y += SLIDER_H;
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_POS_X, 1920)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_POS_Y, 1080)) return;
+        y += SLIDER_H;
+
         y += 6 + 12 + 16;
 
-        // Display sliders
-        if (tryDrag(mx, my, ix, iw, y, S_SCALE,  200)) return; y += SLIDER_H;
-        if (tryDrag(mx, my, ix, iw, y, S_MAX_P,   20)) return; y += SLIDER_H;
-        if (tryDrag(mx, my, ix, iw, y, S_BG_OP,  255)) return; y += SLIDER_H;
-        if (tryDrag(mx, my, ix, iw, y, S_BORDER, 255)) return; y += SLIDER_H;
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_SCALE, 200)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_MAX_P, 20)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_BG_OP, 255)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_BORDER, 255)) return;
+        y += SLIDER_H;
+
         y += 6 + 12 + 16 + 20;
 
-        // Column toggles
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowHeads(!hudOverlay.getShowHeads());         return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowStar(!hudOverlay.getShowStar());           return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowFkdr(!hudOverlay.getShowFkdr());           return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowWlr(!hudOverlay.getShowWlr());             return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowStreak(!hudOverlay.getShowStreak());       return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowUrchin(!hudOverlay.getShowUrchin());       return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowThreat(!hudOverlay.getShowThreat());       return; } y+=TOGGLE_H;
-        if (hit(mx,my,ix,y,iw,TOGGLE_H)){ hudOverlay.setShowTeamColor(!hudOverlay.getShowTeamColor()); return; } y+=TOGGLE_H+8+16+20;
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowHeads(!hudOverlay.getShowHeads());
+            return;
+        }
+        y += TOGGLE_H;
 
-        // Sort dropdown
-        if (hit(mx, my, ix, y + 12, iw, 24)) {
-            String m = hudOverlay.getSortMode();
-            hudOverlay.setSortMode(m.equals("threat") ? "fkdr" : m.equals("fkdr") ? "star" : m.equals("star") ? "name" : "threat");
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowStar(!hudOverlay.getShowStar());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowLevel(!hudOverlay.getShowLevel());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowFkdr(!hudOverlay.getShowFkdr());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowWlr(!hudOverlay.getShowWlr());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowStreak(!hudOverlay.getShowStreak());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowUrchin(!hudOverlay.getShowUrchin());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowThreat(!hudOverlay.getShowThreat());
+            return;
+        }
+        y += TOGGLE_H;
+
+        if (hit(mouseX, mouseY, innerX, y, innerWidth, TOGGLE_H)) {
+            hudOverlay.setShowTeamColor(!hudOverlay.getShowTeamColor());
+            return;
         }
 
-        super.mouseClicked(mx, my, btn);
+        y += TOGGLE_H + 8 + 16 + 20;
+
+        if (hit(mouseX, mouseY, innerX, y + 12, innerWidth, 24)) {
+            String mode = hudOverlay.getSortMode();
+
+            hudOverlay.setSortMode(
+                    mode.equals("threat")
+                            ? "fkdr"
+                            : mode.equals("fkdr")
+                                    ? "star"
+                                    : mode.equals("star")
+                                            ? "name"
+                                            : "threat"
+            );
+        }
+
+        super.mouseClicked(mouseX, mouseY, button);
     }
 
-    /** Returns true and starts dragging if the mouse is on this slider's bar. */
-    private boolean tryDrag(int mx, int my, int ix, int iw, int y, int id, int max) {
-        int bx = ix, bw = barW(iw, max);
-        // bar is at y+10, height 8
-        if (mx >= bx && mx <= bx + bw && my >= y + 10 && my < y + 18) {
-            applySlider(id, mx, bx, bw);
-            dragging  = true;
-            dragId    = id;
-            dragBarX  = bx;
-            dragBarW  = bw;
+    private boolean tryDrag(
+            int mouseX,
+            int mouseY,
+            int innerX,
+            int innerWidth,
+            int y,
+            int id,
+            int max
+    ) {
+        int barX = innerX;
+        int barWidth = barW(innerWidth, max);
+
+        if (mouseX >= barX
+                && mouseX <= barX + barWidth
+                && mouseY >= y + 10
+                && mouseY < y + 18) {
+            applySlider(id, mouseX, barX, barWidth);
+
+            dragging = true;
+            dragId = id;
+            dragBarX = barX;
+            dragBarW = barWidth;
+
             return true;
         }
+
         return false;
     }
 
-    private boolean hit(int mx, int my, int x, int y, int w, int h) {
-        return mx >= x && mx < x + w && my >= y && my < y + h;
+    private boolean hit(int mouseX, int mouseY, int x, int y, int width, int height) {
+        return mouseX >= x
+                && mouseX < x + width
+                && mouseY >= y
+                && mouseY < y + height;
     }
 
     @Override
-    protected void mouseReleased(int mx, int my, int state) {
-        dragging = false; dragId = -1;
-        super.mouseReleased(mx, my, state);
+    protected void mouseReleased(int mouseX, int mouseY, int state) {
+        dragging = false;
+        dragId = -1;
+
+        super.mouseReleased(mouseX, mouseY, state);
     }
 
     @Override
-    protected void mouseClickMove(int mx, int my, int btn, long t) {
-        if (dragging && dragId >= 0) applySlider(dragId, mx, dragBarX, dragBarW);
+    protected void mouseClickMove(
+            int mouseX,
+            int mouseY,
+            int button,
+            long timeSinceLastClick
+    ) {
+        if (dragging && dragId >= 0) {
+            applySlider(dragId, mouseX, dragBarX, dragBarW);
+        }
     }
 
     @Override
     public void handleMouseInput() throws IOException {
         super.handleMouseInput();
-        int dw = Mouse.getEventDWheel();
-        if (dw != 0) {
-            scrollOffset -= dw > 0 ? 20 : -20;
+
+        int scroll = Mouse.getEventDWheel();
+
+        if (scroll != 0) {
+            scrollOffset -= scroll > 0 ? 20 : -20;
             scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
         }
     }
 
     @Override
-    public boolean doesGuiPauseGame() { return false; }
+    public boolean doesGuiPauseGame() {
+        return false;
+    }
 
     private void saveAndClose() {
-        LobbyIntel li = (LobbyIntel) Myau.moduleManager.getModule("LobbyIntel");
-        if (li != null) li.saveHudSettings();
+        LobbyIntel lobbyIntel =
+                (LobbyIntel) Myau.moduleManager.getModule("LobbyIntel");
+
+        if (lobbyIntel != null) {
+            lobbyIntel.saveHudSettings();
+        }
+
         mc.displayGuiScreen(parent);
     }
 }
