@@ -12,9 +12,9 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
@@ -38,18 +38,17 @@ public class IntelManager {
     private static final String GHOST_URL =
             "https://ghost-intel-bot-production.up.railway.app/api/tags";
 
-    private final ExecutorService pool = Executors.newFixedThreadPool(6);
-    private volatile boolean fetching = false;
+    private static final long HYPIXEL_INTERVAL_MS = 600L;
 
+    private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-
-    // 100 requests/minute: leaves room below Hypixel's usual 120/minute limit.
-    private static final long HYPIXEL_INTERVAL_MS = 600L;
 
     private final Map<String, String> uuidCache = new HashMap<>();
     private final List<IntelPlayer> players = new ArrayList<>();
     private final List<IntelPlayer> manualPlayers = new ArrayList<>();
+
+    private volatile boolean fetching = false;
 
     private IntelGui gui;
     private IntelHudOverlay hudOverlay;
@@ -103,38 +102,66 @@ public class IntelManager {
 
         List<IntelPlayer> combined = combined();
 
-        if (gui != null) gui.setPlayers(combined);
-        if (hudOverlay != null) hudOverlay.setPlayers(combined);
+        if (gui != null) {
+            gui.setPlayers(combined);
+        }
+
+        if (hudOverlay != null) {
+            hudOverlay.setPlayers(combined);
+        }
 
         pool.submit(() -> {
             fetchAndCacheUuid(player.name);
 
             List<IntelPlayer> refreshed = combined();
 
-            if (gui != null) gui.setPlayers(refreshed);
-            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+            if (gui != null) {
+                gui.setPlayers(refreshed);
+            }
+
+            if (hudOverlay != null) {
+                hudOverlay.setPlayers(refreshed);
+            }
         });
 
         pool.submit(() -> {
             fetchUrchinBatch(java.util.Collections.singletonList(player));
             fetchHypixel(player);
-
             player.computeThreat();
 
             List<IntelPlayer> refreshed = combined();
 
-            if (gui != null) gui.setPlayers(refreshed);
-            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+            if (gui != null) {
+                gui.setPlayers(refreshed);
+            }
+
+            if (hudOverlay != null) {
+                hudOverlay.setPlayers(refreshed);
+            }
         });
     }
 
-    public void removeManualPlayer(String name) {
-        manualPlayers.removeIf(player -> player.name.equalsIgnoreCase(name));
+    /**
+     * Removes a player that was added by search or by the automatic /who scan.
+     *
+     * @return true when a matching manually-added player was removed
+     */
+    public boolean removeManualPlayer(String name) {
+        boolean removed = manualPlayers.removeIf(
+                player -> player.name.equalsIgnoreCase(name)
+        );
 
         List<IntelPlayer> combined = combined();
 
-        if (gui != null) gui.setPlayers(combined);
-        if (hudOverlay != null) hudOverlay.setPlayers(combined);
+        if (gui != null) {
+            gui.setPlayers(combined);
+        }
+
+        if (hudOverlay != null) {
+            hudOverlay.setPlayers(combined);
+        }
+
+        return removed;
     }
 
     public boolean isManual(IntelPlayer player) {
@@ -142,7 +169,7 @@ public class IntelManager {
     }
 
     private List<IntelPlayer> combined() {
-        List<IntelPlayer> all = new ArrayList<>(players);
+        List<IntelPlayer> result = new ArrayList<>(players);
 
         for (IntelPlayer manual : manualPlayers) {
             boolean alreadyPresent = false;
@@ -155,11 +182,11 @@ public class IntelManager {
             }
 
             if (!alreadyPresent) {
-                all.add(manual);
+                result.add(manual);
             }
         }
 
-        return all;
+        return result;
     }
 
     public void scanLobby() {
@@ -226,21 +253,31 @@ public class IntelManager {
 
             List<IntelPlayer> refreshed = new ArrayList<>(players);
 
-            if (gui != null) gui.setPlayers(refreshed);
-            if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+            if (gui != null) {
+                gui.setPlayers(refreshed);
+            }
+
+            if (hudOverlay != null) {
+                hudOverlay.setPlayers(refreshed);
+            }
         });
 
         for (IntelPlayer player : players) {
-            final IntelPlayer currentPlayer = player;
+            final IntelPlayer current = player;
 
             pool.submit(() -> {
-                fetchHypixel(currentPlayer);
-                currentPlayer.computeThreat();
+                fetchHypixel(current);
+                current.computeThreat();
 
                 List<IntelPlayer> refreshed = new ArrayList<>(players);
 
-                if (gui != null) gui.setPlayers(refreshed);
-                if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+                if (gui != null) {
+                    gui.setPlayers(refreshed);
+                }
+
+                if (hudOverlay != null) {
+                    hudOverlay.setPlayers(refreshed);
+                }
             });
         }
 
@@ -269,7 +306,10 @@ public class IntelManager {
     private String fetchAndCacheUuid(String name) {
         synchronized (uuidCache) {
             String cached = uuidCache.get(name);
-            if (cached != null) return cached;
+
+            if (cached != null) {
+                return cached;
+            }
         }
 
         try {
@@ -283,9 +323,9 @@ public class IntelManager {
                 JsonObject object = new JsonParser().parse(json).getAsJsonObject();
 
                 if (object.has("id")) {
-                    String raw = object.get("id").getAsString();
+                    String rawUuid = object.get("id").getAsString();
 
-                    String uuid = raw.replaceAll(
+                    String uuid = rawUuid.replaceAll(
                             "^(.{8})(.{4})(.{4})(.{4})(.{12})$",
                             "$1-$2-$3-$4-$5"
                     );
@@ -299,7 +339,7 @@ public class IntelManager {
                 }
             }
         } catch (Exception exception) {
-            dbg("[UUID] Mojang exception: " + exception.getMessage());
+            dbg("[UUID] Mojang error: " + exception.getMessage());
         }
 
         try {
@@ -332,7 +372,7 @@ public class IntelManager {
                 }
             }
         } catch (Exception exception) {
-            dbg("[UUID] playerdb exception: " + exception.getMessage());
+            dbg("[UUID] playerdb error: " + exception.getMessage());
         }
 
         dbg("[UUID] failed for: " + name);
@@ -373,11 +413,15 @@ public class IntelManager {
                     null
             );
 
-            if (json == null) return false;
+            if (json == null) {
+                return false;
+            }
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
 
-            if (root.has("error")) return false;
+            if (root.has("error")) {
+                return false;
+            }
 
             if (root.has("level")) {
                 player.level = (int) root.get("level").getAsDouble();
@@ -398,11 +442,9 @@ public class IntelManager {
                 return false;
             }
 
-            if (bedwars.has("level")) {
-                player.star = bedwars.get("level").getAsInt();
-            } else {
-                player.star = 0;
-            }
+            player.star = bedwars.has("level")
+                    ? bedwars.get("level").getAsInt()
+                    : 0;
 
             int finalKills = bwInt(bedwars, "final_kills_bedwars");
 
@@ -473,10 +515,10 @@ public class IntelManager {
             JsonObject profile = root.getAsJsonObject("player");
 
             if (profile.has("networkExp")) {
-                double exp = profile.get("networkExp").getAsDouble();
+                double networkExp = profile.get("networkExp").getAsDouble();
 
                 player.level = (int) (
-                        (Math.sqrt(exp + 15312.5) - 88.38) / 35.35
+                        (Math.sqrt(networkExp + 15312.5) - 88.38) / 35.35
                 );
             }
 
@@ -497,15 +539,12 @@ public class IntelManager {
                         ? profile.getAsJsonObject("achievements")
                         : null;
 
-                if (achievements != null && achievements.has("bedwars_level")) {
-                    player.star = achievements.get("bedwars_level").getAsInt();
-                } else {
-                    player.star = 0;
-                }
+                player.star = achievements != null && achievements.has("bedwars_level")
+                        ? achievements.get("bedwars_level").getAsInt()
+                        : 0;
             }
 
             if (bedwars == null) {
-                player.star = 0;
                 return false;
             }
 
@@ -535,12 +574,10 @@ public class IntelManager {
         return bedwars.has(key) ? bedwars.get(key).getAsInt() : 0;
     }
 
-    /**
-     * Uses Coral's Cubelify endpoint. Set a Coral key with:
-     * .coralkey <key>
-     */
     private void fetchUrchinBatch(List<IntelPlayer> batch) {
-        if (batch.isEmpty() || urchinApiKey.isEmpty()) return;
+        if (batch.isEmpty() || urchinApiKey.isEmpty()) {
+            return;
+        }
 
         try {
             for (IntelPlayer player : batch) {
@@ -600,12 +637,10 @@ public class IntelManager {
         }
     }
 
-    private void fetchUrchin(IntelPlayer player) {
-        fetchUrchinBatch(java.util.Collections.singletonList(player));
-    }
-
     private void fetchGhostBatch(List<IntelPlayer> batch) {
-        if (batch.isEmpty() || ghostApiKey.isEmpty()) return;
+        if (batch.isEmpty() || ghostApiKey.isEmpty()) {
+            return;
+        }
 
         for (IntelPlayer player : batch) {
             try {
@@ -736,19 +771,16 @@ public class IntelManager {
         return result.toString();
     }
 
-    /**
-     * Converts Hypixel BedWars Experience into an exact star level.
-     *
-     * The first five levels cost 500, 1,000, 2,000, 3,500 and 5,000 XP.
-     * Every remaining level costs 5,000 XP. One prestige is 487,000 XP.
-     */
     private static int getBedWarsLevelFromExp(int experience) {
         if (experience <= 0) {
             return 0;
         }
 
-        int level = (experience / 487000) * 100;
-        int remaining = experience % 487000;
+        // 500 + 1,000 + 2,000 + 3,500 + ninety-six 5,000-XP levels.
+        final int prestigeExperience = 487000;
+
+        int level = (experience / prestigeExperience) * 100;
+        int remaining = experience % prestigeExperience;
 
         int[] earlyLevelCosts = {500, 1000, 2000, 3500, 5000};
 
@@ -761,7 +793,7 @@ public class IntelManager {
             level++;
         }
 
-        return level + (remaining / 5000);
+        return level + remaining / 5000;
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
