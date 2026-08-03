@@ -477,7 +477,8 @@ public class IntelManager {
     /**
      * Fetches a single player's Bedwars stats without touching the lobby
      * player list, GUI, or HUD — used by commands like .bw that just want
-     * a one-off lookup.
+     * a one-off lookup. Also pulls the Coral cheater tag if a Coral key
+     * is configured, so the tag can be shown alongside the stats.
      */
     public IntelPlayer fetchStandaloneStats(String name) {
         IntelPlayer player = new IntelPlayer(name, null);
@@ -487,6 +488,14 @@ public class IntelManager {
         } catch (Exception exception) {
             player.loading = false;
             dbg("[Intel] standalone stats fetch failed for " + name
+                    + ": " + exception);
+        }
+
+        try {
+            fetchUrchinBatch(java.util.Collections.singletonList(player));
+            player.computeThreat();
+        } catch (Exception exception) {
+            dbg("[Intel] standalone Coral fetch failed for " + name
                     + ": " + exception);
         }
 
@@ -731,9 +740,9 @@ public class IntelManager {
 
                 JsonObject tag = tags.get(0).getAsJsonObject();
 
-                String type = tag.has("icon") && !tag.get("icon").isJsonNull()
+                String icon = tag.has("icon") && !tag.get("icon").isJsonNull()
                         ? tag.get("icon").getAsString()
-                        : "tagged";
+                        : "";
 
                 String reason = tag.has("tooltip") && !tag.get("tooltip").isJsonNull()
                         ? tag.get("tooltip").getAsString()
@@ -741,11 +750,30 @@ public class IntelManager {
 
                 String text = tag.has("text") && !tag.get("text").isJsonNull()
                         ? tag.get("text").getAsString()
-                        : type;
+                        : (reason.isEmpty() ? icon : reason);
+
+                // The Cubelify "icon" field is a Material Design icon id
+                // (e.g. "mdi-account-alert"), NOT a classification string —
+                // the actual human-readable severity lives in tooltip/text.
+                // Classify against all three so keyword matching (closet /
+                // confirmed / blatant / sniper) actually has something to match.
+                String classifyBasis = (icon + " " + text + " " + reason).toLowerCase();
+
+                boolean positiveTag = classifyBasis.contains("verified")
+                        || classifyBasis.contains("clean")
+                        || classifyBasis.contains("trusted")
+                        || (classifyBasis.contains("legit") && !classifyBasis.contains("legitscaf"));
+
+                if (positiveTag) {
+                    // Not a cheat flag — e.g. a "Verified" clean-record tag.
+                    player.cheater = false;
+                    continue;
+                }
 
                 player.cheater = true;
-                player.urchinTag = text + (reason.isEmpty() ? "" : " — " + reason);
-                player.urchinType = type.toLowerCase();
+                player.urchinTag = text + (reason.isEmpty() || reason.equalsIgnoreCase(text)
+                        ? "" : " — " + reason);
+                player.urchinType = classifyBasis;
                 player.urchinReason = reason.toLowerCase();
                 player.computeThreat();
             }
