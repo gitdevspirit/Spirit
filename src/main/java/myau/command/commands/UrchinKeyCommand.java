@@ -30,6 +30,7 @@ public class UrchinKeyCommand extends Command {
         }
 
         IntelManager.urchinApiKey = args[0].trim();
-        reply("&aCoral API key set.");
+        IntelManager.getInstance().saveUrchinKeyToFile();
+        reply("&aCoral API key set and saved.");
     }
 }
