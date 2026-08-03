@@ -292,25 +292,8 @@ public class IntelGui extends GuiScreen {
 
         // Urchin tag badge below level with icon - using letter codes
         if (p.urchinTag != null) {
-            // Get icon based on type - letter codes
-            String icon = "C"; // default closet
-            int iconColor = 0xFFFF8844; // orange
-            
-            if (p.urchinType != null) {
-                if (p.urchinType.contains("closet")) {
-                    icon = "C";   // C for closet
-                    iconColor = 0xFFFF8844;
-                } else if (p.urchinType.contains("confirmed")) {
-                    icon = "CC";  // CC for confirmed
-                    iconColor = 0xFFDD44DD;
-                } else if (p.urchinType.contains("blatant")) {
-                    icon = "BC";  // BC for blatant
-                    iconColor = 0xFFFF3344;
-                } else if (p.urchinType.contains("sniper")) {
-                    icon = "S";   // S for sniper
-                    iconColor = 0xFFFF1122;
-                }
-            }
+            String icon = p.getTagBadge();
+            int iconColor = p.getTagColor();
             
             // Truncate long tag for card display
             String tag = p.urchinTag;
