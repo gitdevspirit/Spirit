@@ -22,6 +22,18 @@ import java.util.concurrent.atomic.AtomicLong;
 
 public class IntelManager {
 
+    public static final List<String> debugLog = new ArrayList<>();
+
+    public static void dbg(String message) {
+        synchronized (debugLog) {
+            debugLog.add(message);
+
+            if (debugLog.size() > 200) {
+                debugLog.remove(0);
+            }
+        }
+    }
+
     private static final IntelManager INSTANCE = new IntelManager();
 
     public static IntelManager getInstance() {
@@ -54,6 +66,45 @@ public class IntelManager {
     private IntelHudOverlay hudOverlay;
 
     private IntelManager() {
+        loadUrchinKeyFromFile();
+    }
+
+    public void saveUrchinKeyToFile() {
+        try {
+            File dir = new File("./config/Myau/");
+            dir.mkdirs();
+
+            File keyFile = new File(dir, "coral-key.txt");
+
+            if (urchinApiKey.isEmpty()) {
+                keyFile.delete();
+                return;
+            }
+
+            try (PrintWriter writer = new PrintWriter(new FileWriter(keyFile))) {
+                writer.println(urchinApiKey);
+            }
+        } catch (Exception exception) {
+            dbg("[Intel] failed to save Coral key: " + exception);
+        }
+    }
+
+    private void loadUrchinKeyFromFile() {
+        try {
+            File keyFile = new File("./config/Myau/coral-key.txt");
+            if (!keyFile.exists()) return;
+
+            try (BufferedReader reader = new BufferedReader(new FileReader(keyFile))) {
+                String key = reader.readLine();
+
+                if (key != null && !key.trim().isEmpty()) {
+                    urchinApiKey = key.trim();
+                    dbg("[Intel] Loaded Coral key from file");
+                }
+            }
+        } catch (Exception exception) {
+            dbg("[Intel] failed to load Coral key: " + exception);
+        }
     }
 
     public boolean isFetching() {
@@ -133,32 +184,43 @@ public class IntelManager {
         }
 
         pool.submit(() -> {
-            fetchAndCacheUuid(player.name);
+            try {
+                fetchAndCacheUuid(player.name);
+            } catch (Exception exception) {
+                dbg("[Intel] UUID fetch failed for " + player.name
+                        + ": " + exception);
+            } finally {
+                List<IntelPlayer> refreshed = combined();
 
-            List<IntelPlayer> refreshed = combined();
+                if (gui != null) {
+                    gui.setPlayers(refreshed);
+                }
 
-            if (gui != null) {
-                gui.setPlayers(refreshed);
-            }
-
-            if (hudOverlay != null) {
-                hudOverlay.setPlayers(refreshed);
+                if (hudOverlay != null) {
+                    hudOverlay.setPlayers(refreshed);
+                }
             }
         });
 
         pool.submit(() -> {
-            fetchUrchinBatch(java.util.Collections.singletonList(player));
-            fetchHypixel(player);
-            player.computeThreat();
+            try {
+                fetchUrchinBatch(java.util.Collections.singletonList(player));
+                fetchHypixel(player);
+                player.computeThreat();
+            } catch (Exception exception) {
+                player.loading = false;
+                dbg("[Intel] add-player fetch failed for " + player.name
+                        + ": " + exception);
+            } finally {
+                List<IntelPlayer> refreshed = combined();
 
-            List<IntelPlayer> refreshed = combined();
+                if (gui != null) {
+                    gui.setPlayers(refreshed);
+                }
 
-            if (gui != null) {
-                gui.setPlayers(refreshed);
-            }
-
-            if (hudOverlay != null) {
-                hudOverlay.setPlayers(refreshed);
+                if (hudOverlay != null) {
+                    hudOverlay.setPlayers(refreshed);
+                }
             }
         });
     }
@@ -265,33 +327,18 @@ public class IntelManager {
         final List<IntelPlayer> batch = new ArrayList<>(players);
 
         pool.submit(() -> {
-            fetchUrchinBatch(batch);
-            fetchGhostBatch(batch);
+            try {
+                fetchUrchinBatch(batch);
+                fetchGhostBatch(batch);
 
-            for (IntelPlayer player : batch) {
-                if (player.cheater || player.ghostTagged) {
-                    notifyCheater(player);
+                for (IntelPlayer player : batch) {
+                    if (player.cheater || player.ghostTagged) {
+                        notifyCheater(player);
+                    }
                 }
-            }
-
-            List<IntelPlayer> refreshed = new ArrayList<>(players);
-
-            if (gui != null) {
-                gui.setPlayers(refreshed);
-            }
-
-            if (hudOverlay != null) {
-                hudOverlay.setPlayers(refreshed);
-            }
-        });
-
-        for (IntelPlayer player : players) {
-            final IntelPlayer current = player;
-
-            pool.submit(() -> {
-                fetchHypixel(current);
-                current.computeThreat();
-
+            } catch (Exception exception) {
+                dbg("[Intel] tag batch failed: " + exception);
+            } finally {
                 List<IntelPlayer> refreshed = new ArrayList<>(players);
 
                 if (gui != null) {
@@ -300,6 +347,31 @@ public class IntelManager {
 
                 if (hudOverlay != null) {
                     hudOverlay.setPlayers(refreshed);
+                }
+            }
+        });
+
+        for (IntelPlayer player : players) {
+            final IntelPlayer current = player;
+
+            pool.submit(() -> {
+                try {
+                    fetchHypixel(current);
+                    current.computeThreat();
+                } catch (Exception exception) {
+                    current.loading = false;
+                    dbg("[Intel] stats fetch failed for " + current.name
+                            + ": " + exception);
+                } finally {
+                    List<IntelPlayer> refreshed = new ArrayList<>(players);
+
+                    if (gui != null) {
+                        gui.setPlayers(refreshed);
+                    }
+
+                    if (hudOverlay != null) {
+                        hudOverlay.setPlayers(refreshed);
+                    }
                 }
             });
         }
@@ -400,18 +472,6 @@ public class IntelManager {
 
         dbg("[UUID] failed for: " + name);
         return null;
-    }
-
-    public static final List<String> debugLog = new ArrayList<>();
-
-    public static void dbg(String message) {
-        synchronized (debugLog) {
-            debugLog.add(message);
-
-            if (debugLog.size() > 200) {
-                debugLog.remove(0);
-            }
-        }
     }
 
     private void fetchHypixel(IntelPlayer player) {
