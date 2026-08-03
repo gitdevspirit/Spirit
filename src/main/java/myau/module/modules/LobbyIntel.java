@@ -41,6 +41,34 @@ public class LobbyIntel extends Module {
     public final KeybindSetting hudKeybind =
             register(new KeybindSetting("HUD Toggle Key", Keyboard.KEY_H));
 
+    // .bw command — which fields to include in the chat output
+    public final BooleanSetting bwShowStar =
+            register(new BooleanSetting("BW: Show Star", true));
+    public final BooleanSetting bwShowFkdr =
+            register(new BooleanSetting("BW: Show FKDR", true));
+    public final BooleanSetting bwShowWlr =
+            register(new BooleanSetting("BW: Show WLR", true));
+    public final BooleanSetting bwShowBblr =
+            register(new BooleanSetting("BW: Show BBLR", true));
+    public final BooleanSetting bwShowFinalKills =
+            register(new BooleanSetting("BW: Show Final Kills", true));
+    public final BooleanSetting bwShowFinalDeaths =
+            register(new BooleanSetting("BW: Show Final Deaths", false));
+    public final BooleanSetting bwShowKills =
+            register(new BooleanSetting("BW: Show Kills", false));
+    public final BooleanSetting bwShowDeaths =
+            register(new BooleanSetting("BW: Show Deaths", false));
+    public final BooleanSetting bwShowBedsBroken =
+            register(new BooleanSetting("BW: Show Beds Broken", true));
+    public final BooleanSetting bwShowBedsLost =
+            register(new BooleanSetting("BW: Show Beds Lost", false));
+    public final BooleanSetting bwShowWinstreak =
+            register(new BooleanSetting("BW: Show Winstreak", true));
+    public final BooleanSetting bwShowWins =
+            register(new BooleanSetting("BW: Show Wins", false));
+    public final BooleanSetting bwShowLosses =
+            register(new BooleanSetting("BW: Show Losses", false));
+
     public final BooleanProperty hudEnabled = new BooleanProperty("hud-enabled", true);
     public final IntProperty hudPosX = new IntProperty("hud-x", 10, 0, 3840);
     public final IntProperty hudPosY = new IntProperty("hud-y", 100, 0, 2160);
