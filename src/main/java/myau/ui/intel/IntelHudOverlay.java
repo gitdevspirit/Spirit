@@ -468,25 +468,9 @@ public class IntelHudOverlay {
             String displayText = "";
             int displayColor = TEXT_DIM;
 
-            if (player.cheater && player.urchinType != null) {
-                String type = player.urchinType.toLowerCase();
-
-                if (type.contains("closet")) {
-                    displayText = "C";
-                    displayColor = 0xFFFF8844;
-                } else if (type.contains("confirmed")) {
-                    displayText = "CC";
-                    displayColor = 0xFFDD44DD;
-                } else if (type.contains("blatant")) {
-                    displayText = "BC";
-                    displayColor = 0xFFFF3344;
-                } else if (type.contains("sniper")) {
-                    displayText = "S";
-                    displayColor = 0xFFFF1122;
-                } else {
-                    displayText = "C";
-                    displayColor = 0xFFFFAA44;
-                }
+            if (player.cheater) {
+                displayText = player.getTagBadge();
+                displayColor = player.getTagColor();
             }
 
             if (player.ghostTagged && player.ghostType != null) {
