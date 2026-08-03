@@ -15,8 +15,13 @@ public class IntelPlayer {
     public double wlr         = 0;
     public int    winstreak   = 0;
     public int    finalKills  = 0;
+    public int    finalDeaths = 0;
     public int    bedsBroken  = 0;
+    public int    bedsLost    = 0;
+    public int    kills       = 0;
+    public int    deaths      = 0;
     public int    wins        = 0;
+    public int    losses      = 0;
     public boolean isNicked   = false;
 
     // Coral / Urchin
