@@ -90,7 +90,29 @@ public class IntelManager {
         return null;
     }
 
+    /** Hypixel NPC profiles use a version-2 UUID; name/display checks cover
+     * servers that expose an NPC without that UUID convention. */
+    public static boolean isNpc(NetworkPlayerInfo info) {
+        if (info == null || info.getGameProfile() == null) return true;
+        String name = info.getGameProfile().getName();
+        if (name == null || name.isEmpty() || name.equalsIgnoreCase("NPC") || name.startsWith("!")) return true;
+
+        java.util.UUID uuid = info.getGameProfile().getId();
+        if (uuid != null && uuid.version() == 2) return true;
+
+        if (info.getDisplayName() != null) {
+            String displayed = info.getDisplayName().getUnformattedText();
+            if (displayed != null && displayed.toLowerCase(java.util.Locale.ROOT).contains("[npc]")) return true;
+        }
+        return false;
+    }
+
     public void addManualPlayer(String name) {
+        Minecraft minecraft = Minecraft.getMinecraft();
+        NetworkPlayerInfo info = minecraft.getNetHandler() == null
+                ? null : minecraft.getNetHandler().getPlayerInfo(name);
+        if (info != null && isNpc(info)) return;
+
         for (IntelPlayer player : manualPlayers) {
             if (player.name.equalsIgnoreCase(name)) {
                 return;
@@ -203,7 +225,7 @@ public class IntelManager {
         for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
             String name = info.getGameProfile().getName();
 
-            if (name == null || name.isEmpty() || name.startsWith("!")) {
+            if (isNpc(info)) {
                 continue;
             }
 
@@ -220,6 +242,7 @@ public class IntelManager {
 
         if (gui != null) {
             for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
+                if (isNpc(info)) continue;
                 String name = info.getGameProfile().getName();
                 net.minecraft.util.ResourceLocation skin = info.getLocationSkin();
 
