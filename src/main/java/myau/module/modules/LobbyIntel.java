@@ -56,9 +56,9 @@ public class LobbyIntel extends Module {
     public final BooleanProperty hudShowFkdr =
             new BooleanProperty("hud-show-fkdr", true);
     public final BooleanProperty hudShowWlr =
-            new BooleanProperty("hud-show-wlr", false);
+            new BooleanProperty("hud-show-wlr", true);
     public final BooleanProperty hudShowStreak =
-            new BooleanProperty("hud-show-streak", false);
+            new BooleanProperty("hud-show-streak", true);
     public final BooleanProperty hudShowThreat =
             new BooleanProperty("hud-show-threat", true);
     public final BooleanProperty hudShowUrchin =
@@ -318,13 +318,21 @@ public class LobbyIntel extends Module {
                 && message.contains("The game starts in 10 seconds")) {
 
             scannedThisSession = true;
-            IntelManager.dbg("[Intel] BedWars game start detected — scanning lobby");
+            IntelManager.dbg("[Intel] BedWars countdown detected — scanning lobby and requesting /who.");
 
             mc.addScheduledTask(() -> {
-                if (autoKey.getValue()) tryAutoDetectKey();
+                if (autoKey.getValue()) {
+                    tryAutoDetectKey();
+                }
 
                 IntelManager.getInstance().clearAll();
                 IntelManager.getInstance().scanLobby();
+
+                // Sends /who automatically. Its ONLINE: response below provides
+                // the actual player names, including players hidden in the tab list.
+                if (mc.thePlayer != null) {
+                    mc.thePlayer.sendChatMessage("/who");
+                }
             });
         }
 
@@ -369,9 +377,9 @@ public class LobbyIntel extends Module {
                 }
 
                 ChatUtil.sendFormatted(
-                        "&7[Intel] &aReplaced player list with "
+                        "&7[Intel] &aLoaded "
                                 + realNames.size()
-                                + " real players from /who"
+                                + " players from /who."
                 );
 
                 IntelManager.dbg("[Intel] /who replaced list: " + realNames);
