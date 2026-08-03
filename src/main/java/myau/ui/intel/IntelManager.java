@@ -13,96 +13,152 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.UUID;
 
 public class IntelManager {
 
     private static final IntelManager INSTANCE = new IntelManager();
-    public static IntelManager getInstance() { return INSTANCE; }
+
+    public static IntelManager getInstance() {
+        return INSTANCE;
+    }
 
     public static String hypixelApiKey = "";
-    public static String urchinApiKey  = "68DE_lQ0UprVJX8q5k7TIeeZV938J2EfDAF08Q_07s0";
-    public static String ghostApiKey   = "ownerspirit365"; // Ghost Intel API key (optional for now)
+    public static String urchinApiKey = "";
+    public static String ghostApiKey = "";
 
-    private static final String URCHIN_URL = "https://urchin.ws/player";
-    private static final String GHOST_URL  = "https://ghost-intel-bot-production.up.railway.app/api/tags";
+    private static final String CORAL_CUBELIFY_URL =
+            "https://api.urchin.gg/v3/cubelify";
+
+    private static final String GHOST_URL =
+            "https://ghost-intel-bot-production.up.railway.app/api/tags";
 
     private final ExecutorService pool = Executors.newFixedThreadPool(6);
     private volatile boolean fetching = false;
 
-    // Hypixel rate limiter: Use 200ms delay (was working before)
-    // This gives us 5 req/sec = 300 req/min which Hypixel tolerates with bursts
     private final Semaphore hypixelSlots = new Semaphore(1);
     private final AtomicLong lastHypixelRequest = new AtomicLong(0);
-    private static final long HYPIXEL_INTERVAL_MS = 200L; // 200ms like before - was working!
 
-    // UUID cache for skin lookups of non-lobby players
+    // 100 requests/minute: leaves room below Hypixel's usual 120/minute limit.
+    private static final long HYPIXEL_INTERVAL_MS = 600L;
+
     private final Map<String, String> uuidCache = new HashMap<>();
-
     private final List<IntelPlayer> players = new ArrayList<>();
     private final List<IntelPlayer> manualPlayers = new ArrayList<>();
+
     private IntelGui gui;
     private IntelHudOverlay hudOverlay;
 
-    private IntelManager() {}
+    private IntelManager() {
+    }
 
-    public boolean isFetching() { return fetching; }
-    public void setGui(IntelGui gui) { this.gui = gui; }
-    public void setHudOverlay(IntelHudOverlay hud) { this.hudOverlay = hud; }
-    public List<IntelPlayer> getPlayers() { return players; }
+    public boolean isFetching() {
+        return fetching;
+    }
 
-    /** Add a player by name manually (search bar). Fetches stats async. */
-    public void addManualPlayer(String name) {
-        for (IntelPlayer p : manualPlayers) {
-            if (p.name.equalsIgnoreCase(name)) return; // already added
+    public void setGui(IntelGui gui) {
+        this.gui = gui;
+    }
+
+    public void setHudOverlay(IntelHudOverlay hud) {
+        this.hudOverlay = hud;
+    }
+
+    public List<IntelPlayer> getPlayers() {
+        return players;
+    }
+
+    public IntelPlayer getPlayer(String name) {
+        if (name == null) return null;
+
+        for (IntelPlayer player : new ArrayList<>(players)) {
+            if (name.equalsIgnoreCase(player.name)) {
+                return player;
+            }
         }
-        IntelPlayer p = new IntelPlayer(name, null);
-        manualPlayers.add(p);
+
+        for (IntelPlayer player : new ArrayList<>(manualPlayers)) {
+            if (name.equalsIgnoreCase(player.name)) {
+                return player;
+            }
+        }
+
+        return null;
+    }
+
+    public void addManualPlayer(String name) {
+        for (IntelPlayer player : manualPlayers) {
+            if (player.name.equalsIgnoreCase(name)) {
+                return;
+            }
+        }
+
+        IntelPlayer player = new IntelPlayer(name, null);
+        manualPlayers.add(player);
+
         List<IntelPlayer> combined = combined();
+
         if (gui != null) gui.setPlayers(combined);
         if (hudOverlay != null) hudOverlay.setPlayers(combined);
-        
-        // Fetch UUID immediately so skin can start downloading before Hypixel finishes
+
         pool.submit(() -> {
-            fetchAndCacheUuid(p.name); // caches UUID → triggers face download on next GUI render
+            fetchAndCacheUuid(player.name);
+
             List<IntelPlayer> refreshed = combined();
-            if (gui != null) gui.setPlayers(refreshed); // refresh so drawPlayerHead sees the UUID
+
+            if (gui != null) gui.setPlayers(refreshed);
             if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
-        // Fetch full stats in parallel
+
         pool.submit(() -> {
-            fetchUrchinBatch(java.util.Collections.singletonList(p));
-            fetchHypixel(p); // reuses cached UUID
-            p.computeThreat();
+            fetchUrchinBatch(java.util.Collections.singletonList(player));
+            fetchHypixel(player);
+
+            player.computeThreat();
+
             List<IntelPlayer> refreshed = combined();
+
             if (gui != null) gui.setPlayers(refreshed);
             if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
     }
 
     public void removeManualPlayer(String name) {
-        manualPlayers.removeIf(p -> p.name.equalsIgnoreCase(name));
+        manualPlayers.removeIf(player -> player.name.equalsIgnoreCase(name));
+
         List<IntelPlayer> combined = combined();
+
         if (gui != null) gui.setPlayers(combined);
         if (hudOverlay != null) hudOverlay.setPlayers(combined);
     }
 
-    public boolean isManual(IntelPlayer p) { return manualPlayers.contains(p); }
+    public boolean isManual(IntelPlayer player) {
+        return manualPlayers.contains(player);
+    }
 
     private List<IntelPlayer> combined() {
         List<IntelPlayer> all = new ArrayList<>(players);
-        for (IntelPlayer m : manualPlayers) {
-            boolean already = false;
-            for (IntelPlayer p : players) { if (p.name.equalsIgnoreCase(m.name)) { already = true; break; } }
-            if (!already) all.add(m);
+
+        for (IntelPlayer manual : manualPlayers) {
+            boolean alreadyPresent = false;
+
+            for (IntelPlayer player : players) {
+                if (player.name.equalsIgnoreCase(manual.name)) {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+
+            if (!alreadyPresent) {
+                all.add(manual);
+            }
         }
+
         return all;
     }
 
@@ -110,55 +166,79 @@ public class IntelManager {
         players.clear();
         fetching = true;
 
-        Minecraft mc = Minecraft.getMinecraft();
-        if (mc.getNetHandler() == null) { fetching = false; return; }
+        Minecraft minecraft = Minecraft.getMinecraft();
 
-        for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
-            String name = info.getGameProfile().getName();
-            if (name == null || name.isEmpty() || name.startsWith("!")) continue;
-            players.add(new IntelPlayer(name, detectTeam(info)));
-            // Pre-cache UUID from tab list — avoids a Mojang API call per player later
-            java.util.UUID uid = info.getGameProfile().getId();
-            if (uid != null) {
-                synchronized (uuidCache) { uuidCache.put(name, uid.toString()); }
-            }
+        if (minecraft.getNetHandler() == null) {
+            fetching = false;
+            return;
         }
 
-        // Pre-populate skin ResourceLocations from tab list so they show instantly
-        if (gui != null) {
-            for (NetworkPlayerInfo info : mc.getNetHandler().getPlayerInfoMap()) {
-                String n = info.getGameProfile().getName();
-                net.minecraft.util.ResourceLocation loc = info.getLocationSkin();
-                if (n != null && loc != null) {
-                    gui.cacheLobbyPlayerSkin(n, loc);
-                    if (hudOverlay != null) hudOverlay.cacheSkin(n, loc, true);
+        for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
+            String name = info.getGameProfile().getName();
+
+            if (name == null || name.isEmpty() || name.startsWith("!")) {
+                continue;
+            }
+
+            players.add(new IntelPlayer(name, detectTeam(info)));
+
+            java.util.UUID uuid = info.getGameProfile().getId();
+
+            if (uuid != null) {
+                synchronized (uuidCache) {
+                    uuidCache.put(name, uuid.toString());
                 }
             }
+        }
+
+        if (gui != null) {
+            for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
+                String name = info.getGameProfile().getName();
+                net.minecraft.util.ResourceLocation skin = info.getLocationSkin();
+
+                if (name != null && skin != null) {
+                    gui.cacheLobbyPlayerSkin(name, skin);
+
+                    if (hudOverlay != null) {
+                        hudOverlay.cacheSkin(name, skin, true);
+                    }
+                }
+            }
+
             gui.setPlayers(new ArrayList<>(players));
         }
-        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>(players));
 
-        // Fetch Urchin and Ghost Intel for all players
-        final List<IntelPlayer> batchRef = new ArrayList<>(players);
+        if (hudOverlay != null) {
+            hudOverlay.setPlayers(new ArrayList<>(players));
+        }
+
+        final List<IntelPlayer> batch = new ArrayList<>(players);
+
         pool.submit(() -> {
-            fetchUrchinBatch(batchRef);
-            fetchGhostBatch(batchRef);  // Fetch Ghost Intel tags
-            // Notify any cheaters found
-            for (IntelPlayer p : batchRef) {
-                if (p.cheater || p.ghostTagged) notifyCheater(p);
+            fetchUrchinBatch(batch);
+            fetchGhostBatch(batch);
+
+            for (IntelPlayer player : batch) {
+                if (player.cheater || player.ghostTagged) {
+                    notifyCheater(player);
+                }
             }
+
             List<IntelPlayer> refreshed = new ArrayList<>(players);
+
             if (gui != null) gui.setPlayers(refreshed);
             if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
         });
 
-        // Fetch Hypixel per player
-        for (IntelPlayer p : players) {
-            final IntelPlayer fp = p;
+        for (IntelPlayer player : players) {
+            final IntelPlayer currentPlayer = player;
+
             pool.submit(() -> {
-                fetchHypixel(fp);
-                fp.computeThreat();
+                fetchHypixel(currentPlayer);
+                currentPlayer.computeThreat();
+
                 List<IntelPlayer> refreshed = new ArrayList<>(players);
+
                 if (gui != null) gui.setPlayers(refreshed);
                 if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
             });
@@ -167,484 +247,540 @@ public class IntelManager {
         fetching = false;
     }
 
-    public void refresh() { scanLobby(); }
+    public void refresh() {
+        scanLobby();
+    }
 
     public void clearAll() {
         players.clear();
-        if (gui != null) gui.setPlayers(new ArrayList<>());
-        if (hudOverlay != null) hudOverlay.setPlayers(new ArrayList<>());
+
+        if (gui != null) {
+            gui.setPlayers(new ArrayList<>());
+        }
+
+        if (hudOverlay != null) {
+            hudOverlay.setPlayers(new ArrayList<>());
+        }
     }
 
     public void resetInvalidKeyFlag() {
-        // Reset any invalid key flags - for future use
     }
 
-    // ── Hypixel ───────────────────────────────────────────────────────────────
-
-    /** Fetches UUID from Mojang (with playerdb.co fallback) and caches it. */
     private String fetchAndCacheUuid(String name) {
-        synchronized (uuidCache) { String cached = uuidCache.get(name); if (cached != null) return cached; }
-        // Try Mojang first
+        synchronized (uuidCache) {
+            String cached = uuidCache.get(name);
+            if (cached != null) return cached;
+        }
+
         try {
-            String json = get("https://api.mojang.com/users/profiles/minecraft/" + name, null, null);
+            String json = get(
+                    "https://api.mojang.com/users/profiles/minecraft/" + name,
+                    null,
+                    null
+            );
+
             if (json != null) {
-                JsonObject obj = new JsonParser().parse(json).getAsJsonObject();
-                if (obj.has("id")) {
-                    String raw  = obj.get("id").getAsString();
-                    String uuid = raw.replaceAll("^(.{8})(.{4})(.{4})(.{4})(.{12})$", "$1-$2-$3-$4-$5");
-                    synchronized (uuidCache) { uuidCache.put(name, uuid); }
+                JsonObject object = new JsonParser().parse(json).getAsJsonObject();
+
+                if (object.has("id")) {
+                    String raw = object.get("id").getAsString();
+
+                    String uuid = raw.replaceAll(
+                            "^(.{8})(.{4})(.{4})(.{4})(.{12})$",
+                            "$1-$2-$3-$4-$5"
+                    );
+
+                    synchronized (uuidCache) {
+                        uuidCache.put(name, uuid);
+                    }
+
                     dbg("[UUID] Mojang OK: " + uuid);
                     return uuid;
                 }
             }
-        } catch (Exception e) { dbg("[UUID] Mojang ex: " + e.getMessage()); }
-        // Fallback: playerdb.co
+        } catch (Exception exception) {
+            dbg("[UUID] Mojang exception: " + exception.getMessage());
+        }
+
         try {
-            String json = get("https://playerdb.co/api/player/minecraft/" + name, null, null);
+            String json = get(
+                    "https://playerdb.co/api/player/minecraft/" + name,
+                    null,
+                    null
+            );
+
             if (json != null) {
-                JsonObject obj = new JsonParser().parse(json).getAsJsonObject();
-                if (obj.has("data")) {
-                    JsonObject data = obj.getAsJsonObject("data");
+                JsonObject object = new JsonParser().parse(json).getAsJsonObject();
+
+                if (object.has("data")) {
+                    JsonObject data = object.getAsJsonObject("data");
+
                     if (data.has("player")) {
                         JsonObject player = data.getAsJsonObject("player");
+
                         if (player.has("id")) {
-                            String uuid = player.get("id").getAsString(); // already has dashes
-                            synchronized (uuidCache) { uuidCache.put(name, uuid); }
+                            String uuid = player.get("id").getAsString();
+
+                            synchronized (uuidCache) {
+                                uuidCache.put(name, uuid);
+                            }
+
                             dbg("[UUID] playerdb OK: " + uuid);
                             return uuid;
                         }
                     }
                 }
             }
-        } catch (Exception e) { dbg("[UUID] playerdb ex: " + e.getMessage()); }
+        } catch (Exception exception) {
+            dbg("[UUID] playerdb exception: " + exception.getMessage());
+        }
+
         dbg("[UUID] failed for: " + name);
         return null;
     }
 
-    // ── Debug log ─────────────────────────────────────────────────────────────
-    public static final java.util.List<String> debugLog = new java.util.ArrayList<>();
-    public static void dbg(String msg) {
+    public static final List<String> debugLog = new ArrayList<>();
+
+    public static void dbg(String message) {
         synchronized (debugLog) {
-            debugLog.add(msg);
-            if (debugLog.size() > 200) debugLog.remove(0);
+            debugLog.add(message);
+
+            if (debugLog.size() > 200) {
+                debugLog.remove(0);
+            }
         }
     }
 
-    private void fetchHypixel(IntelPlayer p) {
-        boolean got = false;
-        
-        // If we have Hypixel API key, use it first (more accurate, has stars)
+    private void fetchHypixel(IntelPlayer player) {
+        boolean gotStats = false;
+
         if (!hypixelApiKey.isEmpty()) {
-            System.out.println("[Intel] Fetching " + p.name + " from Hypixel API...");
-            got = fetchHypixelApi(p);
-            System.out.println("[Intel] " + p.name + ": fkdr=" + p.fkdr + " star=" + p.star + " fk=" + p.finalKills + " wins=" + p.wins);
+            gotStats = fetchHypixelApi(player);
         }
-        
-        // Fallback to Slothpixel if Hypixel API failed or no key
-        if (!got) {
-            got = fetchSlothpixel(p);
+
+        if (!gotStats) {
+            fetchSlothpixel(player);
         }
-        
-        p.loading = false;
+
+        player.loading = false;
     }
 
-    /** Slothpixel — free public Hypixel wrapper, no key needed */
-    private boolean fetchSlothpixel(IntelPlayer p) {
+    private boolean fetchSlothpixel(IntelPlayer player) {
         try {
-            String json = get("https://api.slothpixel.me/api/players/" + p.name, null, null);
-            dbg("[Sloth] len=" + (json == null ? "null" : json.length()));
+            String json = get(
+                    "https://api.slothpixel.me/api/players/" + player.name,
+                    null,
+                    null
+            );
+
             if (json == null) return false;
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-            if (root.has("error")) { dbg("[Sloth] error=" + root.get("error")); return false; }
 
-            if (root.has("level")) p.level = (int) root.get("level").getAsDouble();
+            if (root.has("error")) return false;
 
-            JsonObject bw = null;
-            if (root.has("stats")) {
-                JsonObject st = root.getAsJsonObject("stats");
-                if (st.has("Bedwars")) bw = st.getAsJsonObject("Bedwars");
+            if (root.has("level")) {
+                player.level = (int) root.get("level").getAsDouble();
             }
-            dbg("[Sloth] bw=" + (bw != null));
-            if (bw == null) {
-                p.star = 0;
+
+            JsonObject bedwars = null;
+
+            if (root.has("stats")) {
+                JsonObject stats = root.getAsJsonObject("stats");
+
+                if (stats.has("Bedwars")) {
+                    bedwars = stats.getAsJsonObject("Bedwars");
+                }
+            }
+
+            if (bedwars == null) {
+                player.star = 0;
                 return false;
             }
-            
-            // Try to get star from Slothpixel (they call it "level")
-            if (bw.has("level")) {
-                try {
-                    p.star = bw.get("level").getAsInt();
-                } catch (Exception e) {
-                    p.star = 0;
-                }
+
+            if (bedwars.has("level")) {
+                player.star = bedwars.get("level").getAsInt();
             } else {
-                p.star = 0;
+                player.star = 0;
             }
 
-            int fk = bwInt(bw, "final_kills_bedwars");
-            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
-            int w  = bwInt(bw, "wins_bedwars");
-            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
-            p.finalKills = fk;
-            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
-            p.wins       = w;
-            p.winstreak  = bwInt(bw, "winstreak");
-            p.fkdr       = (double) fk / fd;
-            p.wlr        = (double) w  / l;
-            
-            return true; // Success - stats loaded
-        } catch (Exception e) { 
-            return false; 
+            int finalKills = bwInt(bedwars, "final_kills_bedwars");
+
+            int finalDeaths = bwInt(bedwars, "final_deaths_bedwars");
+            if (finalDeaths == 0) finalDeaths = 1;
+
+            int wins = bwInt(bedwars, "wins_bedwars");
+
+            int losses = bwInt(bedwars, "losses_bedwars");
+            if (losses == 0) losses = 1;
+
+            player.finalKills = finalKills;
+            player.bedsBroken = bwInt(bedwars, "beds_broken_bedwars");
+            player.wins = wins;
+            player.winstreak = bwInt(bedwars, "winstreak");
+            player.fkdr = (double) finalKills / finalDeaths;
+            player.wlr = (double) wins / losses;
+
+            return true;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
-    /** Official Hypixel API v2 — used when API key is configured */
-    private boolean fetchHypixelApi(IntelPlayer p) {
+    private boolean fetchHypixelApi(IntelPlayer player) {
         try {
             hypixelSlots.acquire();
+
             try {
-                long now  = System.currentTimeMillis();
+                long now = System.currentTimeMillis();
                 long wait = HYPIXEL_INTERVAL_MS - (now - lastHypixelRequest.get());
-                if (wait > 0) Thread.sleep(wait);
+
+                if (wait > 0) {
+                    Thread.sleep(wait);
+                }
+
                 lastHypixelRequest.set(System.currentTimeMillis());
-            } finally { hypixelSlots.release(); }
+            } finally {
+                hypixelSlots.release();
+            }
 
-            String uuid = fetchAndCacheUuid(p.name);
+            String uuid = fetchAndCacheUuid(player.name);
+
             if (uuid == null) {
-                System.err.println("[DEBUG] Could not get UUID for " + p.name);
                 return false;
             }
-            System.out.println("[DEBUG] " + p.name + " UUID: " + uuid);
 
-            String json = get("https://api.hypixel.net/v2/player?uuid=" + uuid, "API-Key", hypixelApiKey);
+            String json = get(
+                    "https://api.hypixel.net/v2/player?uuid=" + uuid,
+                    "API-Key",
+                    hypixelApiKey
+            );
+
             if (json == null) {
-                System.err.println("[DEBUG] Null API response for " + p.name);
                 return false;
             }
-            System.out.println("[DEBUG] Got API response for " + p.name + " (" + json.length() + " chars)");
 
             JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+
             if (!root.has("success") || !root.get("success").getAsBoolean()) {
-                if (root.has("cause")) {
-                    System.err.println("[DEBUG] API Error: " + root.get("cause").getAsString());
-                }
                 return false;
             }
+
             if (!root.has("player") || root.get("player").isJsonNull()) {
-                System.err.println("[DEBUG] Player object null for " + p.name);
                 return false;
             }
 
-            JsonObject player = root.getAsJsonObject("player");
-            if (player.has("networkExp")) {
-                double exp = player.get("networkExp").getAsDouble();
-                p.level = (int)((Math.sqrt(exp + 15312.5) - 88.38) / 35.35);
+            JsonObject profile = root.getAsJsonObject("player");
+
+            if (profile.has("networkExp")) {
+                double exp = profile.get("networkExp").getAsDouble();
+
+                player.level = (int) (
+                        (Math.sqrt(exp + 15312.5) - 88.38) / 35.35
+                );
             }
 
-            JsonObject stats = player.has("stats") ? player.getAsJsonObject("stats") : null;
-            JsonObject bw    = stats != null && stats.has("Bedwars") ? stats.getAsJsonObject("Bedwars") : null;
-            
-            System.out.println("[DEBUG] " + p.name + " has stats: " + (stats != null));
-            System.out.println("[DEBUG] " + p.name + " has Bedwars: " + (bw != null));
-            
-            // Calculate accurate BedWars star from Achievement Points
-            // Hypixel stores BedWars level as "Experience" in the Bedwars stats
-            if (bw != null && bw.has("Experience")) {
-                try {
-                    int experience = bw.get("Experience").getAsInt();
-                    p.star = getBedWarsLevelFromExp(experience);
-                } catch (Exception e) {
-                    p.star = 0;
-                }
+            JsonObject stats = profile.has("stats")
+                    ? profile.getAsJsonObject("stats")
+                    : null;
+
+            JsonObject bedwars = stats != null && stats.has("Bedwars")
+                    ? stats.getAsJsonObject("Bedwars")
+                    : null;
+
+            if (bedwars != null && bedwars.has("Experience")) {
+                player.star = getBedWarsLevelFromExp(
+                        bedwars.get("Experience").getAsInt()
+                );
             } else {
-                // Fallback: use achievements if available
-                try {
-                    JsonObject achievements = player.has("achievements") ? player.getAsJsonObject("achievements") : null;
-                    if (achievements != null && achievements.has("bedwars_level")) {
-                        p.star = achievements.get("bedwars_level").getAsInt();
-                    } else {
-                        p.star = 0; // Default to 0 if no data
-                    }
-                } catch (Exception e) {
-                    p.star = 0;
+                JsonObject achievements = profile.has("achievements")
+                        ? profile.getAsJsonObject("achievements")
+                        : null;
+
+                if (achievements != null && achievements.has("bedwars_level")) {
+                    player.star = achievements.get("bedwars_level").getAsInt();
+                } else {
+                    player.star = 0;
                 }
             }
-            
-            // If no BedWars stats, return false but set star to 0 first
-            if (bw == null) {
-                p.star = 0;
+
+            if (bedwars == null) {
+                player.star = 0;
                 return false;
             }
 
-            int fk = bwInt(bw, "final_kills_bedwars");
-            int fd = bwInt(bw, "final_deaths_bedwars"); if (fd == 0) fd = 1;
-            int w  = bwInt(bw, "wins_bedwars");
-            int l  = bwInt(bw, "losses_bedwars");       if (l  == 0) l  = 1;
-            p.finalKills = fk;
-            p.bedsBroken = bwInt(bw, "beds_broken_bedwars");
-            p.wins       = w;
-            p.winstreak  = bwInt(bw, "winstreak");
-            p.fkdr       = (double) fk / fd;
-            p.wlr        = (double) w  / l;
-            
-            return true; // Success - stats loaded
-        } catch (Exception e) { 
-            return false; 
+            int finalKills = bwInt(bedwars, "final_kills_bedwars");
+
+            int finalDeaths = bwInt(bedwars, "final_deaths_bedwars");
+            if (finalDeaths == 0) finalDeaths = 1;
+
+            int wins = bwInt(bedwars, "wins_bedwars");
+
+            int losses = bwInt(bedwars, "losses_bedwars");
+            if (losses == 0) losses = 1;
+
+            player.finalKills = finalKills;
+            player.bedsBroken = bwInt(bedwars, "beds_broken_bedwars");
+            player.wins = wins;
+            player.winstreak = bwInt(bedwars, "winstreak");
+            player.fkdr = (double) finalKills / finalDeaths;
+            player.wlr = (double) wins / losses;
+
+            return true;
+        } catch (Exception ignored) {
+            return false;
         }
     }
-
-    private int bwStat(JsonObject bw, String... keys) {
-        for (String k : keys) if (bw.has(k)) { try { return bw.get(k).getAsInt(); } catch (Exception ignored) {} }
-        return 0;
+        private int bwInt(JsonObject bedwars, String key) {
+        return bedwars.has(key) ? bedwars.get(key).getAsInt() : 0;
     }
 
-    private int bwInt(JsonObject bw, String key) {
-        return bw.has(key) ? bw.get(key).getAsInt() : 0;
-    }
-
-        private void fetchUrchinBatch(List<IntelPlayer> batch) {
-        if (batch.isEmpty()) return;
-        try {
-            StringBuilder sb = new StringBuilder("{\"usernames\":[");
-            for (int i = 0; i < batch.size(); i++) {
-                sb.append("\"").append(batch.get(i).name).append("\"");
-                if (i < batch.size() - 1) sb.append(",");
-            }
-            sb.append("]}");
-            String body = sb.toString();
-
-            String url = URCHIN_URL + "?sources=MANUAL"
-                    + (urchinApiKey.isEmpty() ? "" : "&key=" + urchinApiKey);
-
-            String response = post(url, body);
-            if (response == null || response.equals("Invalid Key")) return;
-
-            JsonObject root = new JsonParser().parse(response).getAsJsonObject();
-            if (!root.has("players")) return;
-
-            JsonObject players = root.getAsJsonObject("players");
-            for (java.util.Map.Entry<String, com.google.gson.JsonElement> entry : players.entrySet()) {
-                String name = entry.getKey();
-                com.google.gson.JsonArray tags = entry.getValue().getAsJsonArray();
-                if (tags.size() == 0) continue;
-                for (IntelPlayer p : batch) {
-                    if (p.name.equalsIgnoreCase(name)) {
-                        p.cheater = true;
-                        JsonObject tag = tags.get(0).getAsJsonObject();
-                        String type   = tag.has("type") ? tag.get("type").getAsString() : "flagged";
-                        String reason = tag.has("reason") && !tag.get("reason").isJsonNull()
-                                ? tag.get("reason").getAsString() : "";
-                        String typeFmt = type.replace("_", " ");
-                        typeFmt = Character.toUpperCase(typeFmt.charAt(0)) + typeFmt.substring(1);
-                        p.urchinTag    = typeFmt + (reason.isEmpty() ? "" : " \u2014 " + reason);
-                        p.urchinType   = type.toLowerCase();   // e.g. "confirmed_cheater"
-                        p.urchinReason = reason.toLowerCase(); // e.g. "ac and legitscaff"
-                        p.loading      = false; // show data now; Hypixel will add real stats
-                        p.computeThreat(); // apply cheat floor immediately; recomputed again after Hypixel
-                        p.computeThreat(); // apply cheat floor immediately; Hypixel will recompute with real stats
-                        break;
-                    }
-                }
-            }
-        } catch (Exception ignored) {}
-    }
-
-    // Single-player wrapper (used by debug command)
-    private void fetchUrchin(IntelPlayer p) {
-        fetchUrchinBatch(java.util.Collections.singletonList(p));
-    }
-
-    /** Fetch Ghost Intel tags for a batch of players */
-    private void fetchGhostBatch(List<IntelPlayer> batch) {
-        if (batch.isEmpty()) return;
-        
-        dbg("[Ghost] Fetching tags for " + batch.size() + " players");
-        
-        // Ghost Intel doesn't have batch API, so fetch individually
-        for (IntelPlayer p : batch) {
-            try {
-                String url = GHOST_URL + "/" + p.name;
-                if (!ghostApiKey.isEmpty()) {
-                    url += "?key=" + ghostApiKey;
-                }
-                
-                dbg("[Ghost] Checking " + p.name);
-                
-                String json = get(url, null, null);
-                if (json == null) {
-                    dbg("[Ghost] " + p.name + " - NULL response");
-                    continue;
-                }
-                
-                JsonObject root = new JsonParser().parse(json).getAsJsonObject();
-                if (!root.has("tags")) {
-                    dbg("[Ghost] " + p.name + " - No tags field");
-                    continue;
-                }
-                
-                JsonElement tagsElement = root.get("tags");
-                if (!tagsElement.isJsonArray()) {
-                    dbg("[Ghost] " + p.name + " - Tags not array");
-                    continue;
-                }
-                
-                com.google.gson.JsonArray tags = tagsElement.getAsJsonArray();
-                
-                if (tags.size() == 0) {
-                    dbg("[Ghost] " + p.name + " - No tags");
-                    continue;
-                }
-                
-                // Get the first (most recent) tag
-                JsonObject tag = tags.get(0).getAsJsonObject();
-                p.ghostTagged = true;
-                p.ghostType = tag.has("type") ? tag.get("type").getAsString() : "tagged";
-                p.ghostReason = tag.has("reason") ? tag.get("reason").getAsString() : "";
-                
-                dbg("[Ghost] §a✓ " + p.name + " = " + p.ghostType);
-                
-            } catch (Exception e) {
-                dbg("[Ghost] §c✗ " + p.name + " ERROR: " + e.getMessage());
-            }
-        }
-    }
-
-    /** Returns cached UUID for a player name, or null if not yet known */
-    public String getCachedUuid(String name) {
-        synchronized (uuidCache) { return uuidCache.get(name); }
-    }
-
-    // ── Notification ──────────────────────────────────────────────────────────
-
-    private void notifyCheater(IntelPlayer p) {
-        try {
-            // Check if notifications are enabled in LobbyIntel module
-            myau.module.modules.LobbyIntel lobbyIntel = (myau.module.modules.LobbyIntel) 
-                myau.Myau.moduleManager.getModule("LobbyIntel");
-            if (lobbyIntel == null || !lobbyIntel.notifyCheaters.getValue()) return;
-            
-            if (Myau.notificationManager == null) return;
-            Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
-            if (notifModule == null || !notifModule.isEnabled()) return;
-            long dur = (long)(notifModule.duration.getValue() * 1000.0);
-            
-            // Determine source of flag
-            String source = "";
-            if (p.ghostTagged && p.cheater) source = "Ghost Intel + Urchin";
-            else if (p.ghostTagged) source = "Ghost Intel";
-            else if (p.cheater) source = "Urchin";
-            
-            if (!source.isEmpty()) {
-                Myau.notificationManager.add("⚑ " + p.name + " flagged by " + source, dur, 0xFFFF3344);
-            }
-        } catch (Exception ignored) {}
-    }
-
-    // ── HTTP helpers ──────────────────────────────────────────────────────────
-
-    private String get(String urlStr, String headerKey, String headerVal) {
-        try {
-            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
-            con.setRequestMethod("GET");
-            con.setConnectTimeout(5000);
-            con.setReadTimeout(5000);
-            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-            if (headerKey != null) con.setRequestProperty(headerKey, headerVal);
-            if (con.getResponseCode() != 200) return null;
-            return readStream(con.getInputStream());
-        } catch (Exception e) { return null; }
-    }
-
-    private String post(String urlStr, String jsonBody) {
-        try {
-            HttpURLConnection con = (HttpURLConnection) new URL(urlStr).openConnection();
-            con.setRequestMethod("POST");
-            con.setConnectTimeout(5000);
-            con.setReadTimeout(5000);
-            con.setDoOutput(true);
-            con.setRequestProperty("Content-Type", "application/json");
-            con.setRequestProperty("User-Agent", "Spirit-Client/1.0");
-            try (OutputStream os = con.getOutputStream()) {
-                os.write(jsonBody.getBytes("UTF-8"));
-            }
-            int code = con.getResponseCode();
-            if (code != 200) return null;
-            return readStream(con.getInputStream());
-        } catch (Exception e) { return null; }
-    }
-
-    private String readStream(InputStream is) throws IOException {
-        return readStreamStatic(is);
-    }
-
-    public static String readStreamStatic(InputStream is) throws IOException {
-        BufferedReader br = new BufferedReader(new InputStreamReader(is));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = br.readLine()) != null) sb.append(line);
-        br.close();
-        return sb.toString();
-    }
-    
     /**
-     * Calculate BedWars level (star) from experience points
-     * Hypixel BedWars uses a tiered progression system
+     * Uses Coral's Cubelify endpoint. Set a Coral key with:
+     * .coralkey <key>
      */
-    private static int getBedWarsLevelFromExp(int exp) {
-        int level = 0;
-        
-        // Levels 0-3: 500 XP per level
-        if (exp < 2000) {
-            return exp / 500;
+    private void fetchUrchinBatch(List<IntelPlayer> batch) {
+        if (batch.isEmpty() || urchinApiKey.isEmpty()) return;
+
+        try {
+            for (IntelPlayer player : batch) {
+                String uuid = fetchAndCacheUuid(player.name);
+
+                if (uuid == null) {
+                    continue;
+                }
+
+                String url = CORAL_CUBELIFY_URL
+                        + "?uuid=" + uuid
+                        + "&name=" + player.name
+                        + "&sources=MANUAL"
+                        + "&key=" + urchinApiKey;
+
+                String response = get(url, null, null);
+
+                if (response == null) {
+                    continue;
+                }
+
+                JsonObject root = new JsonParser()
+                        .parse(response)
+                        .getAsJsonObject();
+
+                if (!root.has("tags") || !root.get("tags").isJsonArray()) {
+                    continue;
+                }
+
+                com.google.gson.JsonArray tags = root.getAsJsonArray("tags");
+
+                if (tags.size() == 0) {
+                    continue;
+                }
+
+                JsonObject tag = tags.get(0).getAsJsonObject();
+
+                String type = tag.has("icon") && !tag.get("icon").isJsonNull()
+                        ? tag.get("icon").getAsString()
+                        : "tagged";
+
+                String reason = tag.has("tooltip") && !tag.get("tooltip").isJsonNull()
+                        ? tag.get("tooltip").getAsString()
+                        : "";
+
+                String text = tag.has("text") && !tag.get("text").isJsonNull()
+                        ? tag.get("text").getAsString()
+                        : type;
+
+                player.cheater = true;
+                player.urchinTag = text + (reason.isEmpty() ? "" : " — " + reason);
+                player.urchinType = type.toLowerCase();
+                player.urchinReason = reason.toLowerCase();
+                player.computeThreat();
+            }
+        } catch (Exception ignored) {
         }
-        level = 4;
-        exp -= 2000;
-        
-        // Levels 4-99: 1000 XP per level  
-        if (exp < 96000) {
-            return level + (exp / 1000);
+    }
+
+    private void fetchUrchin(IntelPlayer player) {
+        fetchUrchinBatch(java.util.Collections.singletonList(player));
+    }
+
+    private void fetchGhostBatch(List<IntelPlayer> batch) {
+        if (batch.isEmpty() || ghostApiKey.isEmpty()) return;
+
+        for (IntelPlayer player : batch) {
+            try {
+                String url = GHOST_URL + "/" + player.name + "?key=" + ghostApiKey;
+                String json = get(url, null, null);
+
+                if (json == null) {
+                    continue;
+                }
+
+                JsonObject root = new JsonParser().parse(json).getAsJsonObject();
+
+                if (!root.has("tags") || !root.get("tags").isJsonArray()) {
+                    continue;
+                }
+
+                com.google.gson.JsonArray tags = root.getAsJsonArray("tags");
+
+                if (tags.size() == 0) {
+                    continue;
+                }
+
+                JsonObject tag = tags.get(0).getAsJsonObject();
+
+                player.ghostTagged = true;
+                player.ghostType = tag.has("type")
+                        ? tag.get("type").getAsString()
+                        : "tagged";
+
+                player.ghostReason = tag.has("reason")
+                        ? tag.get("reason").getAsString()
+                        : "";
+            } catch (Exception exception) {
+                dbg("[Ghost] " + player.name + " error: " + exception.getMessage());
+            }
         }
-        level = 100;
-        exp -= 96000;
-        
-        // Levels 100-199: 2000 XP per level
-        if (exp < 200000) {
-            return level + (exp / 2000);
+    }
+
+    public String getCachedUuid(String name) {
+        synchronized (uuidCache) {
+            return uuidCache.get(name);
         }
-        level = 200;
-        exp -= 200000;
-        
-        // Levels 200-299: 3000 XP per level
-        if (exp < 300000) {
-            return level + (exp / 3000);
+    }
+
+    private void notifyCheater(IntelPlayer player) {
+        try {
+            myau.module.modules.LobbyIntel lobbyIntel =
+                    (myau.module.modules.LobbyIntel) Myau.moduleManager
+                            .getModule("LobbyIntel");
+
+            if (lobbyIntel == null || !lobbyIntel.notifyCheaters.getValue()) {
+                return;
+            }
+
+            if (Myau.notificationManager == null) {
+                return;
+            }
+
+            Notifications notifications = (Notifications) Myau.moduleManager.modules
+                    .get(Notifications.class);
+
+            if (notifications == null || !notifications.isEnabled()) {
+                return;
+            }
+
+            long duration = (long) (notifications.duration.getValue() * 1000.0);
+
+            String source = "";
+
+            if (player.ghostTagged && player.cheater) {
+                source = "Ghost Intel + Coral";
+            } else if (player.ghostTagged) {
+                source = "Ghost Intel";
+            } else if (player.cheater) {
+                source = "Coral";
+            }
+
+            if (!source.isEmpty()) {
+                Myau.notificationManager.add(
+                        "⚑ " + player.name + " flagged by " + source,
+                        duration,
+                        0xFFFF3344
+                );
+            }
+        } catch (Exception ignored) {
         }
-        level = 300;
-        exp -= 300000;
-        
-        // Levels 300-399: 4000 XP per level
-        if (exp < 400000) {
-            return level + (exp / 4000);
+    }
+
+    private String get(String url, String headerKey, String headerValue) {
+        try {
+            HttpURLConnection connection =
+                    (HttpURLConnection) new URL(url).openConnection();
+
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(5000);
+            connection.setRequestProperty("User-Agent", "Spirit-Client/1.0");
+
+            if (headerKey != null) {
+                connection.setRequestProperty(headerKey, headerValue);
+            }
+
+            if (connection.getResponseCode() != 200) {
+                return null;
+            }
+
+            return readStream(connection.getInputStream());
+        } catch (Exception ignored) {
+            return null;
         }
-        level = 400;
-        exp -= 400000;
-        
-        // Levels 400+: 5000 XP per level
-        return level + (exp / 5000);
+    }
+
+    private String readStream(InputStream input) throws IOException {
+        return readStreamStatic(input);
+    }
+
+    public static String readStreamStatic(InputStream input) throws IOException {
+        BufferedReader reader = new BufferedReader(new InputStreamReader(input));
+        StringBuilder result = new StringBuilder();
+
+        String line;
+
+        while ((line = reader.readLine()) != null) {
+            result.append(line);
+        }
+
+        reader.close();
+        return result.toString();
+    }
+
+    /**
+     * Converts Hypixel BedWars Experience into an exact star level.
+     *
+     * The first five levels cost 500, 1,000, 2,000, 3,500 and 5,000 XP.
+     * Every remaining level costs 5,000 XP. One prestige is 487,000 XP.
+     */
+    private static int getBedWarsLevelFromExp(int experience) {
+        if (experience <= 0) {
+            return 0;
+        }
+
+        int level = (experience / 487000) * 100;
+        int remaining = experience % 487000;
+
+        int[] earlyLevelCosts = {500, 1000, 2000, 3500, 5000};
+
+        for (int cost : earlyLevelCosts) {
+            if (remaining < cost) {
+                return level;
+            }
+
+            remaining -= cost;
+            level++;
+        }
+
+        return level + (remaining / 5000);
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
         try {
-            String dn = info.getDisplayName() != null ? info.getDisplayName().getFormattedText() : "";
-            if (dn.contains("§c")) return "red";
-            if (dn.contains("§9")) return "blue";
-            if (dn.contains("§a")) return "green";
-            if (dn.contains("§e")) return "yellow";
-            if (dn.contains("§b")) return "aqua";
-            if (dn.contains("§f")) return "white";
-            if (dn.contains("§d")) return "pink";
-            if (dn.contains("§8")) return "gray";
-        } catch (Exception ignored) {}
+            String displayName = info.getDisplayName() != null
+                    ? info.getDisplayName().getFormattedText()
+                    : "";
+
+            if (displayName.contains("§c")) return "red";
+            if (displayName.contains("§9")) return "blue";
+            if (displayName.contains("§a")) return "green";
+            if (displayName.contains("§e")) return "yellow";
+            if (displayName.contains("§b")) return "aqua";
+            if (displayName.contains("§f")) return "white";
+            if (displayName.contains("§d")) return "pink";
+            if (displayName.contains("§8")) return "gray";
+        } catch (Exception ignored) {
+        }
+
         return null;
     }
 }
