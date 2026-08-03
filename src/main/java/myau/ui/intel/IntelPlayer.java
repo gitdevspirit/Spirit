@@ -47,17 +47,46 @@ public class IntelPlayer {
         this.role = RoleManager.getInstance().getRole(name);
     }
 
-    /** Compact Coral tag label suitable for the tab list and HUD. */
+    /**
+     * Compact Coral tag label — single source of truth used by the HUD
+     * overlay, LobbyIntel GUI, tab list, and .bw command so they never
+     * diverge from each other again. Checks urchinType (which now folds in
+     * icon + text + tooltip, since Cubelify's "icon" field alone is just a
+     * Material Design icon id and never contains classification words) plus
+     * urchinReason and urchinTag as fallbacks, in case the classification
+     * word only shows up in one of them for a given tag source.
+     */
     public String getTagBadge() {
-        if (!cheater || urchinType == null) return "";
+        if (!cheater) return "";
 
-        String type = urchinType.toLowerCase();
-        if (type.contains("closet")) return "C";
-        if (type.contains("confirmed")) return "CC";
-        if (type.contains("blatant")) return "BC";
-        if (type.contains("sniper")) return "S";
-        if (type.contains("caution")) return "!";
-        return "TAG";
+        String basis = (
+                (urchinType   != null ? urchinType   : "") + " " +
+                (urchinReason != null ? urchinReason : "") + " " +
+                (urchinTag    != null ? urchinTag    : "")
+        ).toLowerCase();
+
+        if (basis.contains("blatant"))   return "BC";
+        if (basis.contains("confirmed")) return "CC";
+        if (basis.contains("closet"))    return "C";
+        if (basis.contains("sniper"))    return "S";
+        if (basis.contains("caution"))   return "!";
+
+        // Flagged by Coral but none of the known severity words matched —
+        // still show a code rather than a static placeholder.
+        return "C";
+    }
+
+    /** ARGB color matching {@link #getTagBadge()}'s classification. */
+    public int getTagColor() {
+        String badge = getTagBadge();
+        switch (badge) {
+            case "BC": return 0xFFFF3344; // blatant — red
+            case "CC": return 0xFFDD44DD; // confirmed — magenta
+            case "S":  return 0xFFFF1122; // sniper — bright red
+            case "!":  return 0xFFFFCC44; // caution — amber
+            case "C":  return 0xFFFF8844; // closet / unclassified — orange
+            default:   return 0xFFAAAAAA;
+        }
     }
 
     private static final Object[][] KEYWORD_SCORES = {
