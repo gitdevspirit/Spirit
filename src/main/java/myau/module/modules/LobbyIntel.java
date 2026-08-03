@@ -68,6 +68,11 @@ public class LobbyIntel extends Module {
             register(new BooleanSetting("BW: Show Wins", false));
     public final BooleanSetting bwShowLosses =
             register(new BooleanSetting("BW: Show Losses", false));
+    public final BooleanSetting bwShowTag =
+            register(new BooleanSetting("BW: Show Cheater Tag", true));
+
+    public final BooleanSetting tabShowTag =
+            register(new BooleanSetting("Tab: Show Cheater Tag", true));
 
     public final BooleanProperty hudEnabled = new BooleanProperty("hud-enabled", true);
     public final IntProperty hudPosX = new IntProperty("hud-x", 10, 0, 3840);
