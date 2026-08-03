@@ -10,15 +10,22 @@ import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.ui.intel.IntelManager;
 import myau.ui.intel.IntelPlayer;
+import myau.util.ColorUtil;
 import myau.util.RenderUtil;
 import myau.util.TeamUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.scoreboard.Score;
+import net.minecraft.scoreboard.ScoreObjective;
+import net.minecraft.scoreboard.Scoreboard;
 import org.lwjgl.opengl.GL11;
 
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Renders a BedWars star tag above players' heads using stats
@@ -26,15 +33,17 @@ import java.util.List;
  */
 public class BedwarsTag extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    private static final DecimalFormat healthFormatter = new DecimalFormat("0.0", new DecimalFormatSymbols(Locale.US));
 
-    public final BooleanSetting showStar   = register(new BooleanSetting("Show Star",    true));
-    public final BooleanSetting showFkdr   = register(new BooleanSetting("Show FKDR",    false));
-    public final BooleanSetting showThreat = register(new BooleanSetting("Show Threat",  false));
-    public final BooleanSetting selfTag    = register(new BooleanSetting("Show Self",     false));
-    public final BooleanSetting autoScale  = register(new BooleanSetting("Auto Scale",    true));
-    public final SliderSetting  scale      = register(new SliderSetting("Scale",          1.0, 0.5, 2.0, 0.05));
-    public final BooleanSetting background = register(new BooleanSetting("Background",    true));
-    public final BooleanSetting onlyIntel  = register(new BooleanSetting("Intel Only",    false));
+    public final BooleanSetting  showStar   = register(new BooleanSetting("Show Star",    true));
+    public final DropdownSetting healthMode = register(new DropdownSetting("Health", 1, "NONE", "HP", "HEARTS", "TAB"));
+    public final BooleanSetting  showFkdr   = register(new BooleanSetting("Show FKDR",    false));
+    public final BooleanSetting  showThreat = register(new BooleanSetting("Show Threat",  false));
+    public final BooleanSetting  selfTag    = register(new BooleanSetting("Show Self",     false));
+    public final BooleanSetting  autoScale  = register(new BooleanSetting("Auto Scale",    true));
+    public final SliderSetting   scale      = register(new SliderSetting("Scale",          1.0, 0.5, 2.0, 0.05));
+    public final BooleanSetting  background = register(new BooleanSetting("Background",    true));
+    public final BooleanSetting  onlyIntel  = register(new BooleanSetting("Intel Only",    false));
 
     public BedwarsTag() { super("BedWarsTag", false); }
 
@@ -90,16 +99,21 @@ public class BedwarsTag extends Module {
             String starPart   = parts[0]; // e.g. "☆8"
             String namePart   = parts[1]; // e.g. "BadAiiim"
             String urchinPart = parts[2]; // e.g. "CC" or ""
+            String healthPart = buildHealthText(player); // e.g. " 20" or " 10.0" or " 20"(tab)
 
             int starColor   = getStarColor(intel);
             int nameColor   = 0xFFFFFFFF;
             int urchinColor = getUrchinColor(intel);
+            int healthColor = getHealthColor(player);
 
             int gap = 3;
             int starW   = mc.fontRendererObj.getStringWidth(starPart);
             int nameW   = mc.fontRendererObj.getStringWidth(namePart);
+            int healthW = healthPart.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(healthPart);
             int urchinW = urchinPart.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(urchinPart);
-            int totalW  = starW + gap + nameW + (urchinW > 0 ? gap + urchinW : 0);
+            int totalW  = starW + gap + nameW
+                    + (healthW > 0 ? gap + healthW : 0)
+                    + (urchinW > 0 ? gap + urchinW : 0);
 
             float ty = -(float) mc.fontRendererObj.FONT_HEIGHT;
             float tx = -totalW / 2f;
@@ -115,15 +129,70 @@ public class BedwarsTag extends Module {
             // ☆8 on the left (prestige color)
             mc.fontRendererObj.drawString(starPart, tx, ty, starColor, true);
             // Name in the middle (white)
-            mc.fontRendererObj.drawString(namePart, tx + starW + gap, ty, nameColor, true);
+            float cursor = tx + starW + gap;
+            mc.fontRendererObj.drawString(namePart, cursor, ty, nameColor, true);
+            cursor += nameW;
+            // Health (colored by HP %, or gold for TAB mode)
+            if (!healthPart.isEmpty()) {
+                cursor += gap;
+                mc.fontRendererObj.drawString(healthPart, cursor, ty, healthColor, true);
+                cursor += healthW;
+            }
             // Urchin tag on the right (colored)
             if (!urchinPart.isEmpty()) {
-                mc.fontRendererObj.drawString(urchinPart, tx + starW + gap + nameW + gap, ty, urchinColor, true);
+                cursor += gap;
+                mc.fontRendererObj.drawString(urchinPart, cursor, ty, urchinColor, true);
             }
             GlStateManager.enableDepth();
 
             GlStateManager.popMatrix();
         }
+    }
+
+    // Builds the health suffix text based on the Health dropdown (NONE/HP/HEARTS/TAB)
+    private String buildHealthText(EntityPlayer player) {
+        switch (healthMode.getIndex()) {
+            case 1: { // HP
+                float health     = player.getHealth();
+                float absorption = player.getAbsorptionAmount();
+                if (absorption > 0.0F) {
+                    return String.format("%d+%d", (int) health, (int) absorption);
+                }
+                return String.format("%d", (int) health);
+            }
+            case 2: { // HEARTS
+                float health     = player.getHealth();
+                float absorption = player.getAbsorptionAmount();
+                if (absorption > 0.0F) {
+                    return String.format("%s+%s",
+                            healthFormatter.format((double) health / 2.0),
+                            healthFormatter.format((double) absorption / 2.0));
+                }
+                return healthFormatter.format((double) health / 2.0);
+            }
+            case 3: { // TAB — read from the "below name" scoreboard objective, like NameTags does
+                Scoreboard sb = mc.theWorld.getScoreboard();
+                if (sb != null) {
+                    ScoreObjective obj = sb.getObjectiveInDisplaySlot(2);
+                    if (obj != null) {
+                        Score score = sb.getValueFromObjective(player.getName(), obj);
+                        if (score != null) return String.valueOf(score.getScorePoints());
+                    }
+                }
+                return "";
+            }
+            default: // NONE
+                return "";
+        }
+    }
+
+    private int getHealthColor(EntityPlayer player) {
+        if (healthMode.getIndex() == 3) return 0xFFFFD700; // gold, matches TAB mode in NameTags
+        float health     = player.getHealth();
+        float absorption = player.getAbsorptionAmount();
+        float max        = player.getMaxHealth();
+        float percent    = Math.min(Math.max((health + absorption) / max, 0.0F), 1.0F);
+        return ColorUtil.getHealthBlend(percent).getRGB();
     }
 
     // Returns [starText, name, urchinTag] — rendered separately with different colors
