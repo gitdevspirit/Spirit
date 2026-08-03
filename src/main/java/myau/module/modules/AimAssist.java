@@ -175,6 +175,10 @@ public class AimAssist extends Module {
             // Body rotation for rendering
             RotationState.applyState(true, silentYaw, silentPitch, silentYaw, 10);
 
+            // Keep WASD movement pointed where the player actually intends,
+            // even though the server is being told we're facing silentYaw/silentPitch.
+            myau.management.MovementFix.forceMovementFix = true;
+
             // Inject silent rotation into position packet
             event.setRotation(silentYaw, silentPitch, 10);
 
@@ -184,12 +188,33 @@ public class AimAssist extends Module {
             if (dist > range.getValue() + extraSwing.getValue()) return;
             if (System.currentTimeMillis() < nextAttackMs) return;
 
+            // Don't swing mid-flick — wait until the silent rotation has actually
+            // converged on the target, or the "aim" is a lie the server can catch.
+            float[] fullTarget = calcFullTargetRotation(currentTarget);
+            float convergence = Math.max(
+                    Math.abs(MathHelper.wrapAngleTo180_float(fullTarget[0] - silentYaw)),
+                    Math.abs(fullTarget[1] - silentPitch));
+            if (convergence > 8.0f) return;
+
             attackingThisTick = true;
             mc.playerController.attackEntity(mc.thePlayer, currentTarget);
             mc.thePlayer.swingItem();
             attackingTarget = currentTarget;
             scheduleNextAttack();
         }
+    }
+
+    // The fully-converged (unsmoothed) rotation to the target, used only to check
+    // how close the smoothed silentYaw/silentPitch actually is before attacking.
+    private float[] calcFullTargetRotation(EntityPlayer target) {
+        AxisAlignedBB bb = target.getEntityBoundingBox();
+        double cx = (bb.minX + bb.maxX) / 2.0;
+        double cy = (bb.minY + bb.maxY) / 2.0;
+        double cz = (bb.minZ + bb.maxZ) / 2.0;
+        net.minecraft.util.Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+        return RotationUtil.getRotations(
+                cx - eyes.xCoord, cy - eyes.yCoord, cz - eyes.zCoord,
+                silentYaw, silentPitch, 180.0f, 0.0f);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
