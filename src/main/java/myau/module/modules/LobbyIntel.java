@@ -53,6 +53,8 @@ public class LobbyIntel extends Module {
             new BooleanProperty("hud-show-heads", true);
     public final BooleanProperty hudShowStar =
             new BooleanProperty("hud-show-star", true);
+    public final BooleanProperty hudShowLevel =
+            new BooleanProperty("hud-show-level", false);
     public final BooleanProperty hudShowFkdr =
             new BooleanProperty("hud-show-fkdr", true);
     public final BooleanProperty hudShowWlr =
@@ -144,6 +146,7 @@ public class LobbyIntel extends Module {
         hudOverlay.setBorderOpacity(hudBorderOpacity.getValue());
         hudOverlay.setShowHeads(hudShowHeads.getValue());
         hudOverlay.setShowStar(hudShowStar.getValue());
+        hudOverlay.setShowLevel(hudShowLevel.getValue());
         hudOverlay.setShowFkdr(hudShowFkdr.getValue());
         hudOverlay.setShowWlr(hudShowWlr.getValue());
         hudOverlay.setShowStreak(hudShowStreak.getValue());
@@ -163,6 +166,7 @@ public class LobbyIntel extends Module {
         hudBorderOpacity.setValue(hudOverlay.getBorderOpacity());
         hudShowHeads.setValue(hudOverlay.getShowHeads());
         hudShowStar.setValue(hudOverlay.getShowStar());
+        hudShowLevel.setValue(hudOverlay.getShowLevel());
         hudShowFkdr.setValue(hudOverlay.getShowFkdr());
         hudShowWlr.setValue(hudOverlay.getShowWlr());
         hudShowStreak.setValue(hudOverlay.getShowStreak());
@@ -328,8 +332,6 @@ public class LobbyIntel extends Module {
                 IntelManager.getInstance().clearAll();
                 IntelManager.getInstance().scanLobby();
 
-                // Sends /who automatically. Its ONLINE: response below provides
-                // the actual player names, including players hidden in the tab list.
                 if (mc.thePlayer != null) {
                     mc.thePlayer.sendChatMessage("/who");
                 }
