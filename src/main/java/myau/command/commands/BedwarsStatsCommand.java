@@ -42,13 +42,20 @@ public class BedwarsStatsCommand extends Command {
                 || player.fkdr != 0
                 || player.wlr != 0;
 
+        LobbyIntel intel = (LobbyIntel) Myau.moduleManager.getModule("LobbyIntel");
+
         if (!hasAnyData) {
             reply("&cNo Bedwars stats found for &f" + ign
                     + "&c (nicked, never played, or API unreachable).");
+
+            if (player.cheater && intel != null && intel.bwShowTag.getValue()) {
+                String badge = player.getTagBadge();
+                String detail = player.urchinTag != null ? player.urchinTag : badge;
+                reply("&d[" + badge + "] &7" + detail);
+            }
+
             return;
         }
-
-        LobbyIntel intel = (LobbyIntel) Myau.moduleManager.getModule("LobbyIntel");
 
         StringBuilder line = new StringBuilder();
         line.append("&b").append(ign).append("&7 » ");
@@ -117,6 +124,12 @@ public class BedwarsStatsCommand extends Command {
         }
 
         reply(line.toString().trim());
+
+        if (player.cheater && intel != null && intel.bwShowTag.getValue()) {
+            String badge = player.getTagBadge();
+            String detail = player.urchinTag != null ? player.urchinTag : badge;
+            reply("&d[" + badge + "] &7" + detail);
+        }
     }
 
     /** Defaults to true (shown) when the module reference or setting is unavailable. */
