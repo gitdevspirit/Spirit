@@ -11,6 +11,13 @@ public class RoundedUtils {
         float b = (color       & 0xFF) / 255f;
         float a = (color >> 24 & 0xFF) / 255f;
 
+        // Clamp so radius can never exceed half the smaller dimension —
+        // otherwise the old quad-based approach could invert its center
+        // quad's coordinates and silently drop it depending on GL culling
+        // state, which is what made small HUD rows render dead square.
+        float maxRadius = Math.min(width, height) / 2f;
+        float rad = Math.max(0f, Math.min(radius, maxRadius));
+
         GlStateManager.pushMatrix();
         GlStateManager.enableBlend();
         GlStateManager.disableTexture2D();
@@ -20,21 +27,38 @@ public class RoundedUtils {
         );
         GL11.glColor4f(r, g, b, a);
 
-        // Center fill (excluding corners)
-        drawQuad(x + radius, y, x + width - radius, y + height);          // middle vertical strip
-        drawQuad(x, y + radius, x + radius, y + height - radius);         // left strip
-        drawQuad(x + width - radius, y + radius, x + width, y + height - radius); // right strip
+        if (rad < 0.5f) {
+            // No meaningful rounding possible — plain rect, no seams to worry about.
+            drawQuad(x, y, x + width, y + height);
+        } else {
+            // Single continuous fan around the whole perimeter — avoids any
+            // seam between separately-drawn quads/corner arcs.
+            float cx = x + width / 2f;
+            float cy = y + height / 2f;
 
-        // Four rounded corners
-        drawCorner(x + radius,         y + radius,          radius, 180, 270); // top-left
-        drawCorner(x + width - radius, y + radius,          radius, 270, 360); // top-right
-        drawCorner(x + radius,         y + height - radius, radius,  90, 180); // bottom-left
-        drawCorner(x + width - radius, y + height - radius, radius,   0,  90); // bottom-right
+            GL11.glBegin(GL11.GL_TRIANGLE_FAN);
+            GL11.glVertex2f(cx, cy);
+
+            addArc(x + width - rad, y + rad,          rad, 270, 360);
+            addArc(x + width - rad, y + height - rad, rad,   0,  90);
+            addArc(x + rad,         y + height - rad, rad,  90, 180);
+            addArc(x + rad,         y + rad,           rad, 180, 271); // +1° to close the loop cleanly
+
+            GL11.glEnd();
+        }
 
         GlStateManager.enableTexture2D();
         GlStateManager.disableBlend();
-        GL11.glColor4f(1f, 1f, 1f, 1f); // ✅ reset color
+        GL11.glColor4f(1f, 1f, 1f, 1f); // reset color
         GlStateManager.popMatrix();
+    }
+
+    private static void addArc(float cx, float cy, float radius, int startAngle, int endAngle) {
+        for (int i = startAngle; i <= endAngle; i += 5) {
+            double angle = Math.toRadians(i);
+            GL11.glVertex2f(cx + (float) (Math.cos(angle) * radius),
+                    cy + (float) (Math.sin(angle) * radius));
+        }
     }
 
     public static void drawRoundedOutline(float x, float y, float width, float height, float radius, float thickness, int color) {
@@ -99,17 +123,6 @@ public class RoundedUtils {
         GL11.glVertex2f(x2, y1);
         GL11.glVertex2f(x2, y2);
         GL11.glVertex2f(x1, y2);
-        GL11.glEnd();
-    }
-
-    private static void drawCorner(float cx, float cy, float radius, int startAngle, int endAngle) {
-        GL11.glBegin(GL11.GL_TRIANGLE_FAN);
-        GL11.glVertex2f(cx, cy);
-        for (int i = startAngle; i <= endAngle; i += 5) {
-            double angle = Math.toRadians(i);
-            GL11.glVertex2f(cx + (float)(Math.cos(angle) * radius),
-                            cy + (float)(Math.sin(angle) * radius));
-        }
         GL11.glEnd();
     }
 }
