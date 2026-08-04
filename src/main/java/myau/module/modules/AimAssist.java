@@ -1,348 +1,246 @@
-package com.spirit.modules.combat;
+package myau.module.modules;
 
-import com.spirit.SpiritClient;
-import com.spirit.utils.Rotation;
-import com.spirit.utils.RotationUtils;
+import myau.event.EventTarget;
+import myau.event.types.EventType;
+import myau.events.TickEvent;
+import myau.events.UpdateEvent;
+import myau.module.modules.MovementFix;
+import myau.management.RotationState;
+import myau.module.BooleanSetting;
+import myau.module.DropdownSetting;
+import myau.module.Module;
+import myau.module.SliderSetting;
+import myau.util.ItemUtil;
+import myau.util.RotationUtil;
+import myau.util.TeamUtil;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.entity.EntityPlayerSP;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.util.math.AxisAlignedBB;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.Vec3d;
+import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
+import net.minecraft.util.Vec3;
+import org.lwjgl.input.Mouse;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Random;
-import java.util.stream.Collectors;
 
 /**
- * AimAssist Module - Dynamic rotation-based aim assist
- * Continuously recalculates target position every tick
- * Features: Smoothing, FOV check, Range check, Human error simulation
+ * AimAssist — reworked to match a simpler, unified keystrokesmod reference:
+ * Normal and Silent share one target-point-picking + rotation routine instead
+ * of Normal having its own separate predictive-smoothing math. Normal writes
+ * the real camera on tick; Silent reports a fake rotation via UpdateEvent +
+ * RotationState + MovementFix, same pipeline as Clutch.
  */
-public class AimAssist {
-    
-    // ==================== CONFIGURATION ====================
-    private static final float MAX_TURN_SPEED = 15.0f; // Degrees per tick
-    private static final float FOV_LIMIT = 90.0f;      // Degrees
-    private static final double MAX_RANGE = 6.0;       // Blocks
-    private static final float SMOOTHING_FACTOR = 0.12f; // 0.0-1.0 (lower = smoother)
-    private static final float HUMAN_ERROR_CHANCE = 0.08f; // 8% chance to "miss"
-    
-    // Dynamic aim point settings
-    private static final boolean ENABLE_PREDICTION = true;
-    private static final double PREDICTION_TICKS = 0.5;
-    private static final double AIM_SPREAD = 0.015; // Small randomization for natural feel
-    
-    // ==================== STATE ====================
-    private final Minecraft mc;
-    private final Random random;
-    
-    private EntityLivingBase target;
-    private Rotation currentRotation;
-    private Rotation targetRotation;
-    
-    private Vec3d cachedAimPoint;
-    private int lastAimPointTick = -1;
-    private boolean isEnabled = false;
-    
-    // Anti-detection state
-    private int ticksWithoutTarget = 0;
-    private float[] previousAngles = new float[2];
-    
-    // ==================== CONSTRUCTOR ====================
-    public AimAssist() {
-        this.mc = Minecraft.getMinecraft();
-        this.random = new Random();
-        this.currentRotation = new Rotation(0, 0);
-        this.targetRotation = new Rotation(0, 0);
-        this.cachedAimPoint = Vec3d.ZERO;
+public class AimAssist extends Module {
+    private static final Minecraft mc = Minecraft.getMinecraft();
+
+    private static final int MODE_NORMAL = 0;
+    private static final int MODE_SILENT = 1;
+
+    public final DropdownSetting mode = register(new DropdownSetting("Mode", 0, "Normal", "Silent"));
+    public final SliderSetting   speed = register(new SliderSetting("Speed", 10, 1, 30, 1));
+    public final SliderSetting   multipointHorizontal = register(new SliderSetting("Multipoint Horizontal", 0, 0, 100, 1));
+    public final SliderSetting   multipointVertical   = register(new SliderSetting("Multipoint Vertical", 0, 0, 100, 1));
+    public final SliderSetting   randomization = register(new SliderSetting("Randomization", 50, 0, 100, 1));
+    public final SliderSetting   fov   = register(new SliderSetting("FOV", 90, 15, 360, 1));
+    public final SliderSetting   range = register(new SliderSetting("Range", 4.5, 0.0, 5.0, 0.1));
+    public final DropdownSetting sortMode = register(new DropdownSetting("Sort", 1, "Health", "Angle", "Hurt Time", "Distance"));
+
+    public final BooleanSetting ignoreBehindWalls    = register(new BooleanSetting("Ignore Behind Walls", false));
+    public final BooleanSetting ignoreBehindEntities = register(new BooleanSetting("Ignore Behind Entities", false));
+    public final BooleanSetting aimInvis        = register(new BooleanSetting("Aim Invisible", false));
+    public final BooleanSetting clickAim        = register(new BooleanSetting("Require Mouse", true));
+    public final BooleanSetting ignoreTeammates = register(new BooleanSetting("Ignore Teammates", true));
+    public final BooleanSetting stopWhenBreaking = register(new BooleanSetting("Stop When Breaking", false));
+    public final BooleanSetting keepMoveDirection = register(new BooleanSetting(
+            "Keep Move Direction", true, () -> mode.getIndex() == MODE_SILENT));
+    public final SliderSetting  hoverDelay = register(new SliderSetting(
+            "Hover Delay", 100, 0, 500, 10, () -> stopWhenBreaking.getValue()));
+    public final BooleanSetting weaponOnly = register(new BooleanSetting("Weapon Only", false));
+
+    private long miningStartTime = -1L;
+
+    public AimAssist() { super("AimAssist", false); }
+
+    @Override
+    public String[] getSuffix() {
+        return new String[]{ mode.getValue() };
     }
-    
-    // ==================== MAIN UPDATE LOOP ====================
-    /**
-     * Called every game tick (20 times per second)
-     * This is where the dynamic recalculation happens
-     */
-    public void onTick() {
-        if (!isEnabled || mc.player == null || mc.world == null) {
-            return;
-        }
-        
-        // 1. Update target selection
-        updateTarget();
-        
-        // 2. If no target, smoothly reset
-        if (target == null) {
-            handleNoTarget();
-            return;
-        }
-        
-        // 3. Dynamic aim point calculation (happens every tick!)
-        Vec3d aimPoint = getDynamicAimPoint(target);
-        
-        // 4. Calculate required rotation
-        EntityPlayerSP player = mc.player;
-        Vec3d eyePos = player.getEyePosition(1.0f);
-        Rotation requiredRotation = RotationUtils.calculateRotation(eyePos, aimPoint);
-        
-        // 5. Apply FOV and range checks
-        if (!isWithinFOV(requiredRotation) || !isWithinRange(target)) {
-            return;
-        }
-        
-        // 6. Smooth rotation (anti-snap)
-        Rotation smoothed = applySmoothing(requiredRotation);
-        
-        // 7. Add human-like error
-        Rotation finalRotation = applyHumanError(smoothed);
-        
-        // 8. Apply rotation to player
-        applyRotation(finalRotation);
-        
-        // 9. Store state for next tick
-        this.currentRotation = finalRotation;
-        this.targetRotation = requiredRotation;
+
+    @Override
+    public void onDisabled() {
+        miningStartTime = -1L;
     }
-    
-    // ==================== TARGET SELECTION ====================
-    private void updateTarget() {
-        if (mc.world == null || mc.player == null) return;
-        
-        // Get all living entities (excluding self)
-        List<EntityLivingBase> entities = mc.world.getEntities(
-            EntityLivingBase.class,
-            entity -> entity != mc.player && entity.isEntityAlive()
-        );
-        
-        // Filter by range and filter
-        entities = entities.stream()
-            .filter(e -> mc.player.getDistance(e) <= MAX_RANGE)
-            .sorted(Comparator.comparingDouble(e -> mc.player.getDistance(e)))
-            .collect(Collectors.toList());
-        
-        if (entities.isEmpty()) {
-            target = null;
-            ticksWithoutTarget++;
-            return;
+
+    // ── Normal: real camera, once per tick ──────────────────────────────────────
+
+    @EventTarget
+    public void onTick(TickEvent event) {
+        if (!isEnabled() || event.getType() != EventType.POST) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (mode.getIndex() != MODE_NORMAL || !conditionsMet()) return;
+
+        EntityPlayer target = getEnemy(false);
+        if (target == null) return;
+
+        float baseYaw   = mc.thePlayer.rotationYaw;
+        float basePitch = mc.thePlayer.rotationPitch;
+        float[] rot = getRotationsToTarget(target, baseYaw, basePitch);
+        if (rot == null) return;
+
+        mc.thePlayer.rotationYaw     = rot[0];
+        mc.thePlayer.rotationPitch   = rot[1];
+        mc.thePlayer.rotationYawHead = rot[0];
+    }
+
+    // ── Silent: fake rotation only, via UpdateEvent + RotationState + MovementFix ──
+
+    @EventTarget
+    public void onUpdate(UpdateEvent event) {
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (mode.getIndex() != MODE_SILENT || !conditionsMet()) return;
+
+        EntityPlayer target = getEnemy(true);
+        if (target == null) return;
+
+        float baseYaw   = event.getYaw();
+        float basePitch = event.getPitch();
+        float[] rot = getRotationsToTarget(target, baseYaw, basePitch);
+        if (rot == null) return;
+
+        if (keepMoveDirection.getValue()) MovementFix.forceMovementFix = true;
+        RotationState.applyState(true, rot[0], rot[1], rot[0], 10);
+        event.setRotation(rot[0], rot[1], 10);
+    }
+
+    /** Shared by both modes: picks a point on the target and computes rotations toward it. */
+    private float[] getRotationsToTarget(EntityPlayer target, float baseYaw, float basePitch) {
+        boolean useBackup = ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue();
+        Vec3 aimPoint = pickAimPoint(target, useBackup);
+        if (aimPoint == null) return null;
+
+        float smoothFactor = 1.0f - (float) speed.getValue() / 30.0f;
+        return RotationUtil.getRotations(
+                aimPoint.xCoord - mc.thePlayer.posX,
+                aimPoint.yCoord - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight()),
+                aimPoint.zCoord - mc.thePlayer.posZ,
+                baseYaw, basePitch, 180.0f, smoothFactor);
+    }
+
+    /** Picks a point on the target to aim at, honoring the multipoint spread settings. */
+    private Vec3 pickAimPoint(EntityPlayer target, boolean useBackup) {
+        AxisAlignedBB bb = target.getEntityBoundingBox();
+        double mpH = multipointHorizontal.getValue() / 100.0;
+        double mpV = multipointVertical.getValue() / 100.0;
+
+        double width  = bb.maxX - bb.minX;
+        double height = bb.maxY - bb.minY;
+        double headY  = target.posY + target.getEyeHeight();
+
+        double offsetX = (Math.random() - 0.5) * width  * mpH;
+        double offsetZ = (Math.random() - 0.5) * width  * mpH;
+        double offsetY = (Math.random() - 0.5) * height * mpV;
+
+        double tx = (bb.minX + bb.maxX) / 2.0 + offsetX;
+        double tz = (bb.minZ + bb.maxZ) / 2.0 + offsetZ;
+        double ty = MathHelper.clamp_double(headY + offsetY, bb.minY + 0.1, bb.maxY - 0.1);
+
+        Vec3 point = new Vec3(tx, ty, tz);
+        if (!useBackup) return point;
+
+        if (hasValidAimPoint(target, point)) return point;
+
+        // Fall back to the exact head center — still worth attacking even if
+        // the randomized multipoint spot happened to be obstructed.
+        Vec3 fallback = new Vec3((bb.minX + bb.maxX) / 2.0, MathHelper.clamp_double(headY, bb.minY + 0.1, bb.maxY - 0.1), (bb.minZ + bb.maxZ) / 2.0);
+        return hasValidAimPoint(target, fallback) ? fallback : null;
+    }
+
+    private boolean hasValidAimPoint(EntityPlayer target, Vec3 point) {
+        Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
+
+        if (ignoreBehindWalls.getValue()) {
+            MovingObjectPosition blockHit = mc.theWorld.rayTraceBlocks(eyes, point, false, true, false);
+            if (blockHit != null) return false;
         }
-        
-        // Select closest target
-        EntityLivingBase newTarget = entities.get(0);
-        
-        // Check if we should switch targets (prevents wild flicking)
-        if (target != newTarget) {
-            // Don't switch if current target is still valid and in range
-            if (target != null && 
-                mc.player.getDistance(target) <= MAX_RANGE &&
-                target.isEntityAlive()) {
-                return;
+
+        if (ignoreBehindEntities.getValue()) {
+            for (Object obj : mc.theWorld.playerEntities) {
+                EntityPlayer other = (EntityPlayer) obj;
+                if (other == target || other == mc.thePlayer) continue;
+                AxisAlignedBB expanded = other.getEntityBoundingBox().expand(0.1, 0.1, 0.1);
+                MovingObjectPosition hit = expanded.calculateIntercept(eyes, point);
+                if (hit != null) return false;
             }
         }
-        
-        target = newTarget;
-        ticksWithoutTarget = 0;
+        return true;
     }
-    
-    private void handleNoTarget() {
-        ticksWithoutTarget++;
-        
-        // Slowly return to default aim if no target for > 3 ticks
-        if (ticksWithoutTarget > 3) {
-            // Could implement gradual reset here
+
+    // ── Targeting ─────────────────────────────────────────────────────────────
+
+    private EntityPlayer getEnemy(boolean silentMode) {
+        int fovVal = (int) fov.getValue();
+
+        List<EntityPlayer> candidates = new ArrayList<>();
+        for (Object obj : mc.theWorld.playerEntities) {
+            EntityPlayer p = (EntityPlayer) obj;
+            if (passesTargetFilters(p, fovVal)) candidates.add(p);
+        }
+        if (candidates.isEmpty()) return null;
+
+        Comparator<EntityPlayer> primary = getSortComparator();
+        candidates.sort(primary.thenComparingDouble(p -> mc.thePlayer.getDistanceSqToEntity(p)));
+
+        boolean useBackup = ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue();
+        if (!useBackup) return candidates.get(0);
+
+        for (EntityPlayer candidate : candidates) {
+            if (pickAimPoint(candidate, true) != null) return candidate;
+        }
+        return null;
+    }
+
+    private boolean passesTargetFilters(EntityPlayer target, int fovVal) {
+        if (target == mc.thePlayer || target.deathTime != 0) return false;
+        if (TeamUtil.isFriend(target)) return false;
+        if (ignoreTeammates.getValue() && TeamUtil.isSameTeam(target)) return false;
+        if (!aimInvis.getValue() && target.isInvisible()) return false;
+        if (TeamUtil.isBot(target)) return false;
+        if (RotationUtil.distanceToBox(target.getEntityBoundingBox()) > range.getValue()) return false;
+        if (fovVal != 360 && RotationUtil.angleToEntity(target) > fovVal) return false;
+        return true;
+    }
+
+    private Comparator<EntityPlayer> getSortComparator() {
+        switch (sortMode.getIndex()) {
+            case 0: return Comparator.comparingDouble(p -> p.getHealth() + p.getAbsorptionAmount());
+            case 2: return Comparator.comparingInt(p -> p.hurtTime);
+            case 3: return Comparator.comparingDouble(p -> mc.thePlayer.getDistanceSqToEntity(p));
+            default: return Comparator.comparingDouble(RotationUtil::angleToEntity); // Angle
         }
     }
-    
-    // ==================== DYNAMIC AIM POINT ====================
-    /**
-     * 🔥 The core dynamic calculation - recalculates every tick
-     * This is the "moving block" analogy in practice
-     */
-    private Vec3d getDynamicAimPoint(Entity target) {
-        // Cache recalculation every 2 ticks for performance
-        int currentTick = mc.player.ticksExisted;
-        if (lastAimPointTick == currentTick) {
-            return cachedAimPoint;
-        }
-        
-        lastAimPointTick = currentTick;
-        
-        // Get the target's bounding box
-        AxisAlignedBB bb = target.getBoundingBox();
-        Vec3d center = new Vec3d(
-            (bb.minX + bb.maxX) / 2.0,
-            (bb.minY + bb.maxY) / 2.0,
-            (bb.minZ + bb.maxZ) / 2.0
-        );
-        
-        // 1. PREDICTION: Lead moving targets
-        if (ENABLE_PREDICTION && isMoving(target)) {
-            Vec3d velocity = getEntityVelocity(target);
-            center = center.add(
-                velocity.x * PREDICTION_TICKS,
-                velocity.y * PREDICTION_TICKS,
-                velocity.z * PREDICTION_TICKS
-            );
-        }
-        
-        // 2. RANDOMIZATION: Natural aim point variation
-        if (AIM_SPREAD > 0) {
-            double spreadX = (random.nextDouble() - 0.5) * AIM_SPREAD;
-            double spreadY = (random.nextDouble() - 0.5) * AIM_SPREAD;
-            double spreadZ = (random.nextDouble() - 0.5) * AIM_SPREAD;
-            center = center.add(spreadX, spreadY, spreadZ);
-        }
-        
-        // 3. CACHE for performance
-        cachedAimPoint = center;
-        return center;
-    }
-    
-    private boolean isMoving(Entity entity) {
-        Vec3d vel = getEntityVelocity(entity);
-        return Math.abs(vel.x) > 0.01 || Math.abs(vel.z) > 0.01;
-    }
-    
-    private Vec3d getEntityVelocity(Entity entity) {
-        // Handle different entity types
-        if (entity instanceof EntityLivingBase) {
-            return new Vec3d(entity.motionX, entity.motionY, entity.motionZ);
-        }
-        return Vec3d.ZERO;
-    }
-    
-    // ==================== ROTATION CALCULATIONS ====================
-    private Rotation applySmoothing(Rotation targetRot) {
-        float yawDiff = MathHelper.wrapDegrees(targetRot.yaw - currentRotation.yaw);
-        float pitchDiff = MathHelper.wrapDegrees(targetRot.pitch - currentRotation.pitch);
-        
-        // Clamp turn speed
-        float maxSpeed = MAX_TURN_SPEED * getDynamicSpeedMultiplier();
-        yawDiff = MathHelper.clamp(yawDiff, -maxSpeed, maxSpeed);
-        pitchDiff = MathHelper.clamp(pitchDiff, -maxSpeed * 0.7f, maxSpeed * 0.7f);
-        
-        // Apply smoothing with dynamic factor
-        float smoothFactor = SMOOTHING_FACTOR * getDistanceBasedFactor();
-        
-        return new Rotation(
-            currentRotation.yaw + yawDiff * smoothFactor,
-            currentRotation.pitch + pitchDiff * smoothFactor
-        );
-    }
-    
-    private float getDynamicSpeedMultiplier() {
-        if (target == null) return 1.0f;
-        
-        // Aim faster when target is far, slower when close
-        float distance = mc.player.getDistance(target);
-        if (distance < 1.0f) return 0.5f;
-        if (distance > 4.0f) return 1.5f;
-        return 1.0f;
-    }
-    
-    private float getDistanceBasedFactor() {
-        if (target == null) return 1.0f;
-        
-        // More aggressive smoothing when close (prevents jitter)
-        float distance = mc.player.getDistance(target);
-        if (distance < 1.5f) return 0.6f;
-        if (distance > 4.0f) return 1.2f;
-        return 1.0f;
-    }
-    
-    private Rotation applyHumanError(Rotation rotation) {
-        if (random.nextFloat() < HUMAN_ERROR_CHANCE) {
-            // Add slight mis-aim
-            float errorYaw = (random.nextFloat() - 0.5f) * 0.5f;
-            float errorPitch = (random.nextFloat() - 0.5f) * 0.3f;
-            return new Rotation(
-                rotation.yaw + errorYaw,
-                rotation.pitch + errorPitch
-            );
-        }
-        return rotation;
-    }
-    
-    private void applyRotation(Rotation rotation) {
-        if (mc.player == null) return;
-        
-        // Normalize angles
-        rotation.yaw = MathHelper.wrapDegrees(rotation.yaw);
-        rotation.pitch = MathHelper.clamp(rotation.pitch, -90.0f, 90.0f);
-        
-        mc.player.rotationYaw = rotation.yaw;
-        mc.player.rotationPitch = rotation.pitch;
-        
-        // Store for next tick
-        previousAngles[0] = rotation.yaw;
-        previousAngles[1] = rotation.pitch;
-    }
-    
-    // ==================== VALIDATION ====================
-    private boolean isWithinFOV(Rotation rotation) {
-        if (mc.player == null) return true;
-        
-        float currentYaw = mc.player.rotationYaw;
-        float diff = MathHelper.wrapDegrees(rotation.yaw - currentYaw);
-        
-        return Math.abs(diff) <= FOV_LIMIT;
-    }
-    
-    private boolean isWithinRange(Entity target) {
-        return mc.player != null && mc.player.getDistance(target) <= MAX_RANGE;
-    }
-    
-    // ==================== MODULE CONTROLS ====================
-    public void enable() {
-        this.isEnabled = true;
-        SpiritClient.logger.info("AimAssist enabled");
-    }
-    
-    public void disable() {
-        this.isEnabled = false;
-        this.target = null;
-        SpiritClient.logger.info("AimAssist disabled");
-    }
-    
-    public void toggle() {
-        if (isEnabled) {
-            disable();
+
+    private boolean conditionsMet() {
+        if (mc.currentScreen != null) return false;
+        if (weaponOnly.getValue() && !ItemUtil.isHoldingSword()) return false;
+        if (clickAim.getValue() && !Mouse.isButtonDown(0)) return false;
+
+        if (stopWhenBreaking.getValue() && isBreakingBlock()) {
+            if (miningStartTime == -1L) miningStartTime = System.currentTimeMillis();
+            long elapsed = System.currentTimeMillis() - miningStartTime;
+            if (elapsed >= (long) hoverDelay.getValue()) return false;
         } else {
-            enable();
+            miningStartTime = -1L;
         }
+        return true;
     }
-    
-    public boolean isEnabled() {
-        return isEnabled;
-    }
-    
-    // ==================== GETTERS/SETTERS ====================
-    public EntityLivingBase getTarget() {
-        return target;
-    }
-    
-    public Rotation getCurrentRotation() {
-        return currentRotation;
-    }
-    
-    public Rotation getTargetRotation() {
-        return targetRotation;
-    }
-    
-    // ==================== NESTED CLASSES ====================
-    public static class Rotation {
-        public float yaw;
-        public float pitch;
-        
-        public Rotation(float yaw, float pitch) {
-            this.yaw = yaw;
-            this.pitch = pitch;
-        }
-        
-        @Override
-        public String toString() {
-            return String.format("Rotation{yaw=%.2f, pitch=%.2f}", yaw, pitch);
-        }
+
+    private boolean isBreakingBlock() {
+        return mc.objectMouseOver != null
+                && mc.objectMouseOver.typeOfHit == MovingObjectPosition.MovingObjectType.BLOCK
+                && Mouse.isButtonDown(0);
     }
 }
+
