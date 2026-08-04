@@ -63,15 +63,21 @@ public class BedwarsStatsCommand extends Command {
         boolean wroteAny = false;
 
         if (enabled(intel, intel == null ? null : intel.bwShowStar)) {
-            line.append("&f").append(player.star).append("&7\u272A  ");
+            String starCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getPrestigeColor(player.star));
+            line.append(starCode).append(player.star).append("&7\u272A  ");
             wroteAny = true;
         }
         if (enabled(intel, intel == null ? null : intel.bwShowFkdr)) {
-            line.append("&7FKDR &f").append(fmt(player.fkdr)).append("  ");
+            String fkdrCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getStatColor(player.fkdr, 3, 6));
+            line.append("&7FKDR ").append(fkdrCode).append(fmt(player.fkdr)).append("  ");
             wroteAny = true;
         }
         if (enabled(intel, intel == null ? null : intel.bwShowWlr)) {
-            line.append("&7WLR &f").append(fmt(player.wlr)).append("  ");
+            String wlrCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getStatColor(player.wlr, 2, 4));
+            line.append("&7WLR ").append(wlrCode).append(fmt(player.wlr)).append("  ");
             wroteAny = true;
         }
         if (enabled(intel, intel == null ? null : intel.bwShowBblr)) {
@@ -128,7 +134,9 @@ public class BedwarsStatsCommand extends Command {
         if (player.cheater && intel != null && intel.bwShowTag.getValue()) {
             String badge = player.getTagBadge();
             String detail = player.urchinTag != null ? player.urchinTag : badge;
-            reply("&d[" + badge + "] &7" + detail);
+            String tagCode = badge.equals("C") ? "§6"
+                    : myau.ui.intel.IntelColors.nearestCode(player.getTagColor());
+            reply(tagCode + "[" + badge + "] &7" + detail);
         }
     }
 
