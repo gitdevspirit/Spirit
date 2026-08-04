@@ -39,16 +39,27 @@ public abstract class MixinGuiPlayerTabOverlay {
             return vanillaName;
         }
 
-        StringBuilder stats = new StringBuilder(" §8| §6✫")
+        String starCode = myau.ui.intel.IntelColors.nearestCode(
+                myau.ui.intel.IntelColors.getPrestigeColor(player.star));
+        String fkdrCode = myau.ui.intel.IntelColors.nearestCode(
+                myau.ui.intel.IntelColors.getStatColor(player.fkdr, 3, 6));
+        String wlrCode = myau.ui.intel.IntelColors.nearestCode(
+                myau.ui.intel.IntelColors.getStatColor(player.wlr, 2, 4));
+
+        StringBuilder stats = new StringBuilder(" §8| ").append(starCode).append("\u272A")
                 .append(player.star)
-                .append(" §7FKDR §f")
+                .append(" §7FKDR ").append(fkdrCode)
                 .append(String.format(java.util.Locale.ROOT, "%.1f", player.fkdr))
-                .append(" §7WLR §f")
+                .append(" §7WLR ").append(wlrCode)
                 .append(String.format(java.util.Locale.ROOT, "%.1f", player.wlr));
 
         String tag = player.getTagBadge();
         if (!tag.isEmpty() && lobbyIntel.tabShowTag.getValue()) {
-            stats.append(" §d").append(tag);
+            // Closet cheater specifically renders gold in the tab list;
+            // everything else uses the nearest code to its usual color.
+            String tagCode = tag.equals("C") ? "§6"
+                    : myau.ui.intel.IntelColors.nearestCode(player.getTagColor());
+            stats.append(" ").append(tagCode).append(tag);
         }
 
         return vanillaName + stats;
