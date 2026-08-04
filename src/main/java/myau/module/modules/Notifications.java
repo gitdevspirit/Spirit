@@ -1,15 +1,13 @@
 package myau.module.modules;
 
-import com.google.gson.JsonObject;
 import myau.event.EventTarget;
-import myau.event.events.EventRender2D;
-import myau.event.events.EventTick;
+import myau.events.Render2DEvent;
+import myau.events.TickEvent;
 import myau.module.Category;
 import myau.module.Module;
-import myau.module.DropdownSetting;
-import myau.module.SliderSetting;
-import myau.module.BooleanSetting;
-import net.minecraft.client.Minecraft;
+import myau.property.properties.BooleanProperty;
+import myau.property.properties.ModeProperty;
+import myau.property.properties.NumberProperty;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -24,27 +22,26 @@ public class Notifications extends Module {
     public static final String[] WAVE_AXES = new String[]{"Vertical", "Horizontal"};
     public static final String[] VERTICAL_WAVE_DIRECTIONS = new String[]{"Down", "Up"};
     public static final String[] HORIZONTAL_WAVE_DIRECTIONS = new String[]{"Left", "Right"};
-    private static final String MINECRAFT_COLOR_CODES = "0123456789abcdef";
 
-    public final DropdownSetting colorMode = register(new DropdownSetting("Color mode", "Static", COLOR_MODES));
-    public final BooleanSetting useColorCodes = register(new BooleanSetting("Use color codes", false));
-    public final DropdownSetting waveAxis = register(new DropdownSetting("Wave axis", "Vertical", WAVE_AXES));
-    public final DropdownSetting verticalWaveDirection = register(new DropdownSetting("Wave direction ", "Down", VERTICAL_WAVE_DIRECTIONS));
-    public final DropdownSetting horizontalWaveDirection = register(new DropdownSetting("Wave direction", "Left", HORIZONTAL_WAVE_DIRECTIONS));
-    public final SliderSetting waveSpeed = register(new SliderSetting("Wave speed", 1.0, 0.1, 5.0, 0.1));
-    public final SliderSetting waveLength = register(new SliderSetting("Wave length", 1.0, 0.5, 5.0, 0.1));
-    public final SliderSetting fontSize = register(new SliderSetting("Scale", 1.0, 0.5, 2.0, 0.1));
-    public final SliderSetting animationSpeed = register(new SliderSetting("Animation speed", 0.1, 0.01, 1.0, 0.01));
+    public final ModeProperty colorMode = new ModeProperty("Color mode", "Static", COLOR_MODES);
+    public final BooleanProperty useColorCodes = new BooleanProperty("Use color codes", false);
+    public final ModeProperty waveAxis = new ModeProperty("Wave axis", "Vertical", WAVE_AXES);
+    public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", "Down", VERTICAL_WAVE_DIRECTIONS);
+    public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", "Left", HORIZONTAL_WAVE_DIRECTIONS);
+    public final NumberProperty waveSpeed = new NumberProperty("Wave speed", 1.0, 0.1, 5.0, 0.1);
+    public final NumberProperty waveLength = new NumberProperty("Wave length", 1.0, 0.5, 5.0, 0.1);
+    public final NumberProperty fontSize = new NumberProperty("Scale", 1.0, 0.5, 2.0, 0.1);
+    public final NumberProperty animationSpeed = new NumberProperty("Animation speed", 0.1, 0.01, 1.0, 0.01);
 
-    public final BooleanSetting showToggle = register(new BooleanSetting("Show module toggle", true));
-    public final BooleanSetting showState = register(new BooleanSetting("Show module state", true));
-    public final SliderSetting displayTime = register(new SliderSetting("Display time (s)", 2.0, 0.5, 10.0, 0.5));
-    public final SliderSetting maxNotifications = register(new SliderSetting("Max notifications", 5, 1, 10, 1));
-    public final DropdownSetting position = register(new DropdownSetting("Position", "Bottom Right", new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"}));
+    public final BooleanProperty showToggle = new BooleanProperty("Show module toggle", true);
+    public final BooleanProperty showState = new BooleanProperty("Show module state", true);
+    public final NumberProperty displayTime = new NumberProperty("Display time (s)", 2.0, 0.5, 10.0, 0.5);
+    public final NumberProperty maxNotifications = new NumberProperty("Max notifications", 5, 1, 10, 1);
+    public final ModeProperty position = new ModeProperty("Position", "Bottom Right", new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"});
 
-    public final BooleanSetting drawBackground = register(new BooleanSetting("Draw background", true));
-    public final BooleanSetting textShadow = register(new BooleanSetting("Text shadow", true));
-    public final BooleanSetting lowercase = register(new BooleanSetting("Lowercase", false));
+    public final BooleanProperty drawBackground = new BooleanProperty("Draw background", true);
+    public final BooleanProperty textShadow = new BooleanProperty("Text shadow", true);
+    public final BooleanProperty lowercase = new BooleanProperty("Lowercase", false);
 
     private final List<Notification> notifications = new ArrayList<>();
 
@@ -52,34 +49,18 @@ public class Notifications extends Module {
         super("Notifications", Category.RENDER);
     }
 
-    public static void showNotification(String title, String message, NotificationType type) {
-        Notifications instance = (Notifications) myau.Myau.getModuleManager().getModule(Notifications.class);
-        if (instance != null && instance.isEnabled()) {
-            instance.addNotification(title, message, type);
-        }
-    }
-
-    public static void showModuleToggle(Module module, boolean state) {
-        Notifications instance = (Notifications) myau.Myau.getModuleManager().getModule(Notifications.class);
-        if (instance != null && instance.isEnabled() && instance.showToggle.getValue()) {
-            String stateStr = instance.showState.getValue() ? (state ? " §aEnabled" : " §cDisabled") : "";
-            String message = module.getName() + stateStr;
-            instance.addNotification("Module", message, state ? NotificationType.INFO : NotificationType.WARNING);
-        }
-    }
-
     public void addNotification(String title, String message, NotificationType type) {
-        long durationMs = (long) (displayTime.getValue() * 1000.0);
+        long durationMs = (long) (displayTime.getValue().doubleValue() * 1000.0);
         notifications.add(new Notification(title, message, type, durationMs));
 
-        int max = (int) maxNotifications.getValue();
+        int max = maxNotifications.getValue().intValue();
         while (notifications.size() > max) {
             notifications.remove(0);
         }
     }
 
     @EventTarget
-    public void onTick(EventTick event) {
+    public void onTick(TickEvent event) {
         long now = System.currentTimeMillis();
         Iterator<Notification> iterator = notifications.iterator();
         while (iterator.hasNext()) {
@@ -91,15 +72,15 @@ public class Notifications extends Module {
     }
 
     @EventTarget
-    public void onRender2D(EventRender2D event) {
+    public void onRender2D(Render2DEvent event) {
         if (mc.thePlayer == null || mc.theWorld == null || notifications.isEmpty()) return;
 
         ScaledResolution sr = new ScaledResolution(mc);
-        float scale = (float) fontSize.getValue();
+        float scale = fontSize.getValue().floatValue();
         int width = sr.getScaledWidth();
         int height = sr.getScaledHeight();
 
-        float animSpeed = (float) animationSpeed.getValue();
+        float animSpeed = animationSpeed.getValue().floatValue();
         long now = System.currentTimeMillis();
 
         GlStateManager.pushMatrix();
@@ -155,7 +136,7 @@ public class Notifications extends Module {
                 Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + boxWidth), (int) (currentY + boxHeight), new Color(0, 0, 0, 150).getRGB());
             }
 
-            // Draw side indicator color bar
+            // Draw side accent line
             Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + 2), (int) (currentY + boxHeight), color);
 
             mc.fontRendererObj.drawString(displayText, currentX + padding + 2, currentY + 3, -1, textShadow.getValue());
@@ -202,10 +183,10 @@ public class Notifications extends Module {
     }
 
     private int getGradientWaveColor(Color c1, Color c2, double gradientOffset) {
-        double animationProgress = (Math.sin(getAnimatedWaveAngle(gradientOffset)) + 1.0) * 0.5;
-        int r = (int) (c1.getRed() + (c2.getRed() - c1.getRed()) * animationProgress);
-        int g = (int) (c1.getGreen() + (c2.getGreen() - c1.getGreen()) * animationProgress);
-        int b = (int) (c1.getBlue() + (c2.getBlue() - c1.getBlue()) * animationProgress);
+        double animProgress = (Math.sin(getAnimatedWaveAngle(gradientOffset)) + 1.0) * 0.5;
+        int r = (int) (c1.getRed() + (c2.getRed() - c1.getRed()) * animProgress);
+        int g = (int) (c1.getGreen() + (c2.getGreen() - c1.getGreen()) * animProgress);
+        int b = (int) (c1.getBlue() + (c2.getBlue() - c1.getBlue()) * animProgress);
         return new Color(r, g, b).getRGB();
     }
 
@@ -220,11 +201,11 @@ public class Notifications extends Module {
     }
 
     private double getWaveSpeedMultiplier() {
-        return Math.max(0.1, waveSpeed.getValue());
+        return Math.max(0.1, waveSpeed.getValue().doubleValue());
     }
 
     private double getWaveLengthMultiplier() {
-        return Math.max(0.5, waveLength.getValue());
+        return Math.max(0.5, waveLength.getValue().doubleValue());
     }
 
     public enum NotificationType {
