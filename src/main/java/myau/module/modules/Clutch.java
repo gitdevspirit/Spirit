@@ -4,7 +4,7 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.UpdateEvent;
-import myau.management.MovementFix;
+import myau.module.modules.MovementFix;
 import myau.management.RotationState;
 import myau.module.BooleanSetting;
 import myau.module.KeybindSetting;
