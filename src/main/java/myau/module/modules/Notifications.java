@@ -1,235 +1,215 @@
 package myau.module.modules;
 
+import myau.Myau;
 import myau.event.EventTarget;
 import myau.events.Render2DEvent;
-import myau.events.TickEvent;
+import myau.management.NotificationManager;
+import myau.module.BooleanSetting;
+import myau.module.DropdownSetting;
 import myau.module.Module;
-import myau.property.properties.BooleanProperty;
-import myau.property.properties.FloatProperty;
-import myau.property.properties.IntProperty;
-import myau.property.properties.ModeProperty;
-import net.minecraft.client.gui.Gui;
+import myau.module.SliderSetting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
+import org.lwjgl.opengl.GL11;
 
-import java.awt.Color;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 
 public class Notifications extends Module {
-    public static final String[] COLOR_MODES = new String[]{"Static", "Gradient", "Rainbow"};
-    public static final String[] WAVE_AXES = new String[]{"Vertical", "Horizontal"};
-    public static final String[] VERTICAL_WAVE_DIRECTIONS = new String[]{"Down", "Up"};
-    public static final String[] HORIZONTAL_WAVE_DIRECTIONS = new String[]{"Left", "Right"};
+    private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final ModeProperty colorMode = new ModeProperty("Color mode", 0, COLOR_MODES);
-    public final BooleanProperty useColorCodes = new BooleanProperty("Use color codes", false);
-    public final ModeProperty waveAxis = new ModeProperty("Wave axis", 0, WAVE_AXES);
-    public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", 0, VERTICAL_WAVE_DIRECTIONS);
-    public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", 0, HORIZONTAL_WAVE_DIRECTIONS);
-    public final FloatProperty waveSpeed = new FloatProperty("Wave speed", 1.0f, 0.1f, 5.0f);
-    public final FloatProperty waveLength = new FloatProperty("Wave length", 1.0f, 0.5f, 5.0f);
-    public final FloatProperty fontSize = new FloatProperty("Scale", 1.0f, 0.5f, 2.0f);
-    public final FloatProperty animationSpeed = new FloatProperty("Animation speed", 0.1f, 0.01f, 1.0f);
+    public final SliderSetting   duration = register(new SliderSetting("Duration",  3.0, 1.0, 10.0, 0.5));
+    public final DropdownSetting position = register(new DropdownSetting("Position", 0,
+            "Bottom Right", "Top Right", "Bottom Left", "Top Left"));
+    public final BooleanSetting  anim     = register(new BooleanSetting("Animation", true));
 
-    public final BooleanProperty showToggle = new BooleanProperty("Show module toggle", true);
-    public final BooleanProperty showState = new BooleanProperty("Show module state", true);
-    public final FloatProperty displayTime = new FloatProperty("Display time (s)", 2.0f, 0.5f, 10.0f);
-    public final FloatProperty duration = displayTime; // Compatibility alias
-    public final IntProperty maxNotifications = new IntProperty("Max notifications", 5, 1, 10);
-    public final ModeProperty position = new ModeProperty("Position", 0, new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"});
+    // ── Layout ────────────────────────────────────────────────────────────────
+    private static final int   H          = 28;   // card height
+    private static final int   ACCENT_W   = 3;    // left color stripe width
+    private static final int   PAD_LEFT   = 8;    // padding after accent stripe
+    private static final int   PAD_RIGHT  = 12;   // right padding
+    private static final int   MARGIN     = 12;   // screen edge margin
+    private static final int   GAP        = 5;    // gap between notifications
+    private static final float CORNER_R   = 5f;
+    private static final float ANIM_IN    = 220f;
+    private static final float ANIM_OUT   = 280f;
 
-    public final BooleanProperty drawBackground = new BooleanProperty("Draw background", true);
-    public final BooleanProperty textShadow = new BooleanProperty("Text shadow", true);
-    public final BooleanProperty lowercase = new BooleanProperty("Lowercase", false);
+    // ── Colors ────────────────────────────────────────────────────────────────
+    private static final int BG      = 0xEE0D0D0D; // near-black background
+    private static final int PINK    = 0xFFE991B8; // default accent (Spirit pink)
+    private static final int WHITE   = 0xFFEEEEFF;
+    private static final int DIM     = 0xFF888899;
 
-    private final List<Notification> notifications = new ArrayList<>();
-
-    public Notifications() {
-        super("Notifications", false);
-    }
-
-    public void addNotification(String title, String message, NotificationType type) {
-        long durationMs = (long) (displayTime.getValue() * 1000.0f);
-        notifications.add(new Notification(title, message, type, durationMs));
-
-        int max = maxNotifications.getValue();
-        while (notifications.size() > max) {
-            notifications.remove(0);
-        }
-    }
-
-    @EventTarget
-    public void onTick(TickEvent event) {
-        long now = System.currentTimeMillis();
-        Iterator<Notification> iterator = notifications.iterator();
-        while (iterator.hasNext()) {
-            Notification n = iterator.next();
-            if (n.isExpired(now) && n.animationProgress <= 0.01f) {
-                iterator.remove();
-            }
-        }
-    }
+    public Notifications() { super("Notifications", true); }
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
-        if (mc.thePlayer == null || mc.theWorld == null || notifications.isEmpty()) return;
+        if (mc.thePlayer == null || Myau.notificationManager == null) return;
+        List<NotificationManager.NotificationEntry> active = Myau.notificationManager.getActive();
+        if (active.isEmpty()) return;
 
-        ScaledResolution sr = new ScaledResolution(mc);
-        float scale = fontSize.getValue();
-        int width = sr.getScaledWidth();
-        int height = sr.getScaledHeight();
+        ScaledResolution sr  = new ScaledResolution(mc);
+        int sw = sr.getScaledWidth(), sh = sr.getScaledHeight();
+        int pos         = position.getIndex();
+        boolean right   = pos == 0 || pos == 1;
+        boolean bottom  = pos == 0 || pos == 2;
 
-        float animSpeed = animationSpeed.getValue();
-        long now = System.currentTimeMillis();
+        for (int i = 0; i < active.size(); i++) {
+            NotificationManager.NotificationEntry n = active.get(i);
 
-        GlStateManager.pushMatrix();
-        GlStateManager.scale(scale, scale, 1.0f);
+            long  age   = n.getAge();
+            long  total = n.durationMillis;
+            float alpha = computeAlpha(age, total);
+            float slide = computeSlide(age, total);
 
-        int scaledWidth = (int) (width / scale);
-        int scaledHeight = (int) (height / scale);
+            // Card width based on message
+            int msgW   = mc.fontRendererObj.getStringWidth(n.message);
+            int cardW  = ACCENT_W + PAD_LEFT + msgW + PAD_RIGHT;
+            int minW   = 120;
+            if (cardW < minW) cardW = minW;
 
-        int padding = 4;
-        int rowHeight = mc.fontRendererObj.FONT_HEIGHT + 6;
+            float slideOff = anim.getValue() ? (cardW + MARGIN + 20) * (1f - slide) : 0f;
+            float x = right  ? sw - MARGIN - cardW + slideOff : MARGIN - slideOff;
+            float y = bottom ? sh - MARGIN - H - i * (H + GAP)
+                             : MARGIN + i * (H + GAP);
 
-        int posMode = position.getValue();
-        boolean isTop = posMode == 2 || posMode == 3;
-        boolean isRight = posMode == 0 || posMode == 2;
+            // Accent color — use notification's own color if set, else Spirit pink
+            int accentRaw = n.color == 0xFFFFFF ? PINK : (0xFF000000 | n.color);
+            int accent    = withAlpha(accentRaw, alpha);
+            int bg        = withAlpha(BG, alpha);
+            int textCol   = withAlpha(WHITE, alpha);
+            int dimCol    = withAlpha(DIM, alpha);
 
-        float startY = isTop ? 10 : scaledHeight - 30;
-        float currentY = startY;
+            GlStateManager.pushMatrix();
+            GlStateManager.translate(x, y, 0);
 
-        double verticalWaveAccum = 0.0;
+            // ── Shadow ────────────────────────────────────────────────────────
+            solidRect(-2, -2, cardW + 4, H + 4, withAlpha(0xFF000000, alpha * 0.3f));
 
-        for (int i = 0; i < notifications.size(); i++) {
-            Notification n = notifications.get(i);
+            // ── Card background ───────────────────────────────────────────────
+            roundedRect(0, 0, cardW, H, CORNER_R, bg);
 
-            boolean expired = n.isExpired(now);
-            float targetAnim = expired ? 0.0f : 1.0f;
-            n.animationProgress += (targetAnim - n.animationProgress) * animSpeed;
+            // ── Accent left stripe ─────────────────────────────────────────────
+            // Draw as a rounded rect on the left, clipped to card
+            roundedRect(0, 0, ACCENT_W + CORNER_R, H, CORNER_R, accent); // fills corners
+            solidRect(ACCENT_W, 0, CORNER_R, H, bg);                      // square off right side
 
-            if (n.animationProgress < 0.02f && expired) continue;
-
-            String displayText = n.message;
-            if (lowercase.getValue()) {
-                displayText = displayText.toLowerCase();
+            // ── Progress bar at bottom — shrinks as notification expires ──────
+            float progress = total > 0 ? Math.max(0f, 1f - (float) age / total) : 1f;
+            int barW = (int)((cardW - ACCENT_W) * progress);
+            if (barW > 0) {
+                solidRect(ACCENT_W, H - 2, barW, 2, withAlpha(accent, alpha * 0.5f));
             }
 
-            int textWidth = mc.fontRendererObj.getStringWidth(displayText);
-            int boxWidth = textWidth + padding * 2;
-            int boxHeight = rowHeight;
+            // ── Thin top highlight line ───────────────────────────────────────
+            solidRect(ACCENT_W, 0, cardW - ACCENT_W, 1, withAlpha(0xFFFFFFFF, alpha * 0.06f));
 
-            float targetX = isRight ? (scaledWidth - boxWidth - 10) : 10;
-            float offscreenX = isRight ? scaledWidth : -boxWidth;
+            // ── Text ──────────────────────────────────────────────────────────
+            GlStateManager.enableTexture2D();
+            GlStateManager.enableBlend();
+            GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+            GlStateManager.disableDepth();
 
-            float currentX = offscreenX + (targetX - offscreenX) * n.animationProgress;
+            int fontH = mc.fontRendererObj.FONT_HEIGHT;
+            int ty    = (H - fontH) / 2;
 
-            double rowCenterX = currentX + boxWidth / 2.0;
-            double wavePhase = hudWavePhase(verticalWaveAccum, rowCenterX);
-            int color = getHudColor(wavePhase);
+            mc.fontRendererObj.drawString(n.message, ACCENT_W + PAD_LEFT, ty, textCol, true);
 
-            if (hudWaveIsVertical()) {
-                verticalWaveAccum += getVerticalWaveStep();
-            }
+            GlStateManager.enableDepth();
+            GlStateManager.disableBlend();
+            GL11.glColor4f(1, 1, 1, 1);
 
-            if (drawBackground.getValue()) {
-                Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + boxWidth), (int) (currentY + boxHeight), new Color(0, 0, 0, 150).getRGB());
-            }
-
-            Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + 2), (int) (currentY + boxHeight), color);
-
-            mc.fontRendererObj.drawString(displayText, currentX + padding + 2, currentY + 3, -1, textShadow.getValue());
-
-            if (isTop) {
-                currentY += (boxHeight + 3) * n.animationProgress;
-            } else {
-                currentY -= (boxHeight + 3) * n.animationProgress;
-            }
-        }
-
-        GlStateManager.popMatrix();
-    }
-
-    private boolean hudWaveIsVertical() {
-        return waveAxis.getValue() == 0;
-    }
-
-    private double hudWavePhase(double verticalAccum, double rowCenterX) {
-        return hudWaveIsVertical() ? verticalAccum : rowCenterX * (0.35 / getWaveLengthMultiplier()) * getHorizontalWaveDirectionSign();
-    }
-
-    private double getVerticalWaveStep() {
-        return 12.0 / getWaveLengthMultiplier() * getVerticalWaveDirectionSign();
-    }
-
-    private int getVerticalWaveDirectionSign() {
-        return verticalWaveDirection.getValue() == 1 ? 1 : -1;
-    }
-
-    private int getHorizontalWaveDirectionSign() {
-        return horizontalWaveDirection.getValue() == 1 ? 1 : -1;
-    }
-
-    public int getHudColor(double gradientOffset) {
-        int mode = colorMode.getValue();
-        if (mode == 2) {
-            return getRainbowWaveColor(gradientOffset);
-        } else if (mode == 1) {
-            return getGradientWaveColor(Color.WHITE, new Color(85, 85, 255), gradientOffset);
-        } else {
-            return Color.WHITE.getRGB();
+            GlStateManager.popMatrix();
         }
     }
 
-    private int getGradientWaveColor(Color c1, Color c2, double gradientOffset) {
-        double animProgress = (Math.sin(getAnimatedWaveAngle(gradientOffset)) + 1.0) * 0.5;
-        int r = (int) (c1.getRed() + (c2.getRed() - c1.getRed()) * animProgress);
-        int g = (int) (c1.getGreen() + (c2.getGreen() - c1.getGreen()) * animProgress);
-        int b = (int) (c1.getBlue() + (c2.getBlue() - c1.getBlue()) * animProgress);
-        return new Color(r, g, b).getRGB();
+    // ── GL helpers ────────────────────────────────────────────────────────────
+
+    private void solidRect(float x, float y, float w, float h, int color) {
+        float a = (color >> 24 & 0xFF) / 255f;
+        float r = (color >> 16 & 0xFF) / 255f;
+        float g = (color >> 8  & 0xFF) / 255f;
+        float b = (color       & 0xFF) / 255f;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(r, g, b, a);
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(x,     y);
+        GL11.glVertex2f(x + w, y);
+        GL11.glVertex2f(x + w, y + h);
+        GL11.glVertex2f(x,     y + h);
+        GL11.glEnd();
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
-    private int getRainbowWaveColor(double gradientOffset) {
-        double hue = getAnimatedWaveAngle(gradientOffset) / (Math.PI * 2D);
-        hue -= Math.floor(hue);
-        return Color.getHSBColor((float) hue, 1.0F, 1.0F).getRGB();
+    private void roundedRect(float x, float y, float w, float h, float r, int color) {
+        float a = (color >> 24 & 0xFF) / 255f;
+        float rf = (color >> 16 & 0xFF) / 255f;
+        float gf = (color >> 8  & 0xFF) / 255f;
+        float bf = (color       & 0xFF) / 255f;
+        GL11.glDisable(GL11.GL_TEXTURE_2D);
+        GL11.glEnable(GL11.GL_BLEND);
+        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+        GL11.glColor4f(rf, gf, bf, a);
+
+        // Center strips
+        quad(x + r, y,     x + w - r, y + h);
+        quad(x,     y + r, x + r,     y + h - r);
+        quad(x + w - r, y + r, x + w, y + h - r);
+
+        // Corners
+        arc(x + r,     y + r,     r, 180, 270);
+        arc(x + w - r, y + r,     r, 270, 360);
+        arc(x + r,     y + h - r, r,  90, 180);
+        arc(x + w - r, y + h - r, r,   0,  90);
+
+        GL11.glEnable(GL11.GL_TEXTURE_2D);
+        GL11.glColor4f(1, 1, 1, 1);
     }
 
-    private double getAnimatedWaveAngle(double gradientOffset) {
-        return (double) System.currentTimeMillis() / 7500.0F * (Math.PI * 2D) * getWaveSpeedMultiplier() + gradientOffset * 0.12;
+    private void quad(float x1, float y1, float x2, float y2) {
+        GL11.glBegin(GL11.GL_QUADS);
+        GL11.glVertex2f(x1, y1); GL11.glVertex2f(x2, y1);
+        GL11.glVertex2f(x2, y2); GL11.glVertex2f(x1, y2);
+        GL11.glEnd();
     }
 
-    private double getWaveSpeedMultiplier() {
-        return Math.max(0.1, waveSpeed.getValue());
-    }
-
-    private double getWaveLengthMultiplier() {
-        return Math.max(0.5, waveLength.getValue());
-    }
-
-    public enum NotificationType {
-        INFO, WARNING, ERROR
-    }
-
-    public static class Notification {
-        public final String title;
-        public final String message;
-        public final NotificationType type;
-        public final long creationTime;
-        public final long duration;
-        public float animationProgress = 0.0f;
-
-        public Notification(String title, String message, NotificationType type, long duration) {
-            this.title = title;
-            this.message = message;
-            this.type = type;
-            this.duration = duration;
-            this.creationTime = System.currentTimeMillis();
+    private void arc(float cx, float cy, float r, int start, int end) {
+        GL11.glBegin(GL11.GL_TRIANGLE_FAN);
+        GL11.glVertex2f(cx, cy);
+        for (int d = start; d <= end; d += 4) {
+            double rad = Math.toRadians(d);
+            GL11.glVertex2f(cx + (float) Math.cos(rad) * r, cy + (float) Math.sin(rad) * r);
         }
+        GL11.glEnd();
+    }
 
-        public boolean isExpired(long now) {
-            return now - creationTime > duration;
+    // ── Color helpers ─────────────────────────────────────────────────────────
+
+    private int withAlpha(int color, float alpha) {
+        int a = Math.max(0, Math.min(255, (int)(((color >> 24) & 0xFF) * alpha)));
+        return (a << 24) | (color & 0x00FFFFFF);
+    }
+
+    // ── Animation ─────────────────────────────────────────────────────────────
+
+    private float computeSlide(long age, long total) {
+        if (age < ANIM_IN) {
+            float t = age / ANIM_IN;
+            return 1f - (1f - t) * (1f - t) * (1f - t); // ease-out cubic
         }
+        if (total > 0 && total - age < ANIM_OUT) {
+            float t = (total - age) / ANIM_OUT;
+            return t * t * t; // ease-in cubic
+        }
+        return 1f;
+    }
+
+    private float computeAlpha(long age, long total) {
+        if (age < ANIM_IN)  return Math.min(1f, age / ANIM_IN * 1.5f);
+        if (total > 0 && total - age < ANIM_OUT) return Math.max(0f, (total - age) / ANIM_OUT);
+        return 1f;
     }
 }
