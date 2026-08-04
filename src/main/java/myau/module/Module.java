@@ -2,7 +2,6 @@ package myau.module;
 
 import myau.property.Property;
 import myau.property.properties.BooleanProperty;
-import myau.property.properties.KeybindProperty;
 import myau.module.modules.Notifications;
 import myau.module.ModuleManager;
 import net.minecraft.client.Minecraft;
@@ -18,7 +17,7 @@ public abstract class Module {
     private final Category category;
     private final List<Property<?>> properties = new ArrayList<>();
 
-    public final KeybindProperty keybind = new KeybindProperty("Keybind", 0);
+    public int key = 0;
     public final BooleanProperty enabled = new BooleanProperty("Enabled", false);
     public final BooleanProperty hidden = new BooleanProperty("Hidden", false);
 
@@ -33,7 +32,7 @@ public abstract class Module {
         this.name = name;
         this.nameInHud = nameInHud;
         this.category = category;
-        this.registerProperties(keybind, enabled, hidden);
+        this.registerProperties(enabled, hidden);
     }
 
     public String getName() {
@@ -46,6 +45,14 @@ public abstract class Module {
 
     public Category getCategory() {
         return category;
+    }
+
+    public int getKey() {
+        return key;
+    }
+
+    public void setKey(int key) {
+        this.key = key;
     }
 
     public String getInfo() {
