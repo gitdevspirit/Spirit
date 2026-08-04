@@ -1,1 +1,1 @@
-spirit runs u g
+spirits private ghost client
