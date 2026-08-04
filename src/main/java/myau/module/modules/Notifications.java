@@ -137,7 +137,7 @@ public class Notifications extends Module {
                 Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + boxWidth), (int) (currentY + boxHeight), new Color(0, 0, 0, 150).getRGB());
             }
 
-            // Draw side accent bar
+            // Side bar indicator
             Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + 2), (int) (currentY + boxHeight), color);
 
             mc.fontRendererObj.drawString(displayText, currentX + padding + 2, currentY + 3, -1, textShadow.getValue());
