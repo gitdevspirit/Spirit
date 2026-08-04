@@ -3,6 +3,8 @@ package myau.ui.hud;
 import myau.Myau;
 import myau.module.Module;
 import myau.module.BooleanSetting;
+import myau.font.CFontRenderer;
+import myau.font.FontProcess;
 import myau.module.modules.HUD;
 import myau.module.modules.Pit;
 import myau.ui.clickgui.RoundedUtils;
@@ -17,6 +19,7 @@ import java.util.List;
 
 public class ArraylistHUD {
     private final Minecraft mc = Minecraft.getMinecraft();
+    private HUD hud;
 
     private static final class Row {
         final String name;
@@ -33,6 +36,7 @@ public class ArraylistHUD {
     public void render() {
         ScaledResolution sr = new ScaledResolution(mc);
         HUD hud = (HUD) Myau.moduleManager.getModule(HUD.class);
+        this.hud = hud;
 
         if (hud == null || !hud.isEnabled()) return;
 
@@ -48,7 +52,7 @@ public class ArraylistHUD {
         boolean boundOnly = hud.alBoundOnly.getValue();
         boolean drawBg = hud.alBackground.getValue();
 
-        int fontH = mc.fontRendererObj.FONT_HEIGHT;
+        int fontH = fontHeight();
         int lineHeight = fontH + padY * 2;
 
         List<Row> rows = new ArrayList<>();
@@ -90,7 +94,7 @@ public class ArraylistHUD {
                         ? " " + fmt(module.getSuffix()[0], lowercase)
                         : "";
 
-                return mc.fontRendererObj.getStringWidth(
+                return fontWidth(
                         fmt(module.getName(), lowercase) + detail
                 );
             }).reversed());
@@ -110,7 +114,7 @@ public class ArraylistHUD {
 
         for (Row row : rows) {
             String display = (row.isPitSub ? "  " : "") + row.name;
-            int width = mc.fontRendererObj.getStringWidth(display + row.detail);
+            int width = fontWidth(display + row.detail);
 
             if (width > maxW) {
                 maxW = width;
@@ -146,8 +150,8 @@ public class ArraylistHUD {
             Row row = rows.get(i);
 
             String display = (row.isPitSub ? "  " : "") + row.name;
-            int nameW = mc.fontRendererObj.getStringWidth(display);
-            int detailW = mc.fontRendererObj.getStringWidth(row.detail);
+            int nameW = fontWidth(display);
+            int detailW = fontWidth(row.detail);
             int totalW = nameW + detailW;
 
             int rowY = bgY + i * (lineHeight + spacing);
@@ -177,7 +181,7 @@ public class ArraylistHUD {
 
             int textColor = row.isPitSub ? detailRGB : nameRGB;
 
-            mc.fontRendererObj.drawString(
+            drawFontString(
                     display,
                     textX,
                     textY,
@@ -186,7 +190,7 @@ public class ArraylistHUD {
             );
 
             if (!row.detail.isEmpty()) {
-                mc.fontRendererObj.drawString(
+                drawFontString(
                         row.detail,
                         textX + nameW,
                         textY,
@@ -231,6 +235,50 @@ public class ArraylistHUD {
 
     private String fmt(String value, boolean lower) {
         return lower ? value.toLowerCase() : value;
+    }
+
+    // ── Font resolution (Vanilla or one of the bundled TTF fonts) ──────────────
+
+    private CFontRenderer getCustomFont() {
+        if (hud == null || hud.alFont.getIndex() == 0) return null; // 0 = Vanilla
+
+        String key;
+        switch (hud.alFont.getIndex()) {
+            case 1: key = "client"; break;
+            case 2: key = "bold";   break;
+            case 3: key = "arial";  break;
+            case 4: key = "apple";  break;
+            case 5: key = "sans";   break;
+            case 6: key = "noto";   break;
+            case 7: key = "tahoma"; break;
+            default: return null;
+        }
+
+        return FontProcess.getScaledFont(key, (float) hud.alFontScale.getValue());
+    }
+
+    private int fontWidth(String text) {
+        CFontRenderer custom = getCustomFont();
+        return custom != null ? custom.getStringWidth(text) : mc.fontRendererObj.getStringWidth(text);
+    }
+
+    private int fontHeight() {
+        CFontRenderer custom = getCustomFont();
+        return custom != null ? custom.FONT_HEIGHT : mc.fontRendererObj.FONT_HEIGHT;
+    }
+
+    private void drawFontString(String text, float x, float y, int color, boolean shadow) {
+        CFontRenderer custom = getCustomFont();
+
+        if (custom != null) {
+            if (shadow) {
+                custom.drawStringWithShadow(text, x, y, color);
+            } else {
+                custom.drawString(text, x, y, color);
+            }
+        } else {
+            mc.fontRendererObj.drawString(text, x, y, color, shadow);
+        }
     }
 
     private static int rgba(double r, double g, double b, double a) {
