@@ -1,6 +1,7 @@
 package myau.module.modules;
 
 import myau.module.BooleanSetting;
+import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 
@@ -97,27 +98,82 @@ public class HUD extends Module {
     public final SliderSetting alGradBlue =
             register(new SliderSetting("AL Grad Blue", 55, 0, 255, 1));
 
+    // ── Animated text color (applies to both the header and list colors) ──
+    public final DropdownSetting colorMode =
+            register(new DropdownSetting("Color Mode", 0, "Static", "Gradient", "Rainbow"));
+
+    public final SliderSetting waveGradRed =
+            register(new SliderSetting("Wave Gradient Red", 85, 0, 255, 1));
+
+    public final SliderSetting waveGradGreen =
+            register(new SliderSetting("Wave Gradient Green", 85, 0, 255, 1));
+
+    public final SliderSetting waveGradBlue =
+            register(new SliderSetting("Wave Gradient Blue", 255, 0, 255, 1));
+
+    public final SliderSetting waveSpeed =
+            register(new SliderSetting("Wave Speed", 1.0, 0.1, 5.0, 0.1));
+
+    private static final long RAINBOW_PERIOD_MS = 4000L;
+
     public HUD() {
         super("HUD", true);
     }
 
     public Color getColor(long time) {
-        return new Color(
-                (int) red.getValue(),
-                (int) green.getValue(),
-                (int) blue.getValue()
-        );
+        return getColor(time, 0f);
     }
 
     public Color getColor(long time, float offset) {
-        return getColor(time);
+        return resolveColor(
+                time, offset,
+                (int) red.getValue(), (int) green.getValue(), (int) blue.getValue()
+        );
     }
 
     public Color getListColor() {
-        return new Color(
-                (int) listRed.getValue(),
-                (int) listGreen.getValue(),
-                (int) listBlue.getValue()
+        return resolveColor(
+                System.currentTimeMillis(), 0f,
+                (int) listRed.getValue(), (int) listGreen.getValue(), (int) listBlue.getValue()
         );
+    }
+
+    private Color resolveColor(long time, float offset, int baseR, int baseG, int baseB) {
+        int mode = colorMode.getIndex();
+
+        if (mode == 2) {
+            return rainbowColor(time, offset);
+        }
+
+        if (mode == 1) {
+            return gradientColor(time, offset, baseR, baseG, baseB);
+        }
+
+        return new Color(baseR, baseG, baseB);
+    }
+
+    private Color gradientColor(long time, float offset, int baseR, int baseG, int baseB) {
+        double t = (Math.sin(
+                time / 1000.0 * waveSpeed.getValue() + offset * 0.12
+        ) + 1.0) / 2.0;
+
+        int r = (int) (baseR + ((int) waveGradRed.getValue() - baseR) * t);
+        int g = (int) (baseG + ((int) waveGradGreen.getValue() - baseG) * t);
+        int b = (int) (baseB + ((int) waveGradBlue.getValue() - baseB) * t);
+
+        return new Color(clamp(r), clamp(g), clamp(b));
+    }
+
+    private Color rainbowColor(long time, float offset) {
+        double hue = (time / (double) RAINBOW_PERIOD_MS
+                * waveSpeed.getValue() + offset * 0.002) % 1.0;
+
+        if (hue < 0) hue += 1.0;
+
+        return Color.getHSBColor((float) hue, 0.8f, 1f);
+    }
+
+    private int clamp(int value) {
+        return Math.max(0, Math.min(255, value));
     }
 }
