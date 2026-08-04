@@ -286,9 +286,13 @@ public class IntelGui extends GuiScreen {
         String namePrefix = p.cheater ? "\u26D4 " : "";
         mc.fontRendererObj.drawString(namePrefix + p.name, nameX, cy + 8, nameCol, false);
 
-        // Level below name
-        String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.level;
-        mc.fontRendererObj.drawString(lvlStr, nameX, cy + 19, p.loading ? COL_DIM : COL_GOLD, false);
+        // Star below name — uses the Bedwars star count (not network level)
+        String lvlStr = p.loading ? "loading\u2026" : "\u2605 " + p.star;
+        mc.fontRendererObj.drawString(
+                lvlStr, nameX, cy + 19,
+                p.loading ? COL_DIM : IntelColors.getPrestigeColor(p.star),
+                false
+        );
 
         // Urchin tag badge below level with icon - using letter codes
         if (p.urchinTag != null) {
@@ -343,7 +347,7 @@ public class IntelGui extends GuiScreen {
         int _lw2 = cx + cw + CARD_PAD;
         gl();
         drawCentred(fmt(p.fkdr),                colFkdr(_lw2),   sy, statCol(p.fkdr, 3, 6));
-        drawCentred(fmt(p.wlr),                 colWlr(_lw2),    sy, statCol(p.wlr, 1.5, 4));
+        drawCentred(fmt(p.wlr),                 colWlr(_lw2),    sy, statCol(p.wlr, 2, 4));
         drawCentred(String.valueOf(p.winstreak), colStreak(_lw2), sy, statCol(p.winstreak, 10, 30));
 
         // Threat score number only (no bar)
@@ -377,9 +381,9 @@ public class IntelGui extends GuiScreen {
         mc.fontRendererObj.drawString(p.name, 0, 0, p.cheater ? COL_RED : COL_BRIGHT, false);
         GlStateManager.popMatrix();
 
-        // Level + team
-        String sub = "\u2605 " + p.level + (p.team != null ? "   [" + p.team + "]" : "");
-        mc.fontRendererObj.drawString(sub, x + 44f, y + 22f, COL_GOLD, false);
+        // Star + team
+        String sub = "\u2605 " + p.star + (p.team != null ? "   [" + p.team + "]" : "");
+        mc.fontRendererObj.drawString(sub, x + 44f, y + 22f, IntelColors.getPrestigeColor(p.star), false);
         y += 48;
 
         // Urchin tag — wrapped lines inside a background box
@@ -420,7 +424,7 @@ public class IntelGui extends GuiScreen {
 
         // Stats rows
         y = dRow(x, y, innerW, "Final K/D",   fmt(p.fkdr),                  statCol(p.fkdr, 3, 6));
-        y = dRow(x, y, innerW, "Win/Loss",     fmt(p.wlr),                   statCol(p.wlr, 1.5, 4));
+        y = dRow(x, y, innerW, "Win/Loss",     fmt(p.wlr),                   statCol(p.wlr, 2, 4));
         y = dRow(x, y, innerW, "Win Streak",   String.valueOf(p.winstreak),   statCol(p.winstreak, 10, 30));
         y = dRow(x, y, innerW, "Final Kills",  String.valueOf(p.finalKills),  COL_BRIGHT);
         y = dRow(x, y, innerW, "Beds Broken",  String.valueOf(p.bedsBroken),  COL_BRIGHT);
@@ -957,10 +961,7 @@ public class IntelGui extends GuiScreen {
     }
 
     private int statCol(double v, double mid, double high) {
-        if (v >= high)  return 0xFFFF3344;
-        if (v >= mid)   return 0xFFFF9933;
-        if (v >= mid/2) return 0xFFFFEE44;
-        return 0xFF44CC66;
+        return IntelColors.getStatColor(v, mid, high);
     }
 
     private int teamCol(String t) {
