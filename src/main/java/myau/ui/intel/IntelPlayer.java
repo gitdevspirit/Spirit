@@ -6,6 +6,8 @@ package myau.ui.intel;
 public class IntelPlayer {
     public String  name;
     public String  team;
+    /** Hypixel rank prefix (e.g. "§b[MVP§9+§b]"), extracted from the tab-list display name. */
+    public String  rankPrefix = "";
     public boolean loading    = true;
 
     // Hypixel BedWars stats
