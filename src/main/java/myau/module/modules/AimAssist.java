@@ -241,17 +241,20 @@ public class AimAssist extends Module {
             fixYaw = RotationState.getSmoothedYaw();
         }
         
+        // Check if player is moving (using moveForward or moveStrafe)
+        boolean isMoving = mc.thePlayer.movementInput.moveForward != 0 || mc.thePlayer.movementInput.moveStrafe != 0;
+        
         // Apply movement fix for Silent mode
         if (mode.getIndex() == MODE_SILENT && rotations.getIndex() == 2) {
             // STRONG movement fix - completely override strafe
-            if (MoveUtil.isMoving()) {
+            if (isMoving) {
                 MoveUtil.fixStrafe(fixYaw);
             }
         }
         
         // Lock View mode fix
         if (rotations.getIndex() == 3) {
-            if (MoveUtil.isMoving()) {
+            if (isMoving) {
                 MoveUtil.fixStrafe(fixYaw);
             }
         }
