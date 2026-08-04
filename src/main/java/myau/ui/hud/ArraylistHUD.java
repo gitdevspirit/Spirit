@@ -82,15 +82,19 @@ public class ArraylistHUD {
             others.add(module);
         }
 
-        others.sort(Comparator.comparingInt((Module module) -> {
-            String detail = showDetail && module.getSuffix().length > 0
-                    ? " " + fmt(module.getSuffix()[0], lowercase)
-                    : "";
+        if (hud != null && hud.alAlphabeticalSort.getValue()) {
+            others.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
+        } else {
+            others.sort(Comparator.comparingInt((Module module) -> {
+                String detail = showDetail && module.getSuffix().length > 0
+                        ? " " + fmt(module.getSuffix()[0], lowercase)
+                        : "";
 
-            return mc.fontRendererObj.getStringWidth(
-                    fmt(module.getName(), lowercase) + detail
-            );
-        }).reversed());
+                return mc.fontRendererObj.getStringWidth(
+                        fmt(module.getName(), lowercase) + detail
+                );
+            }).reversed());
+        }
 
         for (Module module : others) {
             String detail = showDetail && module.getSuffix().length > 0
@@ -159,6 +163,13 @@ public class ArraylistHUD {
                         gradientColor,
                         hud.alGradient.getValue()
                 );
+
+                if (hud.alOutline.getIndex() != 0) {
+                    drawRowOutline(
+                            bgX, rowY, bgW, lineHeight, rounding,
+                            nameRGB, hud.alOutline.getIndex() == 2, left
+                    );
+                }
             }
 
             int textX = left ? bgX + padX : bgX + bgW - totalW - padX;
@@ -272,6 +283,30 @@ public class ArraylistHUD {
                     gradient
             );
         }
+    }
+
+    private void drawRowOutline(
+            int x, int y, int width, int height, float radius,
+            int color, boolean sideOnly, boolean left
+    ) {
+        int outlineColor = (color & 0x00FFFFFF) | 0x99000000;
+        int inset = Math.max(1, (int) radius / 2);
+
+        if (sideOnly) {
+            // A single accent-style line on the aligned edge.
+            if (left) {
+                net.minecraft.client.gui.Gui.drawRect(x, y, x + 1, y + height, outlineColor);
+            } else {
+                net.minecraft.client.gui.Gui.drawRect(x + width - 1, y, x + width, y + height, outlineColor);
+            }
+            return;
+        }
+
+        // Full — thin border on all four edges (approximate for rounded corners).
+        net.minecraft.client.gui.Gui.drawRect(x + inset, y, x + width - inset, y + 1, outlineColor);
+        net.minecraft.client.gui.Gui.drawRect(x + inset, y + height - 1, x + width - inset, y + height, outlineColor);
+        net.minecraft.client.gui.Gui.drawRect(x, y + inset, x + 1, y + height - inset, outlineColor);
+        net.minecraft.client.gui.Gui.drawRect(x + width - 1, y + inset, x + width, y + height - inset, outlineColor);
     }
 
     private void drawHorizontalGradient(
