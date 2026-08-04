@@ -52,6 +52,7 @@ public class FontProcess {
         registerFont("arial", createFont("arial", 18));
         registerFont("apple", createFont("apple", 18));
         registerFont("sans", createFont("sans", 18));
+        registerFont("tahoma", createFont("tahoma", 18));
         registerFont("icon", createFont("icon", 40));
     }
 
