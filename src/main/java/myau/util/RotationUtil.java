@@ -54,9 +54,19 @@ public class RotationUtil {
         double horizontalDistance = Math.sqrt(targetX * targetX + targetZ * targetZ);
         float yawDelta = MathHelper.wrapAngleTo180_float((float) (Math.atan2(targetZ, targetX) * 180.0 / Math.PI) - 90.0f - currentYaw);
         float pitchDelta = MathHelper.wrapAngleTo180_float((float) (-Math.atan2(targetY, horizontalDistance) * 180.0 / Math.PI) - currentPitch);
-        yawDelta = Math.abs(yawDelta) <= 1.0f ? 0.0f : RotationUtil.smoothAngle(RotationUtil.clampAngle(yawDelta, maxAngle), smoothFactor);
-        pitchDelta = Math.abs(pitchDelta) <= 1.0f ? 0.0f : RotationUtil.smoothAngle(RotationUtil.clampAngle(pitchDelta, maxAngle), smoothFactor);
-        return new float[]{RotationUtil.quantizeAngle(currentYaw + yawDelta), RotationUtil.quantizeAngle(currentPitch + pitchDelta)};
+        // Snap fully instead of freezing at 0 once we're within 1° — previously this
+        // created a dead zone where the aim would get "close" and then never actually
+        // finish converging on the target.
+        yawDelta = Math.abs(yawDelta) <= 1.0f ? yawDelta : RotationUtil.smoothAngle(RotationUtil.clampAngle(yawDelta, maxAngle), smoothFactor);
+        pitchDelta = Math.abs(pitchDelta) <= 1.0f ? pitchDelta : RotationUtil.smoothAngle(RotationUtil.clampAngle(pitchDelta, maxAngle), smoothFactor);
+        float newYaw   = RotationUtil.quantizeAngle(currentYaw + yawDelta);
+        float newPitch = RotationUtil.quantizeAngle(RotationUtil.clampPitch(currentPitch + pitchDelta));
+        return new float[]{newYaw, newPitch};
+    }
+
+    /** Clamps a pitch value to the range the client (and most servers) consider valid. */
+    public static float clampPitch(float pitch) {
+        return MathHelper.clamp_float(pitch, -90.0f, 90.0f);
     }
 
     public static Vec3 clampVecToBox(Vec3 vector, AxisAlignedBB boundingBox) {
