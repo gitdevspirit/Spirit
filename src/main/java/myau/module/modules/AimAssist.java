@@ -11,14 +11,11 @@ import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.util.ItemUtil;
-import myau.util.MoveUtil;
 import myau.util.RotationUtil;
 import myau.util.TeamUtil;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
-import net.minecraft.util.MathHelper;
-import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
 import org.lwjgl.input.Mouse;
 
@@ -32,6 +29,7 @@ import java.util.Random;
  */
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
+    private static final Random random = new Random();
 
     private static final int MODE_NORMAL = 0;
     private static final int MODE_SILENT = 1;
@@ -58,7 +56,7 @@ public class AimAssist extends Module {
     public final BooleanSetting aimInvis = register(new BooleanSetting("Aim Invisible", false));
     public final BooleanSetting botCheck = register(new BooleanSetting("Bot Check", true));
 
-    private EntityPlayer target = null;
+    private EntityPlayer currentTarget = null;
     private float previousYaw = 0;
     private float previousPitch = 0;
 
@@ -73,7 +71,7 @@ public class AimAssist extends Module {
 
     @Override
     public void onDisabled() {
-        target = null;
+        currentTarget = null;
         RotationState.applyState(false, 0, 0, 0, 0);
     }
 
@@ -87,11 +85,11 @@ public class AimAssist extends Module {
 
         EntityPlayer target = getTarget();
         if (target == null) {
-            this.target = null;
+            currentTarget = null;
             return;
         }
 
-        this.target = target;
+        currentTarget = target;
         
         float baseYaw = mc.thePlayer.rotationYaw;
         float basePitch = mc.thePlayer.rotationPitch;
@@ -113,12 +111,12 @@ public class AimAssist extends Module {
 
         EntityPlayer target = getTarget();
         if (target == null) {
-            this.target = null;
+            currentTarget = null;
             RotationState.applyState(false, 0, 0, 0, 0);
             return;
         }
 
-        this.target = target;
+        currentTarget = target;
         
         float baseYaw = event.getYaw();
         float basePitch = event.getPitch();
@@ -134,26 +132,12 @@ public class AimAssist extends Module {
             if (rotations.getIndex() == 3) {
                 Myau.rotationManager.setRotation(rot[0], rot[1], 1, true);
             }
-            if (moveFix.getIndex() != 0 || rotations.getIndex() == 3) {
-                event.setPervRotation(rot[0], 1);
-            }
+            // Removed moveFix reference since we don't have MoveInputEvent
         }
 
         // Store for state
         previousYaw = rot[0];
         previousPitch = rot[1];
-    }
-
-    // ── Move Fix (from KillAura) ─────────────────────────────────────────────
-
-    @EventTarget
-    public void onMove(MoveInputEvent event) {
-        if (!isEnabled()) return;
-        if (moveFix.getIndex() == 1 && rotations.getIndex() != 3 && 
-            RotationState.isActived() && RotationState.getPriority() == 1.0F && 
-            MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-        }
     }
 
     // ── Core: Get Rotations (from KillAura) ──────────────────────────────────
@@ -163,16 +147,19 @@ public class AimAssist extends Module {
         
         // Use KillAura's rotation system
         if (rotations.getIndex() == 2 || rotations.getIndex() == 3) {
+            float angleStepVal = (float) angleStep.getValue() + (random.nextFloat() - 0.5f) * 10.0f;
+            float smoothVal = (float) smoothing.getValue() / 100.0f;
+            
             return RotationUtil.getRotationsToBox(
                 box,
                 baseYaw,
                 basePitch,
-                (float) angleStep.getValue() + RandomUtil.nextFloat(-5.0F, 5.0F),
-                (float) smoothing.getValue() / 100.0F
+                angleStepVal,
+                smoothVal
             );
         }
         
-        // Fallback: simple rotations
+        // Fallback: simple rotations to center of box
         Vec3 eyePos = mc.thePlayer.getPositionEyes(1.0f);
         Vec3 targetPos = new Vec3(
             (box.minX + box.maxX) / 2.0,
@@ -242,11 +229,11 @@ public class AimAssist extends Module {
 
     // ── Getters ──────────────────────────────────────────────────────────────
 
-    public EntityPlayer getTarget() {
-        return target;
+    public EntityPlayer getCurrentTarget() {
+        return currentTarget;
     }
 
     public boolean hasTarget() {
-        return target != null;
+        return currentTarget != null;
     }
 }
