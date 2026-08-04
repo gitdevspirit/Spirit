@@ -78,9 +78,8 @@ public abstract class Module {
             if (Myau.notificationManager != null) {
                Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
                if (notifModule != null && notifModule.isEnabled()) {
-                  String action = this.enabled ? "toggled" : "untoggled";
                   long dur = (long)(notifModule.duration.getValue() * 1000.0);
-                  Myau.notificationManager.add(this.getName() + " " + action, dur, this.enabled ? 0xE991B8 : 0x666666);
+                  Myau.notificationManager.addToggle(this.getName(), this.enabled, dur, this.enabled ? 0xE991B8 : 0x666666);
                }
             }
          } catch (Exception var4) {
