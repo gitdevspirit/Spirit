@@ -57,7 +57,7 @@ public class AimAssist extends Module {
             "Hover Delay", 100, 0, 500, 10, () -> stopWhenBreaking.getValue()));
     public final BooleanSetting weaponOnly = register(new BooleanSetting("Weapon Only", false));
     
-    // ==================== NEW DYNAMIC ROTATION SETTINGS ====================
+    // ==================== DYNAMIC ROTATION SETTINGS ====================
     public final SliderSetting   prediction = register(new SliderSetting("Prediction", 0, 0, 10, 1));
     public final SliderSetting   smoothness = register(new SliderSetting("Smoothness", 8, 1, 20, 1));
     public final BooleanSetting  dynamicAimPoint = register(new BooleanSetting("Dynamic Aim Point", true));
@@ -128,10 +128,8 @@ public class AimAssist extends Module {
         EntityPlayer target = getEnemy(true);
         if (target == null) {
             currentTarget = null;
-            // Gradually release silent aim
-            if (RotationState.isSilentAimActive()) {
-                RotationState.applyState(false, 0, 0, 0, 0);
-            }
+            // Deactivate silent aim
+            RotationState.applyState(false, 0, 0, 0, 0);
             return;
         }
 
