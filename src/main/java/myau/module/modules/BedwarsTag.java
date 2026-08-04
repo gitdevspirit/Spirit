@@ -97,12 +97,26 @@ public class BedwarsTag extends Module {
 
             String[] parts = buildParts(intel, player.getName());
             String starPart   = parts[0]; // e.g. "☆8"
-            String namePart   = parts[1]; // e.g. "BadAiiim"
             String urchinPart = parts[2]; // e.g. "CC" or ""
             String healthPart = buildHealthText(player); // e.g. " 20" or " 10.0" or " 20"(tab)
 
+            // In an active Bedwars match (team scoreboard assigned by the
+            // server) — color the name by team instead of showing rank.
+            // In a lobby (no team yet) — show the Hypixel rank prefix instead.
+            String namePart;
+            int nameColor;
+
+            if (player.getTeam() != null) {
+                namePart = player.getName();
+                nameColor = TeamUtil.getTeamColor(player, 1f).getRGB() | 0xFF000000;
+            } else {
+                String rank = (intel != null && intel.rankPrefix != null && !intel.rankPrefix.isEmpty())
+                        ? intel.rankPrefix + " " : "";
+                namePart = rank + player.getName();
+                nameColor = 0xFFFFFFFF;
+            }
+
             int starColor   = getStarColor(intel);
-            int nameColor   = 0xFFFFFFFF;
             int urchinColor = getUrchinColor(intel);
             int healthColor = getHealthColor(player);
 
