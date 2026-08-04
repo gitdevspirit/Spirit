@@ -89,6 +89,12 @@ public class HUD extends Module {
     public final SliderSetting alBgAlpha =
             register(new SliderSetting("AL BG Alpha", 210, 0, 255, 1));
 
+    public final BooleanSetting alAlphabeticalSort =
+            register(new BooleanSetting("AL Alphabetical Sort", false));
+
+    public final DropdownSetting alOutline =
+            register(new DropdownSetting("AL Outline", 0, "None", "Full", "Side"));
+
     public final SliderSetting alGradRed =
             register(new SliderSetting("AL Grad Red", 38, 0, 255, 1));
 
