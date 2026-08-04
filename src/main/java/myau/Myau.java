@@ -175,6 +175,7 @@ public class Myau {
         moduleManager.modules.put(SafeWalk.class, new SafeWalk());
         moduleManager.modules.put(Scaffold.class, new Scaffold());
         moduleManager.modules.put(Clutch.class, new Clutch());
+        moduleManager.modules.put(myau.module.modules.MovementFix.class, new myau.module.modules.MovementFix());
         moduleManager.modules.put(AutoBlockIn.class, new AutoBlockIn());
         moduleManager.modules.put(Spammer.class, new Spammer());
         moduleManager.modules.put(Pit.class, new Pit());
