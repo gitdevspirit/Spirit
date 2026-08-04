@@ -59,7 +59,7 @@ public class AimAssist extends Module {
     public final BooleanSetting aimInvis = register(new BooleanSetting("Aim Invisible", false));
     public final BooleanSetting botCheck = register(new BooleanSetting("Bot Check", true));
 
-    private EntityPlayer target = null;
+    private EntityPlayer currentTarget = null;
 
     public AimAssist() {
         super("AimAssist", false);
@@ -72,7 +72,7 @@ public class AimAssist extends Module {
 
     @Override
     public void onDisabled() {
-        target = null;
+        currentTarget = null;
         RotationState.applyState(false, 0, 0, 0, 0);
     }
 
@@ -86,11 +86,11 @@ public class AimAssist extends Module {
 
         EntityPlayer target = getTarget();
         if (target == null) {
-            this.target = null;
+            currentTarget = null;
             return;
         }
 
-        this.target = target;
+        currentTarget = target;
         
         float baseYaw = mc.thePlayer.rotationYaw;
         float basePitch = mc.thePlayer.rotationPitch;
@@ -112,12 +112,12 @@ public class AimAssist extends Module {
 
         EntityPlayer target = getTarget();
         if (target == null) {
-            this.target = null;
+            currentTarget = null;
             RotationState.applyState(false, 0, 0, 0, 0);
             return;
         }
 
-        this.target = target;
+        currentTarget = target;
         
         // ── EXACT KillAura rotation logic ────────────────────────────────────
         if (rotations.getIndex() == 2 || rotations.getIndex() == 3) {
@@ -236,11 +236,11 @@ public class AimAssist extends Module {
 
     // ── Getters ──────────────────────────────────────────────────────────────
 
-    public EntityPlayer getTarget() {
-        return target;
+    public EntityPlayer getCurrentTarget() {
+        return currentTarget;
     }
 
     public boolean hasTarget() {
-        return target != null;
+        return currentTarget != null;
     }
 }
