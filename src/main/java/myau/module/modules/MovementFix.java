@@ -43,6 +43,9 @@ public class MovementFix {
         if (!forceMovementFix || !RotationState.isActived()) return;
         if (mc.thePlayer == null) return;
 
+        myau.module.Module toggle = myau.Myau.moduleManager.getModule("MovementFix");
+        if (toggle != null && !toggle.isEnabled()) return;
+
         float forward = mc.thePlayer.movementInput.moveForward;
         float strafe  = mc.thePlayer.movementInput.moveStrafe;
         if (forward == 0.0f && strafe == 0.0f) return;
