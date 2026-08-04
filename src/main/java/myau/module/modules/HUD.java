@@ -1,179 +1,47 @@
 package myau.module.modules;
 
-import myau.module.BooleanSetting;
-import myau.module.DropdownSetting;
+import myau.module.Category;
 import myau.module.Module;
-import myau.module.SliderSetting;
+import myau.property.properties.BooleanProperty;
+import myau.property.properties.ColorProperty;
+import myau.property.properties.FloatProperty;
+import myau.property.properties.ModeProperty;
 
 import java.awt.Color;
 
 public class HUD extends Module {
-    public final BooleanSetting toggleSound =
-            register(new BooleanSetting("Toggle Sound", true));
+    public static final String[] COLOR_MODES = new String[]{"Static", "Gradient", "Rainbow"};
+    public static final String[] WAVE_AXES = new String[]{"Vertical", "Horizontal"};
+    public static final String[] VERTICAL_WAVE_DIRECTIONS = new String[]{"Down", "Up"};
+    public static final String[] HORIZONTAL_WAVE_DIRECTIONS = new String[]{"Left", "Right"};
 
-    public final BooleanSetting toggleAlerts =
-            register(new BooleanSetting("Toggle Alerts", true));
+    public static float posX = 2.0f;
+    public static float posY = 2.0f;
 
-    public final SliderSetting scale =
-            register(new SliderSetting("Scale", 1.0, 0.5, 3.0, 0.1));
+    public final ModeProperty colorMode = new ModeProperty("Color mode", 0, COLOR_MODES);
+    public final ColorProperty hudColor = new ColorProperty("Color 1", new Color(255, 255, 255));
+    public final ColorProperty hudColor2 = new ColorProperty("Color 2", new Color(85, 85, 255));
+    public final ModeProperty waveAxis = new ModeProperty("Wave axis", 0, WAVE_AXES);
+    public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", 0, VERTICAL_WAVE_DIRECTIONS);
+    public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", 0, HORIZONTAL_WAVE_DIRECTIONS);
+    public final FloatProperty waveSpeed = new FloatProperty("Wave speed", 1.0f, 0.1f, 5.0f);
+    public final FloatProperty waveLength = new FloatProperty("Wave length", 1.0f, 0.5f, 5.0f);
+    public final FloatProperty animationSpeed = new FloatProperty("Animation speed", 0.1f, 0.01f, 1.0f);
 
-    public final BooleanSetting shadow =
-            register(new BooleanSetting("Shadow", true));
-
-    public final SliderSetting listRed =
-            register(new SliderSetting("List Red", 255, 0, 255, 1));
-
-    public final SliderSetting listGreen =
-            register(new SliderSetting("List Green", 136, 0, 255, 1));
-
-    public final SliderSetting listBlue =
-            register(new SliderSetting("List Blue", 85, 0, 255, 1));
-
-    public final SliderSetting red =
-            register(new SliderSetting("Red", 136, 0, 255, 1));
-
-    public final SliderSetting green =
-            register(new SliderSetting("Green", 136, 0, 255, 1));
-
-    public final SliderSetting blue =
-            register(new SliderSetting("Blue", 136, 0, 255, 1));
-
-    public final SliderSetting alPadX =
-            register(new SliderSetting("AL Pad X", 5, 0, 20, 1));
-
-    public final SliderSetting alPadY =
-            register(new SliderSetting("AL Pad Y", 3, 0, 20, 1));
-
-    public final SliderSetting alRounding =
-            register(new SliderSetting("AL Rounding", 5, 0, 16, 1));
-
-    public final SliderSetting alSpacing =
-            register(new SliderSetting("AL Spacing", 2, 0, 20, 1));
-
-    public final SliderSetting alPosX =
-            register(new SliderSetting("AL X", 2, 0, 1000, 1));
-
-    public final SliderSetting alPosY =
-            register(new SliderSetting("AL Y", 4, 0, 1000, 1));
-
-    public final BooleanSetting alLeft =
-            register(new BooleanSetting("AL Left Side", false));
-
-    public final BooleanSetting alLowercase =
-            register(new BooleanSetting("AL Lowercase", true));
-
-    public final BooleanSetting alShowDetails =
-            register(new BooleanSetting("AL Details", true));
-
-    public final BooleanSetting alBoundOnly =
-            register(new BooleanSetting("AL Bound Only", false));
-
-    public final BooleanSetting alBackground =
-            register(new BooleanSetting("AL Background", true));
-
-    public final BooleanSetting alGradient =
-            register(new BooleanSetting("AL Gradient", true));
-
-    public final BooleanSetting alVanillaFont =
-            register(new BooleanSetting("AL Vanilla Font", true));
-
-    public final SliderSetting alBgRed =
-            register(new SliderSetting("AL BG Red", 8, 0, 255, 1));
-
-    public final SliderSetting alBgGreen =
-            register(new SliderSetting("AL BG Green", 8, 0, 255, 1));
-
-    public final SliderSetting alBgBlue =
-            register(new SliderSetting("AL BG Blue", 14, 0, 255, 1));
-
-    public final SliderSetting alBgAlpha =
-            register(new SliderSetting("AL BG Alpha", 210, 0, 255, 1));
-
-    public final SliderSetting alGradRed =
-            register(new SliderSetting("AL Grad Red", 38, 0, 255, 1));
-
-    public final SliderSetting alGradGreen =
-            register(new SliderSetting("AL Grad Green", 15, 0, 255, 1));
-
-    public final SliderSetting alGradBlue =
-            register(new SliderSetting("AL Grad Blue", 55, 0, 255, 1));
-
-    // ── Animated text color (applies to both the header and list colors) ──
-    public final DropdownSetting colorMode =
-            register(new DropdownSetting("Color Mode", 0, "Static", "Gradient", "Rainbow"));
-
-    public final SliderSetting waveGradRed =
-            register(new SliderSetting("Wave Gradient Red", 85, 0, 255, 1));
-
-    public final SliderSetting waveGradGreen =
-            register(new SliderSetting("Wave Gradient Green", 85, 0, 255, 1));
-
-    public final SliderSetting waveGradBlue =
-            register(new SliderSetting("Wave Gradient Blue", 255, 0, 255, 1));
-
-    public final SliderSetting waveSpeed =
-            register(new SliderSetting("Wave Speed", 1.0, 0.1, 5.0, 0.1));
-
-    private static final long RAINBOW_PERIOD_MS = 4000L;
+    public final BooleanProperty alphabeticalSort = new BooleanProperty("Alphabetical", false);
+    public final BooleanProperty alignRight = new BooleanProperty("Align right", false);
+    public final BooleanProperty drawBackground = new BooleanProperty("Background", true);
+    public final FloatProperty outline = new FloatProperty("Outline", 0.0f, 0.0f, 1.0f);
+    public final BooleanProperty textShadow = new BooleanProperty("Text shadow", true);
+    public final BooleanProperty lowercase = new BooleanProperty("Lowercase", false);
+    public final BooleanProperty showInfo = new BooleanProperty("Show info", true);
 
     public HUD() {
-        super("HUD", true);
-    }
-
-    public Color getColor(long time) {
-        return getColor(time, 0f);
-    }
-
-    public Color getColor(long time, float offset) {
-        return resolveColor(
-                time, offset,
-                (int) red.getValue(), (int) green.getValue(), (int) blue.getValue()
+        super("HUD", Category.RENDER);
+        this.registerProperties(
+                colorMode, hudColor, hudColor2, waveAxis, verticalWaveDirection, horizontalWaveDirection,
+                waveSpeed, waveLength, animationSpeed, alphabeticalSort, alignRight,
+                drawBackground, outline, textShadow, lowercase, showInfo
         );
-    }
-
-    public Color getListColor() {
-        return resolveColor(
-                System.currentTimeMillis(), 0f,
-                (int) listRed.getValue(), (int) listGreen.getValue(), (int) listBlue.getValue()
-        );
-    }
-
-    private Color resolveColor(long time, float offset, int baseR, int baseG, int baseB) {
-        int mode = colorMode.getIndex();
-
-        if (mode == 2) {
-            return rainbowColor(time, offset);
-        }
-
-        if (mode == 1) {
-            return gradientColor(time, offset, baseR, baseG, baseB);
-        }
-
-        return new Color(baseR, baseG, baseB);
-    }
-
-    private Color gradientColor(long time, float offset, int baseR, int baseG, int baseB) {
-        double t = (Math.sin(
-                time / 1000.0 * waveSpeed.getValue() + offset * 0.12
-        ) + 1.0) / 2.0;
-
-        int r = (int) (baseR + ((int) waveGradRed.getValue() - baseR) * t);
-        int g = (int) (baseG + ((int) waveGradGreen.getValue() - baseG) * t);
-        int b = (int) (baseB + ((int) waveGradBlue.getValue() - baseB) * t);
-
-        return new Color(clamp(r), clamp(g), clamp(b));
-    }
-
-    private Color rainbowColor(long time, float offset) {
-        double hue = (time / (double) RAINBOW_PERIOD_MS
-                * waveSpeed.getValue() + offset * 0.002) % 1.0;
-
-        if (hue < 0) hue += 1.0;
-
-        return Color.getHSBColor((float) hue, 0.8f, 1f);
-    }
-
-    private int clamp(int value) {
-        return Math.max(0, Math.min(255, value));
     }
 }
