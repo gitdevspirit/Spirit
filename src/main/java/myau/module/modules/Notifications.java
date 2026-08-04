@@ -6,8 +6,9 @@ import myau.events.TickEvent;
 import myau.module.Category;
 import myau.module.Module;
 import myau.property.properties.BooleanProperty;
+import myau.property.properties.DoubleProperty;
+import myau.property.properties.IntProperty;
 import myau.property.properties.ModeProperty;
-import myau.property.properties.NumberProperty;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -28,15 +29,15 @@ public class Notifications extends Module {
     public final ModeProperty waveAxis = new ModeProperty("Wave axis", "Vertical", WAVE_AXES);
     public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", "Down", VERTICAL_WAVE_DIRECTIONS);
     public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", "Left", HORIZONTAL_WAVE_DIRECTIONS);
-    public final NumberProperty waveSpeed = new NumberProperty("Wave speed", 1.0, 0.1, 5.0, 0.1);
-    public final NumberProperty waveLength = new NumberProperty("Wave length", 1.0, 0.5, 5.0, 0.1);
-    public final NumberProperty fontSize = new NumberProperty("Scale", 1.0, 0.5, 2.0, 0.1);
-    public final NumberProperty animationSpeed = new NumberProperty("Animation speed", 0.1, 0.01, 1.0, 0.01);
+    public final DoubleProperty waveSpeed = new DoubleProperty("Wave speed", 1.0, 0.1, 5.0, 0.1);
+    public final DoubleProperty waveLength = new DoubleProperty("Wave length", 1.0, 0.5, 5.0, 0.1);
+    public final DoubleProperty fontSize = new DoubleProperty("Scale", 1.0, 0.5, 2.0, 0.1);
+    public final DoubleProperty animationSpeed = new DoubleProperty("Animation speed", 0.1, 0.01, 1.0, 0.01);
 
     public final BooleanProperty showToggle = new BooleanProperty("Show module toggle", true);
     public final BooleanProperty showState = new BooleanProperty("Show module state", true);
-    public final NumberProperty displayTime = new NumberProperty("Display time (s)", 2.0, 0.5, 10.0, 0.5);
-    public final NumberProperty maxNotifications = new NumberProperty("Max notifications", 5, 1, 10, 1);
+    public final DoubleProperty displayTime = new DoubleProperty("Display time (s)", 2.0, 0.5, 10.0, 0.5);
+    public final IntProperty maxNotifications = new IntProperty("Max notifications", 5, 1, 10, 1);
     public final ModeProperty position = new ModeProperty("Position", "Bottom Right", new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"});
 
     public final BooleanProperty drawBackground = new BooleanProperty("Draw background", true);
@@ -50,10 +51,10 @@ public class Notifications extends Module {
     }
 
     public void addNotification(String title, String message, NotificationType type) {
-        long durationMs = (long) (displayTime.getValue().doubleValue() * 1000.0);
+        long durationMs = (long) (displayTime.getValue() * 1000.0);
         notifications.add(new Notification(title, message, type, durationMs));
 
-        int max = maxNotifications.getValue().intValue();
+        int max = maxNotifications.getValue();
         while (notifications.size() > max) {
             notifications.remove(0);
         }
@@ -136,7 +137,7 @@ public class Notifications extends Module {
                 Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + boxWidth), (int) (currentY + boxHeight), new Color(0, 0, 0, 150).getRGB());
             }
 
-            // Draw side accent line
+            // Draw side accent bar
             Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + 2), (int) (currentY + boxHeight), color);
 
             mc.fontRendererObj.drawString(displayText, currentX + padding + 2, currentY + 3, -1, textShadow.getValue());
@@ -201,11 +202,11 @@ public class Notifications extends Module {
     }
 
     private double getWaveSpeedMultiplier() {
-        return Math.max(0.1, waveSpeed.getValue().doubleValue());
+        return Math.max(0.1, waveSpeed.getValue());
     }
 
     private double getWaveLengthMultiplier() {
-        return Math.max(0.5, waveLength.getValue().doubleValue());
+        return Math.max(0.5, waveLength.getValue());
     }
 
     public enum NotificationType {
