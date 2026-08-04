@@ -3,6 +3,8 @@ package myau.module.modules;
 import myau.Myau;
 import myau.event.EventTarget;
 import myau.events.Render2DEvent;
+import myau.font.CFontRenderer;
+import myau.font.FontProcess;
 import myau.management.NotificationManager;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
@@ -48,6 +50,9 @@ public class Notifications extends Module {
     public final BooleanSetting textShadow = register(new BooleanSetting("Text Shadow", true));
     public final BooleanSetting lowercase  = register(new BooleanSetting("Lowercase", false));
     public final BooleanSetting splitState = register(new BooleanSetting("Split State Text", true));
+    public final DropdownSetting font = register(new DropdownSetting("Font", 0,
+            "Vanilla", "Client", "Bold", "Arial", "Apple", "Sans", "Noto", "Tahoma"));
+    public final SliderSetting fontScale = register(new SliderSetting("Font Scale", 1.0, 0.5, 2.0, 0.05));
 
     private static final long RAINBOW_PERIOD_MS = 7500L;
 
@@ -107,8 +112,8 @@ public class Notifications extends Module {
                 stateText = stateText.toLowerCase();
             }
 
-            int nameW  = mc.fontRendererObj.getStringWidth(moduleName);
-            int stateW = stateText.isEmpty() ? 0 : mc.fontRendererObj.getStringWidth(stateText);
+            int nameW  = fontWidth(moduleName);
+            int stateW = stateText.isEmpty() ? 0 : fontWidth(stateText);
             int stateGap = stateText.isEmpty() ? 0 : 4;
             int msgW = nameW + stateGap + stateW;
 
@@ -149,16 +154,16 @@ public class Notifications extends Module {
             GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GlStateManager.disableDepth();
 
-            int fontH = mc.fontRendererObj.FONT_HEIGHT;
+            int fontH = fontLineHeight();
             int ty    = (H - fontH) / 2;
 
-            mc.fontRendererObj.drawString(
+            drawFontString(
                     moduleName, ACCENT_W + PAD_LEFT, ty,
                     withAlpha(WHITE, alpha), textShadow.getValue()
             );
 
             if (!stateText.isEmpty()) {
-                mc.fontRendererObj.drawString(
+                drawFontString(
                         stateText, ACCENT_W + PAD_LEFT + nameW + stateGap, ty,
                         stateCol, textShadow.getValue()
                 );
@@ -216,6 +221,50 @@ public class Notifications extends Module {
 
     private int clamp(int v) {
         return Math.max(0, Math.min(255, v));
+    }
+
+    // ── Font resolution (Vanilla or one of the bundled TTF fonts) ──────────────
+
+    private CFontRenderer getCustomFont() {
+        if (font.getIndex() == 0) return null; // 0 = Vanilla
+
+        String key;
+        switch (font.getIndex()) {
+            case 1: key = "client"; break;
+            case 2: key = "bold";   break;
+            case 3: key = "arial";  break;
+            case 4: key = "apple";  break;
+            case 5: key = "sans";   break;
+            case 6: key = "noto";   break;
+            case 7: key = "tahoma"; break;
+            default: return null;
+        }
+
+        return FontProcess.getScaledFont(key, (float) fontScale.getValue());
+    }
+
+    private int fontWidth(String text) {
+        CFontRenderer custom = getCustomFont();
+        return custom != null ? custom.getStringWidth(text) : mc.fontRendererObj.getStringWidth(text);
+    }
+
+    private int fontLineHeight() {
+        CFontRenderer custom = getCustomFont();
+        return custom != null ? custom.FONT_HEIGHT : mc.fontRendererObj.FONT_HEIGHT;
+    }
+
+    private void drawFontString(String text, float x, float y, int color, boolean shadow) {
+        CFontRenderer custom = getCustomFont();
+
+        if (custom != null) {
+            if (shadow) {
+                custom.drawStringWithShadow(text, x, y, color);
+            } else {
+                custom.drawString(text, x, y, color);
+            }
+        } else {
+            mc.fontRendererObj.drawString(text, x, y, color, shadow);
+        }
     }
 
     private void solidRect(float x, float y, float w, float h, int color) {
