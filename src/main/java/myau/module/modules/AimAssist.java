@@ -3,29 +3,23 @@ package myau.module.modules;
 import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
-import myau.events.MoveInputEvent;
 import myau.events.TickEvent;
 import myau.events.UpdateEvent;
 import myau.management.RotationState;
-import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
 import myau.util.ItemUtil;
-import myau.util.MoveUtil;
-import myau.util.PacketUtil;
 import myau.util.RotationUtil;
 import myau.util.TeamUtil;
 import net.minecraft.client.Minecraft;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.network.play.client.C02PacketUseEntity;
-import net.minecraft.network.play.client.C02PacketUseEntity.Action;
-import net.minecraft.network.play.client.C03PacketPlayer;
 import net.minecraft.util.AxisAlignedBB;
+import net.minecraft.util.MathHelper;
 import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
-import net.minecraft.world.WorldSettings.GameType;
 import org.lwjgl.input.Mouse;
 
 import java.util.ArrayList;
@@ -34,7 +28,7 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * AimAssist — Silent logic with proper rotation order and movement fix
+ * AimAssist — Silent logic ported from KillAura
  */
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
@@ -66,13 +60,6 @@ public class AimAssist extends Module {
     public final BooleanSetting botCheck = register(new BooleanSetting("Bot Check", true));
 
     private EntityPlayer currentTarget = null;
-    private long lastAttackTime = 0L;
-    private static final long ATTACK_COOLDOWN = 250L;
-    private float lastYaw = 0;
-    private float lastPitch = 0;
-    private boolean shouldRotate = false;
-    private float targetYaw = 0;
-    private float targetPitch = 0;
 
     public AimAssist() {
         super("AimAssist", false);
@@ -87,9 +74,6 @@ public class AimAssist extends Module {
     public void onDisabled() {
         currentTarget = null;
         RotationState.applyState(false, 0, 0, 0, 0);
-        lastYaw = 0;
-        lastPitch = 0;
-        shouldRotate = false;
     }
 
     // ── Normal: real camera ──────────────────────────────────────────────────
@@ -113,16 +97,12 @@ public class AimAssist extends Module {
         float[] rot = getRotations(target, baseYaw, basePitch);
         if (rot == null) return;
 
-        // Apply rotation
         mc.thePlayer.rotationYaw = rot[0];
         mc.thePlayer.rotationPitch = rot[1];
         mc.thePlayer.rotationYawHead = rot[0];
-        
-        // Actually attack
-        performAttack(target, rot[0], rot[1]);
     }
 
-    // ── Silent: PROPER rotation order ──────────────────────────────────────
+    // ── Silent: EXACT KillAura silent logic ────────────────────────────────
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
@@ -134,7 +114,6 @@ public class AimAssist extends Module {
         if (target == null) {
             currentTarget = null;
             RotationState.applyState(false, 0, 0, 0, 0);
-            shouldRotate = false;
             return;
         }
 
@@ -152,13 +131,6 @@ public class AimAssist extends Module {
                 (float) smoothing.getValue() / 100.0f
             );
             
-            // Store for later use
-            targetYaw = rots[0];
-            targetPitch = rots[1];
-            shouldRotate = true;
-            lastYaw = rots[0];
-            lastPitch = rots[1];
-            
             // Apply rotation to event (same as KillAura)
             event.setRotation(rots[0], rots[1], 1);
             
@@ -171,138 +143,8 @@ public class AimAssist extends Module {
             if (moveFix.getIndex() != 0 || rotations.getIndex() == 3) {
                 event.setPervRotation(rots[0], 1);
             }
-            
-            // 🔥 ATTACK WITH PROPER ORDER: Rotation first, then attack
-            performAttackWithRotation(target, rots[0], rots[1]);
         }
         // ── End KillAura rotation logic ──────────────────────────────────────
-    }
-
-    // ── Attack with proper rotation order (Fixes PacketOrderB) ─────────────
-
-    private void performAttackWithRotation(EntityPlayer target, float yaw, float pitch) {
-        // Check cooldown
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastAttackTime < ATTACK_COOLDOWN) {
-            return;
-        }
-        
-        // Check range
-        if (mc.thePlayer.getDistanceToEntity(target) > attackRange.getValue()) {
-            return;
-        }
-        
-        // Check if target is still valid
-        if (target.deathTime != 0 || !target.isEntityAlive()) {
-            return;
-        }
-        
-        // Check if we can hit (raytrace)
-        if (!throughWalls.getValue()) {
-            Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
-            Vec3 targetVec = new Vec3(target.posX, target.posY + target.getEyeHeight(), target.posZ);
-            MovingObjectPosition hit = mc.theWorld.rayTraceBlocks(eyes, targetVec, false, true, false);
-            if (hit != null) {
-                return;
-            }
-        }
-        
-        // ── PROPER ORDER: Send rotation packet FIRST ──────────────────────
-        // This prevents PacketOrderB flag
-        PacketUtil.sendPacket(new C03PacketPlayer.C05PacketPlayerLook(yaw, pitch, mc.thePlayer.onGround));
-        
-        // Then swing
-        mc.thePlayer.swingItem();
-        
-        // Then send attack (with proper rotation already sent)
-        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-        PacketUtil.sendPacket(new C02PacketUseEntity(target, Action.ATTACK));
-        
-        // Actually attack if not in spectator
-        if (mc.playerController.getCurrentGameType() != GameType.SPECTATOR) {
-            mc.playerController.attackEntity(mc.thePlayer, target);
-        }
-        
-        lastAttackTime = currentTime;
-    }
-
-    // ── Movement Fix (STRONGER for straight line walking) ──────────────────
-
-    @EventTarget
-    public void onMove(MoveInputEvent event) {
-        if (!isEnabled()) return;
-        if (currentTarget == null) return;
-        
-        // Get the rotation to use for movement fix
-        float fixYaw = lastYaw;
-        
-        // If RotationState is active, use that
-        if (RotationState.isActived() && RotationState.getPriority() == 1.0F) {
-            fixYaw = RotationState.getSmoothedYaw();
-        }
-        
-        // Check if player is moving (using moveForward or moveStrafe)
-        boolean isMoving = mc.thePlayer.movementInput.moveForward != 0 || mc.thePlayer.movementInput.moveStrafe != 0;
-        
-        // Apply movement fix for Silent mode
-        if (mode.getIndex() == MODE_SILENT && rotations.getIndex() == 2) {
-            // STRONG movement fix - completely override strafe
-            if (isMoving) {
-                MoveUtil.fixStrafe(fixYaw);
-            }
-        }
-        
-        // Lock View mode fix
-        if (rotations.getIndex() == 3) {
-            if (isMoving) {
-                MoveUtil.fixStrafe(fixYaw);
-            }
-        }
-        
-        // Also apply KillAura's original fix for compatibility
-        if (moveFix.getIndex() == 1 && 
-            rotations.getIndex() != 3 && 
-            RotationState.isActived() && 
-            RotationState.getPriority() == 1.0F && 
-            MoveUtil.isForwardPressed()) {
-            MoveUtil.fixStrafe(RotationState.getSmoothedYaw());
-        }
-    }
-
-    // ── Attack Method (fallback for Normal) ────────────────────────────────
-
-    private void performAttack(EntityPlayer target, float yaw, float pitch) {
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastAttackTime < ATTACK_COOLDOWN) {
-            return;
-        }
-        
-        if (mc.thePlayer.getDistanceToEntity(target) > attackRange.getValue()) {
-            return;
-        }
-        
-        if (target.deathTime != 0 || !target.isEntityAlive()) {
-            return;
-        }
-        
-        if (!throughWalls.getValue()) {
-            Vec3 eyes = mc.thePlayer.getPositionEyes(1.0f);
-            Vec3 targetVec = new Vec3(target.posX, target.posY + target.getEyeHeight(), target.posZ);
-            MovingObjectPosition hit = mc.theWorld.rayTraceBlocks(eyes, targetVec, false, true, false);
-            if (hit != null) {
-                return;
-            }
-        }
-        
-        mc.thePlayer.swingItem();
-        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
-        PacketUtil.sendPacket(new C02PacketUseEntity(target, Action.ATTACK));
-        
-        if (mc.playerController.getCurrentGameType() != GameType.SPECTATOR) {
-            mc.playerController.attackEntity(mc.thePlayer, target);
-        }
-        
-        lastAttackTime = currentTime;
     }
 
     // ── Core: Get Rotations (fallback for Normal mode) ──────────────────────
@@ -310,6 +152,7 @@ public class AimAssist extends Module {
     private float[] getRotations(EntityPlayer target, float baseYaw, float basePitch) {
         AxisAlignedBB box = target.getEntityBoundingBox();
         
+        // Use KillAura's rotation system for Normal mode too
         if (rotations.getIndex() == 2 || rotations.getIndex() == 3) {
             float angleStepVal = (float) angleStep.getValue() + (random.nextFloat() - 0.5f) * 10.0f;
             float smoothVal = (float) smoothing.getValue() / 100.0f;
@@ -323,6 +166,7 @@ public class AimAssist extends Module {
             );
         }
         
+        // Fallback: simple rotations to center of box
         Vec3 eyePos = mc.thePlayer.getPositionEyes(1.0f);
         Vec3 targetPos = new Vec3(
             (box.minX + box.maxX) / 2.0,
@@ -353,13 +197,14 @@ public class AimAssist extends Module {
 
         if (targets.isEmpty()) return null;
 
+        // Sort targets (from KillAura logic)
         targets.sort((a, b) -> {
             int s = 0;
             switch (sort.getIndex()) {
                 case 1: s = Float.compare(TeamUtil.getHealthScore(a), TeamUtil.getHealthScore(b)); break;
                 case 2: s = Integer.compare(a.hurtResistantTime, b.hurtResistantTime); break;
                 case 3: s = Float.compare(RotationUtil.angleToEntity(a), RotationUtil.angleToEntity(b)); break;
-                default:
+                default: // Distance
                     return Double.compare(RotationUtil.distanceToEntity(a), RotationUtil.distanceToEntity(b));
             }
             return s != 0 ? s : Double.compare(RotationUtil.distanceToEntity(a), RotationUtil.distanceToEntity(b));
@@ -374,7 +219,7 @@ public class AimAssist extends Module {
         if (ignoreTeammates.getValue() && TeamUtil.isSameTeam(target)) return false;
         if (!aimInvis.getValue() && target.isInvisible()) return false;
         if (botCheck.getValue() && TeamUtil.isBot(target)) return false;
-        if (mc.thePlayer.getDistanceToEntity(target) > attackRange.getValue()) return false;
+        if (RotationUtil.distanceToEntity(target) > attackRange.getValue()) return false;
         if (fovVal != 360 && RotationUtil.angleToEntity(target) > fovVal) return false;
         if (!throughWalls.getValue() && RotationUtil.rayTrace(target) != null) return false;
         return true;
