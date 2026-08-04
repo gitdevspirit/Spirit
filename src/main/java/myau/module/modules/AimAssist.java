@@ -3,7 +3,6 @@ package myau.module.modules;
 import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
-import myau.events.ClientRotationEvent;
 import myau.events.TickEvent;
 import myau.events.UpdateEvent;
 import myau.management.RotationState;
@@ -20,8 +19,9 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.AxisAlignedBB;
 import net.minecraft.util.MathHelper;
+import net.minecraft.util.MovingObjectPosition;
 import net.minecraft.util.Vec3;
-import net.minecraftforge.fml.common.gameevent.TickEvent;
+
 import org.lwjgl.input.Mouse;
 
 import java.util.ArrayList;
@@ -104,27 +104,22 @@ public class AimAssist extends Module {
         lockedPitch = Float.NaN;
     }
 
-    // ── Render Tick (for Regular and Lock-on) ────────────────────────────────
+    // ── Tick Events ────────────────────────────────────────────────────────────
 
     @EventTarget
     public void onTick(TickEvent event) {
-        if (event.phase == TickEvent.Phase.START) {
-            regularAppliedThisRenderFrame = false;
+        if (event.getType() != EventType.POST) return;
+        
+        if (isLockOnMode()) {
+            applyAim(false);
             return;
         }
-        if (event.phase == TickEvent.Phase.END) {
-            if (isLockOnMode()) {
-                applyAim(false);
-                return;
-            }
-            if (mode.getIndex() == MODE_REGULAR && !regularAppliedThisRenderFrame) {
-                applyAim(false);
-                regularAppliedThisRenderFrame = true;
-            }
+        if (mode.getIndex() == MODE_REGULAR) {
+            applyAim(false);
         }
     }
 
-    // ── Update (for Lock-on and Regular fallback) ────────────────────────────
+    // ── Update (for Regular and Lock-on fallback) ────────────────────────────
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
@@ -137,14 +132,14 @@ public class AimAssist extends Module {
         applyAim(false);
     }
 
-    // ── Client Rotation Event (for Silent mode) ──────────────────────────────
+    // ── Silent Mode Rotation ──────────────────────────────────────────────────
 
     @EventTarget
-    public void onClientRotation(ClientRotationEvent event) {
+    public void onUpdateSilent(UpdateEvent event) {
         if (mode.getIndex() != MODE_SILENT || !conditionsMet()) {
             return;
         }
-        
+
         // Check if KillAura is active
         KillAura killAura = (KillAura) Myau.moduleManager.modules.get(KillAura.class);
         if (killAura != null && killAura.isEnabled() && killAura.hasTarget()) {
@@ -153,16 +148,22 @@ public class AimAssist extends Module {
 
         Entity target = getEnemy(true);
         if (target == null) {
+            RotationState.applyState(false, 0, 0, 0, 0);
             return;
         }
 
-        float[] rot = getTargetRotations(target, true, event);
-        if (rot == null) return;
+        float[] rot = getTargetRotations(target, true, event.getYaw(), event.getPitch());
+        if (rot == null) {
+            RotationState.applyState(false, 0, 0, 0, 0);
+            return;
+        }
 
         if (keepMoveDirection.getValue()) {
             // Movement fix would go here
         }
         
+        // Apply silent rotation via RotationState
+        RotationState.applyState(true, rot[0], rot[1], rot[0], 1);
         event.setRotation(rot[0], rot[1], 1);
     }
 
@@ -184,7 +185,7 @@ public class AimAssist extends Module {
             return;
         }
 
-        float[] rot = getTargetRotations(target, silentMode, null);
+        float[] rot = getTargetRotations(target, silentMode, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch);
         if (rot == null) return;
 
         if (silentMode) {
@@ -198,7 +199,7 @@ public class AimAssist extends Module {
 
     // ── Core: Get Target Rotations ────────────────────────────────────────────
 
-    private float[] getTargetRotations(Entity target, boolean silentMode, ClientRotationEvent event) {
+    private float[] getTargetRotations(Entity target, boolean silentMode, float baseYaw, float basePitch) {
         int speedVal = (int) speed.getValue();
         double mpH = multipointHorizontal.getValue();
         double mpV = multipointVertical.getValue();
@@ -211,8 +212,6 @@ public class AimAssist extends Module {
 
         Vec3 predictedHead = getPredictedHeadCenter(target);
         if (predictedHead != null) {
-            float baseYaw = silentMode && event != null ? event.getYaw() : mc.thePlayer.rotationYaw;
-            float basePitch = silentMode && event != null ? event.getPitch() : mc.thePlayer.rotationPitch;
             float[] desiredRot = getRotationsToPointExact(
                 predictedHead.xCoord, predictedHead.yCoord, predictedHead.zCoord, baseYaw, basePitch
             );
@@ -232,10 +231,7 @@ public class AimAssist extends Module {
         }
 
         // Fallback using RotationUtil
-        if (silentMode && event != null) {
-            return getRotationsToEntity(target, event.getYaw(), event.getPitch(), mpH, mpV, randPercent);
-        }
-        return getRotationsToEntity(target, mc.thePlayer.rotationYaw, mc.thePlayer.rotationPitch, mpH, mpV, randPercent);
+        return getRotationsToEntity(target, baseYaw, basePitch, mpH, mpV, randPercent);
     }
 
     // ── Lock-on Rotations ─────────────────────────────────────────────────────
