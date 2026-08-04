@@ -7,6 +7,7 @@ import myau.events.TickEvent;
 import myau.module.Module;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.MathHelper;
+import myau.management.RotationState;
 
 /**
  * Fixes movement direction while a module is silently reporting a fake rotation.
