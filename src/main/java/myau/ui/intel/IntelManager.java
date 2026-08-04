@@ -34,15 +34,15 @@ public class IntelManager {
         }
     }
 
+    public static String hypixelApiKey = "";
+    public static String urchinApiKey = "";
+    public static String ghostApiKey = "";
+
     private static final IntelManager INSTANCE = new IntelManager();
 
     public static IntelManager getInstance() {
         return INSTANCE;
     }
-
-    public static String hypixelApiKey = "";
-    public static String urchinApiKey = "";
-    public static String ghostApiKey = "";
 
     private static final String CORAL_CUBELIFY_URL =
             "https://api.urchin.gg/v3/cubelify";
@@ -274,7 +274,6 @@ public class IntelManager {
     }
 
     public void scanLobby() {
-        players.clear();
         fetching = true;
 
         Minecraft minecraft = Minecraft.getMinecraft();
@@ -284,6 +283,21 @@ public class IntelManager {
             return;
         }
 
+        // Re-use existing IntelPlayer objects (and their already-fetched
+        // stats) for names still present in the lobby, instead of wiping
+        // everyone back to a blank/loading state on every rescan. Only
+        // players who are genuinely new get queued for a fresh fetch —
+        // this is what was causing stats to flash empty and reloads to
+        // take 10+ seconds on a full lobby (everyone re-queued through the
+        // single-slot, 600ms-interval Hypixel limiter every time).
+        Map<String, IntelPlayer> existingByName = new HashMap<>();
+        for (IntelPlayer existing : players) {
+            existingByName.put(existing.name.toLowerCase(), existing);
+        }
+
+        List<IntelPlayer> newRoster = new ArrayList<>();
+        List<IntelPlayer> needsFetch = new ArrayList<>();
+
         for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
             String name = info.getGameProfile().getName();
 
@@ -291,7 +305,21 @@ public class IntelManager {
                 continue;
             }
 
-            players.add(new IntelPlayer(name, detectTeam(info)));
+            String team = detectTeam(info);
+            IntelPlayer existing = existingByName.get(name.toLowerCase());
+
+            IntelPlayer player;
+            if (existing != null) {
+                player = existing;
+                player.team = team;
+            } else {
+                player = new IntelPlayer(name, team);
+                needsFetch.add(player);
+            }
+
+            player.rankPrefix = extractRankPrefix(info, name);
+
+            newRoster.add(player);
 
             java.util.UUID uuid = info.getGameProfile().getId();
 
@@ -301,6 +329,9 @@ public class IntelManager {
                 }
             }
         }
+
+        players.clear();
+        players.addAll(newRoster);
 
         if (gui != null) {
             for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
@@ -324,34 +355,36 @@ public class IntelManager {
             hudOverlay.setPlayers(new ArrayList<>(players));
         }
 
-        final List<IntelPlayer> batch = new ArrayList<>(players);
+        if (!needsFetch.isEmpty()) {
+            final List<IntelPlayer> batch = new ArrayList<>(needsFetch);
 
-        pool.submit(() -> {
-            try {
-                fetchUrchinBatch(batch);
-                fetchGhostBatch(batch);
+            pool.submit(() -> {
+                try {
+                    fetchUrchinBatch(batch);
+                    fetchGhostBatch(batch);
 
-                for (IntelPlayer player : batch) {
-                    if (player.cheater || player.ghostTagged) {
-                        notifyCheater(player);
+                    for (IntelPlayer player : batch) {
+                        if (player.cheater || player.ghostTagged) {
+                            notifyCheater(player);
+                        }
+                    }
+                } catch (Exception exception) {
+                    dbg("[Intel] tag batch failed: " + exception);
+                } finally {
+                    List<IntelPlayer> refreshed = new ArrayList<>(players);
+
+                    if (gui != null) {
+                        gui.setPlayers(refreshed);
+                    }
+
+                    if (hudOverlay != null) {
+                        hudOverlay.setPlayers(refreshed);
                     }
                 }
-            } catch (Exception exception) {
-                dbg("[Intel] tag batch failed: " + exception);
-            } finally {
-                List<IntelPlayer> refreshed = new ArrayList<>(players);
+            });
+        }
 
-                if (gui != null) {
-                    gui.setPlayers(refreshed);
-                }
-
-                if (hudOverlay != null) {
-                    hudOverlay.setPlayers(refreshed);
-                }
-            }
-        });
-
-        for (IntelPlayer player : players) {
+        for (IntelPlayer player : needsFetch) {
             final IntelPlayer current = player;
 
             pool.submit(() -> {
@@ -377,6 +410,16 @@ public class IntelManager {
         }
 
         fetching = false;
+    }
+
+    /**
+     * Forces a full re-fetch of every player currently in the lobby,
+     * ignoring cached stats. Use sparingly — this is what re-triggers the
+     * full sequential rate-limited fetch for the whole lobby.
+     */
+    public void forceRefreshAll() {
+        players.clear();
+        scanLobby();
     }
 
     public void refresh() {
