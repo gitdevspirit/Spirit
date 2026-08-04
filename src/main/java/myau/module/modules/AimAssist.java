@@ -2,7 +2,7 @@ package myau.module.modules;
 
 import myau.event.EventTarget;
 import myau.event.types.EventType;
-import myau.events.Render3DEvent;
+import myau.events.TickEvent;
 import myau.events.UpdateEvent;
 import myau.management.MovementFix;
 import myau.management.RotationState;
@@ -26,32 +26,23 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * AimAssist v2 — reworked entirely from the ground up on top of a
- * keystrokesmod-derived reference implementation.
- *
- * Three modes, each running on the hook that actually suits it:
- *  - Regular / Lock-on run on {@link Render3DEvent} (every render frame,
- *    decoupled from the 20 TPS tick — buttery smooth, matches the reference's
- *    RenderTickEvent-driven design) and move the real camera.
- *  - Silent runs on {@link UpdateEvent} PRE (the earliest hook before the
- *    packet-rotation swap) and never touches the camera — it reports a fake
- *    rotation to the server via RotationState + MovementFix, exactly like
- *    Clutch does.
+ * AimAssist — reworked to match a simpler, unified keystrokesmod reference:
+ * Normal and Silent share one target-point-picking + rotation routine instead
+ * of Normal having its own separate predictive-smoothing math. Normal writes
+ * the real camera on tick; Silent reports a fake rotation via UpdateEvent +
+ * RotationState + MovementFix, same pipeline as Clutch.
  */
 public class AimAssist extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    private static final int MODE_REGULAR = 0;
-    private static final int MODE_SILENT  = 1;
-    private static final int MODE_LOCKON  = 2;
-    private static final float LOCK_ON_LOCKED_DEGREES = 2.0f;
+    private static final int MODE_NORMAL = 0;
+    private static final int MODE_SILENT = 1;
 
-    public final DropdownSetting mode       = register(new DropdownSetting("Mode", 0, "Regular", "Silent", "Lock-on"));
-    public final DropdownSetting targetMode = register(new DropdownSetting("Target Mode", 0, "Single", "Switch"));
-    public final SliderSetting   speed      = register(new SliderSetting("Speed", 10, 1, 30, 1));
+    public final DropdownSetting mode = register(new DropdownSetting("Mode", 0, "Normal", "Silent"));
+    public final SliderSetting   speed = register(new SliderSetting("Speed", 10, 1, 30, 1));
     public final SliderSetting   multipointHorizontal = register(new SliderSetting("Multipoint Horizontal", 0, 0, 100, 1));
     public final SliderSetting   multipointVertical   = register(new SliderSetting("Multipoint Vertical", 0, 0, 100, 1));
-    public final SliderSetting   randomization = register(new SliderSetting("Randomization", 20, 0, 100, 1));
+    public final SliderSetting   randomization = register(new SliderSetting("Randomization", 50, 0, 100, 1));
     public final SliderSetting   fov   = register(new SliderSetting("FOV", 90, 15, 360, 1));
     public final SliderSetting   range = register(new SliderSetting("Range", 4.5, 0.0, 5.0, 0.1));
     public final DropdownSetting sortMode = register(new DropdownSetting("Sort", 1, "Health", "Angle", "Hurt Time", "Distance"));
@@ -65,17 +56,10 @@ public class AimAssist extends Module {
     public final BooleanSetting keepMoveDirection = register(new BooleanSetting(
             "Keep Move Direction", true, () -> mode.getIndex() == MODE_SILENT));
     public final SliderSetting  hoverDelay = register(new SliderSetting(
-            "Hover Delay", 100, 0, 500, 1, () -> stopWhenBreaking.getValue()));
+            "Hover Delay", 100, 0, 500, 10, () -> stopWhenBreaking.getValue()));
     public final BooleanSetting weaponOnly = register(new BooleanSetting("Weapon Only", false));
-    public final BooleanSetting increasedFovWhileLocked = register(new BooleanSetting(
-            "Increased FOV While Locked", true, () -> targetMode.getIndex() == 0));
 
     private long miningStartTime = -1L;
-    private EntityPlayer lockedTarget;
-    private EntityPlayer smoothedTargetEntity;
-    private long lastSmoothNanoTime = -1L;
-    private float lockedYaw   = Float.NaN;
-    private float lockedPitch = Float.NaN;
 
     public AimAssist() { super("AimAssist", false); }
 
@@ -87,119 +71,27 @@ public class AimAssist extends Module {
     @Override
     public void onDisabled() {
         miningStartTime = -1L;
-        lockedTarget = null;
-        resetLockOnSmooth();
     }
 
-    private void resetLockOnSmooth() {
-        smoothedTargetEntity = null;
-        lastSmoothNanoTime = -1L;
-        lockedYaw   = Float.NaN;
-        lockedPitch = Float.NaN;
-    }
-
-    private boolean isLockOnMode() { return mode.getIndex() == MODE_LOCKON; }
-    private boolean isSingleTargetMode() { return targetMode.getIndex() == 0; }
-
-    // ── Regular / Lock-on: real camera, once per render frame ──────────────────
+    // ── Normal: real camera, once per tick ──────────────────────────────────────
 
     @EventTarget
-    public void onRender3D(Render3DEvent event) {
-        if (!isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
-        if (mode.getIndex() == MODE_SILENT) return;
-
-        if (!conditionsMet()) {
-            if (isLockOnMode()) resetLockOnSmooth();
-            return;
-        }
+    public void onTick(TickEvent event) {
+        if (!isEnabled() || event.getType() != EventType.POST) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (mode.getIndex() != MODE_NORMAL || !conditionsMet()) return;
 
         EntityPlayer target = getEnemy(false);
-        if (target == null) {
-            if (isLockOnMode()) resetLockOnSmooth();
-            return;
-        }
+        if (target == null) return;
 
-        float partialTicks = event.getPartialTicks();
-        float[] rot = isLockOnMode()
-                ? getLockOnRotations(target, partialTicks)
-                : getRegularRotations(target, partialTicks);
+        float baseYaw   = mc.thePlayer.rotationYaw;
+        float basePitch = mc.thePlayer.rotationPitch;
+        float[] rot = getRotationsToTarget(target, baseYaw, basePitch);
         if (rot == null) return;
 
         mc.thePlayer.rotationYaw     = rot[0];
         mc.thePlayer.rotationPitch   = rot[1];
         mc.thePlayer.rotationYawHead = rot[0];
-    }
-
-    private float[] getRegularRotations(EntityPlayer target, float partialTicks) {
-        Vec3 predictedHead = getPredictedHeadCenter(target, partialTicks);
-        if (predictedHead == null) return null;
-
-        float baseYaw   = mc.thePlayer.rotationYaw;
-        float basePitch = mc.thePlayer.rotationPitch;
-        float[] desired = getRotationsToPointExact(predictedHead.xCoord, predictedHead.yCoord, predictedHead.zCoord, baseYaw, basePitch);
-        if (desired == null) return null;
-
-        float errorYaw   = MathHelper.wrapAngleTo180_float(desired[0] - baseYaw);
-        float errorPitch = desired[1] - basePitch;
-        float t      = MathHelper.clamp_float((float) speed.getValue() / 30.0f, 0.0f, 1.0f);
-        float factor = 0.08f + t * 0.77f;
-
-        float randScale   = ((float) randomization.getValue() / 100.0f) * 0.30f;
-        float jitterYaw    = (float) ((Math.random() - 0.5) * 2.0 * Math.abs(errorYaw)   * randScale);
-        float jitterPitch  = (float) ((Math.random() - 0.5) * 2.0 * Math.abs(errorPitch) * randScale);
-
-        float newYaw   = baseYaw   + errorYaw   * factor + jitterYaw;
-        float newPitch = clampPitch(basePitch + errorPitch * factor + jitterPitch);
-        return new float[]{ newYaw, newPitch };
-    }
-
-    private float[] getLockOnRotations(EntityPlayer target, float partialTicks) {
-        if (target != smoothedTargetEntity) {
-            smoothedTargetEntity = target;
-            lastSmoothNanoTime = -1L;
-        }
-
-        float deltaSeconds = getFrameDeltaSeconds();
-        float speedScale   = 0.7f + ((float) speed.getValue()) / 30.0f * 1.1f;
-
-        Vec3 headCenter = getPredictedHeadCenter(target, partialTicks);
-        if (headCenter == null) return null;
-
-        float baseYaw   = !Float.isNaN(lockedYaw)   ? lockedYaw   : mc.thePlayer.rotationYaw;
-        float basePitch = !Float.isNaN(lockedPitch) ? lockedPitch : mc.thePlayer.rotationPitch;
-
-        float[] desired = getRotationsToPointExact(headCenter.xCoord, headCenter.yCoord, headCenter.zCoord, baseYaw, basePitch);
-        if (desired == null) return null;
-
-        float errorYaw     = MathHelper.wrapAngleTo180_float(desired[0] - baseYaw);
-        float errorPitch   = desired[1] - basePitch;
-        float angularError = MathHelper.sqrt_float(errorYaw * errorYaw + errorPitch * errorPitch);
-        boolean lockedOn    = angularError <= LOCK_ON_LOCKED_DEGREES;
-
-        float yaw, pitch;
-        if (lockedOn) {
-            yaw = desired[0];
-            pitch = desired[1];
-        } else {
-            float rate   = MathHelper.clamp_float((34.0f + angularError * 3.8f) * speedScale, 34.0f * speedScale, 58.0f);
-            float factor = 1.0f - (float) Math.exp(-rate * deltaSeconds);
-            yaw   = baseYaw   + errorYaw   * factor;
-            pitch = basePitch + errorPitch * factor;
-        }
-        lockedYaw   = yaw;
-        lockedPitch = clampPitch(pitch);
-        return new float[]{ lockedYaw, lockedPitch };
-    }
-
-    private float getFrameDeltaSeconds() {
-        long now = System.nanoTime();
-        if (lastSmoothNanoTime < 0L) {
-            lastSmoothNanoTime = now;
-            return 1.0f / 60.0f;
-        }
-        float delta = (now - lastSmoothNanoTime) / 1_000_000_000.0f;
-        lastSmoothNanoTime = now;
-        return MathHelper.clamp_float(delta, 0.001f, 0.05f);
     }
 
     // ── Silent: fake rotation only, via UpdateEvent + RotationState + MovementFix ──
@@ -213,24 +105,32 @@ public class AimAssist extends Module {
         EntityPlayer target = getEnemy(true);
         if (target == null) return;
 
-        Vec3 aimPoint = pickAimPoint(target);
-        if (aimPoint == null) return;
-
         float baseYaw   = event.getYaw();
         float basePitch = event.getPitch();
-        float[] rot = RotationUtil.getRotations(
-                aimPoint.xCoord - mc.thePlayer.posX,
-                aimPoint.yCoord - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight()),
-                aimPoint.zCoord - mc.thePlayer.posZ,
-                baseYaw, basePitch, 180.0f, 1.0f - (float) randomization.getValue() / 200.0f);
+        float[] rot = getRotationsToTarget(target, baseYaw, basePitch);
+        if (rot == null) return;
 
         if (keepMoveDirection.getValue()) MovementFix.forceMovementFix = true;
         RotationState.applyState(true, rot[0], rot[1], rot[0], 10);
         event.setRotation(rot[0], rot[1], 10);
     }
 
+    /** Shared by both modes: picks a point on the target and computes rotations toward it. */
+    private float[] getRotationsToTarget(EntityPlayer target, float baseYaw, float basePitch) {
+        boolean useBackup = ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue();
+        Vec3 aimPoint = pickAimPoint(target, useBackup);
+        if (aimPoint == null) return null;
+
+        float smoothFactor = 1.0f - (float) speed.getValue() / 30.0f;
+        return RotationUtil.getRotations(
+                aimPoint.xCoord - mc.thePlayer.posX,
+                aimPoint.yCoord - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight()),
+                aimPoint.zCoord - mc.thePlayer.posZ,
+                baseYaw, basePitch, 180.0f, smoothFactor);
+    }
+
     /** Picks a point on the target to aim at, honoring the multipoint spread settings. */
-    private Vec3 pickAimPoint(EntityPlayer target) {
+    private Vec3 pickAimPoint(EntityPlayer target, boolean useBackup) {
         AxisAlignedBB bb = target.getEntityBoundingBox();
         double mpH = multipointHorizontal.getValue() / 100.0;
         double mpV = multipointVertical.getValue() / 100.0;
@@ -248,13 +148,14 @@ public class AimAssist extends Module {
         double ty = MathHelper.clamp_double(headY + offsetY, bb.minY + 0.1, bb.maxY - 0.1);
 
         Vec3 point = new Vec3(tx, ty, tz);
-        if ((ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue()) && !hasValidAimPoint(target, point)) {
-            // Fall back to the exact head center — still worth attacking even
-            // if the randomized multipoint spot happened to be obstructed.
-            Vec3 fallback = new Vec3((bb.minX + bb.maxX) / 2.0, MathHelper.clamp_double(headY, bb.minY + 0.1, bb.maxY - 0.1), (bb.minZ + bb.maxZ) / 2.0);
-            return hasValidAimPoint(target, fallback) ? fallback : null;
-        }
-        return point;
+        if (!useBackup) return point;
+
+        if (hasValidAimPoint(target, point)) return point;
+
+        // Fall back to the exact head center — still worth attacking even if
+        // the randomized multipoint spot happened to be obstructed.
+        Vec3 fallback = new Vec3((bb.minX + bb.maxX) / 2.0, MathHelper.clamp_double(headY, bb.minY + 0.1, bb.maxY - 0.1), (bb.minZ + bb.maxZ) / 2.0);
+        return hasValidAimPoint(target, fallback) ? fallback : null;
     }
 
     private boolean hasValidAimPoint(EntityPlayer target, Vec3 point) {
@@ -277,65 +178,9 @@ public class AimAssist extends Module {
         return true;
     }
 
-    // ── Shared geometry helpers ──────────────────────────────────────────────
-
-    private Vec3 getPredictedHeadCenter(EntityPlayer entity, float partialTicks) {
-        double x = entity.lastTickPosX + (entity.posX - entity.lastTickPosX) * partialTicks;
-        double y = entity.lastTickPosY + (entity.posY - entity.lastTickPosY) * partialTicks;
-        double z = entity.lastTickPosZ + (entity.posZ - entity.lastTickPosZ) * partialTicks;
-
-        float borderSize = entity.getCollisionBorderSize();
-        AxisAlignedBB bb = entity.getEntityBoundingBox().expand(borderSize, borderSize, borderSize);
-
-        double headCenterY = y + entity.getEyeHeight() + entity.height * 0.06;
-        headCenterY = MathHelper.clamp_double(headCenterY, bb.minY + 0.05, bb.maxY - 0.05);
-
-        double velX = entity.posX - entity.lastTickPosX;
-        double velY = entity.posY - entity.lastTickPosY;
-        double velZ = entity.posZ - entity.lastTickPosZ;
-
-        double distSq = mc.thePlayer.getDistanceSqToEntity(entity);
-        float predTicks = (float) Math.min(0.8, Math.sqrt(distSq) * 0.07);
-
-        return new Vec3(x + velX * predTicks, headCenterY + velY * predTicks, z + velZ * predTicks);
-    }
-
-    private float[] getRotationsToPointExact(double x, double y, double z, float baseYaw, float basePitch) {
-        double deltaX = x - mc.thePlayer.posX;
-        double deltaZ = z - mc.thePlayer.posZ;
-        double deltaY = y - (mc.thePlayer.posY + mc.thePlayer.getEyeHeight());
-        double horizDistSq = deltaX * deltaX + deltaZ * deltaZ;
-
-        if (horizDistSq < 1.0E-12) {
-            float pitch = (float) (-(Math.atan2(deltaY, 0.0) * 57.29577951308232));
-            return new float[]{ baseYaw, clampPitch(pitch) };
-        }
-
-        float targetYaw   = (float) (Math.atan2(deltaZ, deltaX) * 57.29577951308232) - 90.0f;
-        double horizDist  = Math.sqrt(horizDistSq);
-        float targetPitch = (float) (-(Math.atan2(deltaY, horizDist) * 57.29577951308232));
-        return new float[]{ baseYaw + MathHelper.wrapAngleTo180_float(targetYaw - baseYaw), clampPitch(targetPitch) };
-    }
-
-    private float clampPitch(float pitch) {
-        return MathHelper.clamp_float(pitch, -90.0f, 90.0f);
-    }
-
     // ── Targeting ─────────────────────────────────────────────────────────────
 
     private EntityPlayer getEnemy(boolean silentMode) {
-        if (isSingleTargetMode()) {
-            boolean expandedFov = increasedFovWhileLocked.getValue() && lockedTarget != null;
-            if (lockedTarget != null && isValidTarget(lockedTarget, silentMode, expandedFov)) {
-                return lockedTarget;
-            }
-        }
-        EntityPlayer best = findBestEnemy(silentMode);
-        lockedTarget = best;
-        return best;
-    }
-
-    private EntityPlayer findBestEnemy(boolean silentMode) {
         int fovVal = (int) fov.getValue();
 
         List<EntityPlayer> candidates = new ArrayList<>();
@@ -348,19 +193,13 @@ public class AimAssist extends Module {
         Comparator<EntityPlayer> primary = getSortComparator();
         candidates.sort(primary.thenComparingDouble(p -> mc.thePlayer.getDistanceSqToEntity(p)));
 
-        if (!silentMode || !(ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue())) {
-            return candidates.get(0);
-        }
+        boolean useBackup = ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue();
+        if (!useBackup) return candidates.get(0);
+
         for (EntityPlayer candidate : candidates) {
-            if (pickAimPoint(candidate) != null) return candidate;
+            if (pickAimPoint(candidate, true) != null) return candidate;
         }
         return null;
-    }
-
-    private boolean isValidTarget(EntityPlayer target, boolean silentMode, boolean expandedFov) {
-        int fovVal = expandedFov ? 360 : (int) fov.getValue();
-        return passesTargetFilters(target, fovVal)
-                && (!silentMode || !(ignoreBehindWalls.getValue() || ignoreBehindEntities.getValue()) || pickAimPoint(target) != null);
     }
 
     private boolean passesTargetFilters(EntityPlayer target, int fovVal) {
