@@ -7,7 +7,6 @@ import myau.Myau;
 import myau.module.modules.Notifications;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.NetworkPlayerInfo;
-import net.minecraft.scoreboard.ScorePlayerTeam;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -284,6 +283,13 @@ public class IntelManager {
             return;
         }
 
+        // Re-use existing IntelPlayer objects (and their already-fetched
+        // stats) for names still present in the lobby, instead of wiping
+        // everyone back to a blank/loading state on every rescan. Only
+        // players who are genuinely new get queued for a fresh fetch —
+        // this is what was causing stats to flash empty and reloads to
+        // take 10+ seconds on a full lobby (everyone re-queued through the
+        // single-slot, 600ms-interval Hypixel limiter every time).
         Map<String, IntelPlayer> existingByName = new HashMap<>();
         for (IntelPlayer existing : players) {
             existingByName.put(existing.name.toLowerCase(), existing);
@@ -406,6 +412,11 @@ public class IntelManager {
         fetching = false;
     }
 
+    /**
+     * Forces a full re-fetch of every player currently in the lobby,
+     * ignoring cached stats. Use sparingly — this is what re-triggers the
+     * full sequential rate-limited fetch for the whole lobby.
+     */
     public void forceRefreshAll() {
         players.clear();
         scanLobby();
@@ -506,6 +517,12 @@ public class IntelManager {
         return null;
     }
 
+    /**
+     * Fetches a single player's Bedwars stats without touching the lobby
+     * player list, GUI, or HUD — used by commands like .bw that just want
+     * a one-off lookup. Also pulls the Coral cheater tag if a Coral key
+     * is configured, so the tag can be shown alongside the stats.
+     */
     public IntelPlayer fetchStandaloneStats(String name) {
         IntelPlayer player = new IntelPlayer(name, null);
 
@@ -721,8 +738,7 @@ public class IntelManager {
             return false;
         }
     }
-
-    private int bwInt(JsonObject bedwars, String key) {
+        private int bwInt(JsonObject bedwars, String key) {
         return bedwars.has(key) ? bedwars.get(key).getAsInt() : 0;
     }
 
@@ -779,6 +795,11 @@ public class IntelManager {
                         ? tag.get("text").getAsString()
                         : (reason.isEmpty() ? icon : reason);
 
+                // The Cubelify "icon" field is a Material Design icon id
+                // (e.g. "mdi-account-alert"), NOT a classification string —
+                // the actual human-readable severity lives in tooltip/text.
+                // Classify against all three so keyword matching (closet /
+                // confirmed / blatant / sniper) actually has something to match.
                 String classifyBasis = (icon + " " + text + " " + reason).toLowerCase();
 
                 boolean positiveTag = classifyBasis.contains("verified")
@@ -787,6 +808,7 @@ public class IntelManager {
                         || (classifyBasis.contains("legit") && !classifyBasis.contains("legitscaf"));
 
                 if (positiveTag) {
+                    // Not a cheat flag — e.g. a "Verified" clean-record tag.
                     player.cheater = false;
                     continue;
                 }
@@ -941,6 +963,7 @@ public class IntelManager {
             return 0;
         }
 
+        // 500 + 1,000 + 2,000 + 3,500 + ninety-six 5,000-XP levels.
         final int prestigeExperience = 487000;
 
         int level = (experience / prestigeExperience) * 100;
@@ -960,29 +983,25 @@ public class IntelManager {
         return level + remaining / 5000;
     }
 
-    private String extractRankPrefix(NetworkPlayerInfo info, String name) {
-        if (info == null) return "";
-
+    /**
+     * Pulls the Hypixel rank prefix (e.g. "§b[MVP§9+§b]") out of the tab-list
+     * display name by finding where the raw username starts and taking
+     * everything before it. Returns "" for non-donor players / no match.
+     */
+    private String extractRankPrefix(NetworkPlayerInfo info, String rawName) {
         try {
-            ScorePlayerTeam team = info.getPlayerTeam();
-            if (team != null) {
-                String prefix = team.getColorPrefix();
-                if (prefix != null && !prefix.isEmpty()) {
-                    return prefix;
-                }
-            }
+            if (info.getDisplayName() == null) return "";
 
-            if (info.getDisplayName() != null) {
-                String formatted = info.getDisplayName().getFormattedText();
-                int nameIndex = formatted.indexOf(name);
-                if (nameIndex > 0) {
-                    return formatted.substring(0, nameIndex);
-                }
-            }
-        } catch (Exception ignored) {
+            String formatted = info.getDisplayName().getFormattedText();
+            if (formatted == null || rawName == null) return "";
+
+            int idx = formatted.indexOf(rawName);
+            if (idx <= 0) return "";
+
+            return formatted.substring(0, idx).trim();
+        } catch (Exception exception) {
+            return "";
         }
-
-        return "";
     }
 
     private String detectTeam(NetworkPlayerInfo info) {
@@ -1001,6 +1020,7 @@ public class IntelManager {
             if (displayName.contains("§8")) return "gray";
         } catch (Exception ignored) {
         }
-        return "none";
+
+        return null;
     }
 }
