@@ -3,7 +3,6 @@ package myau.module.modules;
 import myau.event.EventTarget;
 import myau.events.Render2DEvent;
 import myau.events.TickEvent;
-import myau.module.Category;
 import myau.module.Module;
 import myau.property.properties.BooleanProperty;
 import myau.property.properties.FloatProperty;
@@ -24,21 +23,22 @@ public class Notifications extends Module {
     public static final String[] VERTICAL_WAVE_DIRECTIONS = new String[]{"Down", "Up"};
     public static final String[] HORIZONTAL_WAVE_DIRECTIONS = new String[]{"Left", "Right"};
 
-    public final ModeProperty colorMode = new ModeProperty("Color mode", "Static", COLOR_MODES);
+    public final ModeProperty colorMode = new ModeProperty("Color mode", 0, COLOR_MODES);
     public final BooleanProperty useColorCodes = new BooleanProperty("Use color codes", false);
-    public final ModeProperty waveAxis = new ModeProperty("Wave axis", "Vertical", WAVE_AXES);
-    public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", "Down", VERTICAL_WAVE_DIRECTIONS);
-    public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", "Left", HORIZONTAL_WAVE_DIRECTIONS);
-    public final FloatProperty waveSpeed = new FloatProperty("Wave speed", 1.0f, 0.1f, 5.0f, 0.1f);
-    public final FloatProperty waveLength = new FloatProperty("Wave length", 1.0f, 0.5f, 5.0f, 0.1f);
-    public final FloatProperty fontSize = new FloatProperty("Scale", 1.0f, 0.5f, 2.0f, 0.1f);
-    public final FloatProperty animationSpeed = new FloatProperty("Animation speed", 0.1f, 0.01f, 1.0f, 0.01f);
+    public final ModeProperty waveAxis = new ModeProperty("Wave axis", 0, WAVE_AXES);
+    public final ModeProperty verticalWaveDirection = new ModeProperty("Wave direction ", 0, VERTICAL_WAVE_DIRECTIONS);
+    public final ModeProperty horizontalWaveDirection = new ModeProperty("Wave direction", 0, HORIZONTAL_WAVE_DIRECTIONS);
+    public final FloatProperty waveSpeed = new FloatProperty("Wave speed", 1.0f, 0.1f, 5.0f);
+    public final FloatProperty waveLength = new FloatProperty("Wave length", 1.0f, 0.5f, 5.0f);
+    public final FloatProperty fontSize = new FloatProperty("Scale", 1.0f, 0.5f, 2.0f);
+    public final FloatProperty animationSpeed = new FloatProperty("Animation speed", 0.1f, 0.01f, 1.0f);
 
     public final BooleanProperty showToggle = new BooleanProperty("Show module toggle", true);
     public final BooleanProperty showState = new BooleanProperty("Show module state", true);
-    public final FloatProperty displayTime = new FloatProperty("Display time (s)", 2.0f, 0.5f, 10.0f, 0.5f);
+    public final FloatProperty displayTime = new FloatProperty("Display time (s)", 2.0f, 0.5f, 10.0f);
+    public final FloatProperty duration = displayTime; // Compatibility alias
     public final IntProperty maxNotifications = new IntProperty("Max notifications", 5, 1, 10);
-    public final ModeProperty position = new ModeProperty("Position", "Bottom Right", new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"});
+    public final ModeProperty position = new ModeProperty("Position", 0, new String[]{"Bottom Right", "Bottom Left", "Top Right", "Top Left"});
 
     public final BooleanProperty drawBackground = new BooleanProperty("Draw background", true);
     public final BooleanProperty textShadow = new BooleanProperty("Text shadow", true);
@@ -47,7 +47,7 @@ public class Notifications extends Module {
     private final List<Notification> notifications = new ArrayList<>();
 
     public Notifications() {
-        super("Notifications", Category.RENDER);
+        super("Notifications", false);
     }
 
     public void addNotification(String title, String message, NotificationType type) {
@@ -93,9 +93,9 @@ public class Notifications extends Module {
         int padding = 4;
         int rowHeight = mc.fontRendererObj.FONT_HEIGHT + 6;
 
-        String posMode = position.getValue();
-        boolean isTop = posMode.startsWith("Top");
-        boolean isRight = posMode.endsWith("Right");
+        int posMode = position.getValue();
+        boolean isTop = posMode == 2 || posMode == 3;
+        boolean isRight = posMode == 0 || posMode == 2;
 
         float startY = isTop ? 10 : scaledHeight - 30;
         float currentY = startY;
@@ -137,7 +137,6 @@ public class Notifications extends Module {
                 Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + boxWidth), (int) (currentY + boxHeight), new Color(0, 0, 0, 150).getRGB());
             }
 
-            // Draw accent indicator bar on the edge
             Gui.drawRect((int) currentX, (int) currentY, (int) (currentX + 2), (int) (currentY + boxHeight), color);
 
             mc.fontRendererObj.drawString(displayText, currentX + padding + 2, currentY + 3, -1, textShadow.getValue());
@@ -153,7 +152,7 @@ public class Notifications extends Module {
     }
 
     private boolean hudWaveIsVertical() {
-        return waveAxis.getValue().equalsIgnoreCase("Vertical");
+        return waveAxis.getValue() == 0;
     }
 
     private double hudWavePhase(double verticalAccum, double rowCenterX) {
@@ -165,18 +164,18 @@ public class Notifications extends Module {
     }
 
     private int getVerticalWaveDirectionSign() {
-        return verticalWaveDirection.getValue().equalsIgnoreCase("Up") ? 1 : -1;
+        return verticalWaveDirection.getValue() == 1 ? 1 : -1;
     }
 
     private int getHorizontalWaveDirectionSign() {
-        return horizontalWaveDirection.getValue().equalsIgnoreCase("Right") ? 1 : -1;
+        return horizontalWaveDirection.getValue() == 1 ? 1 : -1;
     }
 
     public int getHudColor(double gradientOffset) {
-        String mode = colorMode.getValue();
-        if ("Rainbow".equalsIgnoreCase(mode)) {
+        int mode = colorMode.getValue();
+        if (mode == 2) {
             return getRainbowWaveColor(gradientOffset);
-        } else if ("Gradient".equalsIgnoreCase(mode)) {
+        } else if (mode == 1) {
             return getGradientWaveColor(Color.WHITE, new Color(85, 85, 255), gradientOffset);
         } else {
             return Color.WHITE.getRGB();
