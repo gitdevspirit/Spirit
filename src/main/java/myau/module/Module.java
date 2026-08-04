@@ -1,117 +1,118 @@
 package myau.module;
 
-import myau.property.Property;
-import myau.property.properties.BooleanProperty;
-import myau.module.modules.Notifications;
-import myau.module.ModuleManager;
-import net.minecraft.client.Minecraft;
-
 import java.util.ArrayList;
 import java.util.List;
+import myau.Myau;
+import myau.module.modules.HUD;
+import myau.module.modules.Notifications;
+import myau.util.KeyBindUtil;
 
 public abstract class Module {
-    protected static final Minecraft mc = Minecraft.getMinecraft();
+   protected final String name;
+   protected final boolean defaultEnabled;
+   protected final int defaultKey;
+   protected final boolean defaultHidden;
+   protected boolean enabled;
+   protected int key;
+   protected boolean hidden;
+   protected final List<Setting> settings;
 
-    private final String name;
-    private final String nameInHud;
-    private final Category category;
-    private final List<Property<?>> properties = new ArrayList<>();
+   public Module(String name, boolean enabled) {
+      this(name, enabled, false);
+   }
 
-    public int key = 0;
-    public final BooleanProperty enabled = new BooleanProperty("Enabled", false);
-    public final BooleanProperty hidden = new BooleanProperty("Hidden", false);
+   public Module(String name, boolean enabled2, boolean hidden) {
+      this.settings = new ArrayList();
+      this.name = name;
+      this.enabled = this.defaultEnabled = enabled2;
+      this.key = this.defaultKey = 0;
+      this.hidden = this.defaultHidden = hidden;
+   }
 
-    // Animation progress for HUD rendering
-    public float hudAnimation = 0.0f;
+   protected <T extends Setting> T register(T setting) {
+      this.settings.add(setting);
+      return setting;
+   }
 
-    public Module(String name, Category category) {
-        this(name, name, category);
-    }
+   public List<Setting> getSettings() {
+      return this.settings;
+   }
 
-    public Module(String name, String nameInHud, Category category) {
-        this.name = name;
-        this.nameInHud = nameInHud;
-        this.category = category;
-        this.registerProperties(enabled, hidden);
-    }
+   public String getName() {
+      return this.name;
+   }
 
-    public String getName() {
-        return name;
-    }
+   public String formatModule() {
+      return String.format("%s%s &r(%s&r)", this.key == 0 ? "" : String.format("&l[%s] &r", KeyBindUtil.getKeyName(this.key)), this.name, this.enabled ? "&a&lON" : "&c&lOFF");
+   }
 
-    public String getNameInHud() {
-        return nameInHud;
-    }
+   public String[] getSuffix() {
+      return new String[0];
+   }
 
-    public Category getCategory() {
-        return category;
-    }
+   public boolean isEnabled() {
+      return this.enabled;
+   }
 
-    public int getKey() {
-        return key;
-    }
+   public void setEnabled(boolean enabled) {
+      if (this.enabled != enabled) {
+         this.enabled = enabled;
+         if (enabled) {
+            this.onEnabled();
+         } else {
+            this.onDisabled();
+         }
+      }
 
-    public void setKey(int key) {
-        this.key = key;
-    }
+   }
 
-    public String getInfo() {
-        return "";
-    }
+   public boolean toggle() {
+      boolean enabled = !this.enabled;
+      this.setEnabled(enabled);
+      if (this.enabled == enabled) {
+         if ((Boolean)((HUD)Myau.moduleManager.modules.get(HUD.class)).toggleSound.getValue()) {
+            Myau.moduleManager.playSound();
+         }
 
-    public void getInfoUpdate() {
-    }
-
-    public boolean isEnabled() {
-        return enabled.getValue();
-    }
-
-    public void setEnabled(boolean state) {
-        if (this.enabled.getValue() != state) {
-            this.enabled.setValue(state);
-            if (state) {
-                onEnable();
-            } else {
-                onDisable();
+         try {
+            if (Myau.notificationManager != null) {
+               Notifications notifModule = (Notifications) Myau.moduleManager.modules.get(Notifications.class);
+               if (notifModule != null && notifModule.isEnabled()) {
+                  long dur = (long)(notifModule.duration.getValue() * 1000.0);
+                  Myau.notificationManager.addToggle(this.getName(), this.enabled, dur, this.enabled ? 0xE991B8 : 0x666666);
+               }
             }
-            sendToggleNotification(state);
-        }
-    }
+         } catch (Exception var4) {
+         }
 
-    public void toggle() {
-        setEnabled(!isEnabled());
-    }
+         return true;
+      } else {
+         return false;
+      }
+   }
 
-    public boolean isHidden() {
-        return hidden.getValue();
-    }
+   public int getKey() {
+      return this.key;
+   }
 
-    public void setHidden(boolean hidden) {
-        this.hidden.setValue(hidden);
-    }
+   public void setKey(int integer) {
+      this.key = integer;
+   }
 
-    public List<Property<?>> getProperties() {
-        return properties;
-    }
+   public boolean isHidden() {
+      return this.hidden;
+   }
 
-    protected void registerProperties(Property<?>... props) {
-        for (Property<?> prop : props) {
-            properties.add(prop);
-        }
-    }
+   public void setHidden(boolean boolean1) {
+      this.hidden = boolean1;
+   }
 
-    public void onEnable() {
-    }
+   public void onEnabled() {
+   }
 
-    public void onDisable() {
-    }
+   public void onDisabled() {
+   }
 
-    private void sendToggleNotification(boolean state) {
-        Notifications notifModule = ModuleManager.getModule(Notifications.class);
-        if (notifModule != null && notifModule.isEnabled()) {
-            String title = this.getName();
-            String message = title + (state ? " Enabled" : " Disabled");
-            notifModule.addNotification(title, message, Notifications.NotificationType.INFO);
-        }
-    }
+   public void verifyValue(String string) {
+   }
 }
