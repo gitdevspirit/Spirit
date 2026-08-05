@@ -20,7 +20,7 @@ public class IntelHudSettingsGui extends GuiScreen {
     private static final int POPUP_W = 280;
     private static final int POPUP_H = 520;
     private static final int PAD = 12;
-    private static final int SLIDER_H = 28;
+    private static final int SLIDER_H = 30;
     private static final int TOGGLE_H = 24;
 
     private static final int BG_POPUP = 0xEE0A0A12;
@@ -36,6 +36,7 @@ public class IntelHudSettingsGui extends GuiScreen {
     private static final int S_MAX_P = 3;
     private static final int S_BG_OP = 4;
     private static final int S_BORDER = 5;
+    private static final int S_COLUMN_OP = 6;
 
     private int scrollOffset = 0;
     private int maxScroll = 0;
@@ -98,6 +99,12 @@ public class IntelHudSettingsGui extends GuiScreen {
 
             case S_BORDER:
                 hudOverlay.setBorderOpacity(
+                        pixelToVal(mouseX, barX, barWidth, 0, 255)
+                );
+                break;
+
+            case S_COLUMN_OP:
+                hudOverlay.setColumnLineOpacity(
                         pixelToVal(mouseX, barX, barWidth, 0, 255)
                 );
                 break;
@@ -246,6 +253,15 @@ public class IntelHudSettingsGui extends GuiScreen {
                 hudOverlay.getBorderOpacity(),
                 0, 255,
                 S_BORDER,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Column Line Opacity",
+                hudOverlay.getColumnLineOpacity(),
+                0, 255,
+                S_COLUMN_OP,
                 mouseX, mouseY
         );
 
@@ -513,6 +529,9 @@ public class IntelHudSettingsGui extends GuiScreen {
         y += SLIDER_H;
 
         if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_BORDER, 255)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_COLUMN_OP, 255)) return;
         y += SLIDER_H;
 
         y += 6 + 12 + 16 + 20;
