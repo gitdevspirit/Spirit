@@ -54,6 +54,11 @@ public class FontProcess {
         registerFont("sans", createFont("sans", 18));
         registerFont("tahoma", createFont("tahoma", 18));
         registerFont("icon", createFont("icon", 40));
+
+        // "client.ttf" / "client-bold.ttf" are already SF UI Text (Regular/Bold) —
+        // aliased under clearer names rather than loading duplicate font data.
+        aliasFont("sf-regular", "client");
+        aliasFont("sf-bold", "bold");
     }
 
     public static void registerFont(String name, CFontRenderer font) {
