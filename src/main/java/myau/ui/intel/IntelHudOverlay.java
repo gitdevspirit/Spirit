@@ -25,6 +25,8 @@ public class IntelHudOverlay {
     private static final int BORDER_RADIUS = 4;
 
     private int bgOpacity = 200;
+    private int borderOpacity = 140;
+    private int columnLineOpacity = 26;
     private static final int ACCENT = GuiColors.ACCENT;
     private static final int TEXT_BRIGHT = 0xFFDDDDEE;
     private static final int TEXT_DIM = 0xFF888899;
@@ -116,7 +118,11 @@ public class IntelHudOverlay {
     }
 
     public void setBorderOpacity(int opacity) {
-        this.bgOpacity = opacity;
+        this.borderOpacity = Math.max(0, Math.min(255, opacity));
+    }
+
+    public void setColumnLineOpacity(int opacity) {
+        this.columnLineOpacity = Math.max(0, Math.min(255, opacity));
     }
 
     public boolean isEnabled() {
@@ -184,7 +190,11 @@ public class IntelHudOverlay {
     }
 
     public int getBorderOpacity() {
-        return bgOpacity;
+        return borderOpacity;
+    }
+
+    public int getColumnLineOpacity() {
+        return columnLineOpacity;
     }
 
     public void handleClick(int mx, int my) {
@@ -277,6 +287,7 @@ public class IntelHudOverlay {
         int totalHeight = HEADER_HEIGHT + contentHeight;
 
         int bgColor = (bgOpacity << 24) | 0x07070E;
+        int borderColor = (borderOpacity << 24) | 0x00FFFFFF;
 
         // Border — drawn as a slightly larger rounded rect behind the fill,
         // creating a 1px ring around the panel.
@@ -286,7 +297,7 @@ public class IntelHudOverlay {
                 scaledX + width + 1,
                 scaledY + totalHeight + 1,
                 BORDER_RADIUS + 1,
-                0x55FFFFFF
+                borderColor
         );
 
         drawRoundedRect(
@@ -365,8 +376,10 @@ public class IntelHudOverlay {
             // Drop the last boundary — no line needed after the final column.
             columnBoundaries.remove(columnBoundaries.size() - 1);
 
+            int columnLineColor = (columnLineOpacity << 24) | 0x00FFFFFF;
+
             for (int boundaryX : columnBoundaries) {
-                fillRect(boundaryX - 3, dividerY + 2, 1, totalHeight - HEADER_HEIGHT - 4, 0x1AFFFFFF);
+                fillRect(boundaryX - 3, dividerY + 2, 1, totalHeight - HEADER_HEIGHT - 4, columnLineColor);
             }
         }
 
@@ -421,6 +434,13 @@ public class IntelHudOverlay {
 
         if (player.threatScore >= 75) {
             nameColor = ACCENT;
+        } else if (showTeamColor && player.team != null && !player.team.isEmpty()) {
+            // Active match — color the name by team, matching BedwarsTag.
+            nameColor = getTeamColor(player.team);
+        } else if (player.rankPrefix != null && !player.rankPrefix.isEmpty()) {
+            // Lobby (no team yet) — color the name by Hypixel rank.
+            int rankColor = IntelColors.extractLeadingColor(player.rankPrefix);
+            if (rankColor != 0) nameColor = rankColor;
         }
 
         drawText(player.name, currentX, y + 4, nameColor);
