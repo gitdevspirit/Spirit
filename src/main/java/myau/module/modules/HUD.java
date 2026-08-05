@@ -96,7 +96,8 @@ public class HUD extends Module {
             register(new DropdownSetting("AL Outline", 0, "None", "Full", "Side"));
 
     public final DropdownSetting alFont = register(new DropdownSetting("AL Font", 0,
-            "Vanilla", "Client", "Bold", "Arial", "Apple", "Sans", "Noto", "Tahoma"));
+            "Vanilla", "Client", "Bold", "Arial", "Apple", "Sans", "Noto", "Tahoma",
+            "SF Regular", "SF Bold"));
 
     public final SliderSetting alFontScale =
             register(new SliderSetting("AL Font Scale", 1.0, 0.5, 2.0, 0.05));
@@ -144,8 +145,12 @@ public class HUD extends Module {
     }
 
     public Color getListColor() {
+        return getListColor(0f);
+    }
+
+    public Color getListColor(float offset) {
         return resolveColor(
-                System.currentTimeMillis(), 0f,
+                System.currentTimeMillis(), offset,
                 (int) listRed.getValue(), (int) listGreen.getValue(), (int) listBlue.getValue()
         );
     }
