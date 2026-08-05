@@ -39,6 +39,7 @@ public class IntelHudSettingsGui extends GuiScreen {
     private static final int S_BORDER_R = 7;
     private static final int S_BORDER_G = 8;
     private static final int S_BORDER_B = 9;
+    private static final int S_BORDER_THICKNESS = 10;
     private static final int S_COLUMN_OP = 6;
 
     private int scrollOffset = 0;
@@ -121,6 +122,12 @@ public class IntelHudSettingsGui extends GuiScreen {
             case S_BORDER_B:
                 hudOverlay.setBorderBlue(
                         pixelToVal(mouseX, barX, barWidth, 0, 255)
+                );
+                break;
+
+            case S_BORDER_THICKNESS:
+                hudOverlay.setBorderThickness(
+                        pixelToVal(mouseX, barX, barWidth, 1, 8)
                 );
                 break;
 
@@ -301,6 +308,15 @@ public class IntelHudSettingsGui extends GuiScreen {
                 hudOverlay.getBorderBlue(),
                 0, 255,
                 S_BORDER_B,
+                mouseX, mouseY
+        );
+
+        y = slider(
+                innerX, y, innerWidth,
+                "Border Thickness",
+                hudOverlay.getBorderThickness(),
+                1, 8,
+                S_BORDER_THICKNESS,
                 mouseX, mouseY
         );
 
@@ -586,6 +602,9 @@ public class IntelHudSettingsGui extends GuiScreen {
         y += SLIDER_H;
 
         if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_BORDER_B, 255)) return;
+        y += SLIDER_H;
+
+        if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_BORDER_THICKNESS, 8)) return;
         y += SLIDER_H;
 
         if (tryDrag(mouseX, mouseY, innerX, innerWidth, y, S_COLUMN_OP, 255)) return;
