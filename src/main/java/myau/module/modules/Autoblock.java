@@ -224,13 +224,16 @@ public class Autoblock extends Module {
     }
 
     private double ticksToMs(long ticks) {
-        return ticks * 50.0;
-    }
+    return ticks * 50.0;
+}
 
-    @Override
-    public String[] getSuffix() {
-        if (lagging) return new String[]{ "Lagging" };
-        if (blocking) return new String[]{ "Blocking" };
-        return new String[0];
-    }
+public boolean isBlocking() {
+    return blocking;
+}
+
+@Override
+public String[] getSuffix() {
+    if (lagging) return new String[]{ "Lagging" };
+    if (blocking) return new String[]{ "Blocking" };
+    return new String[0];
 }
