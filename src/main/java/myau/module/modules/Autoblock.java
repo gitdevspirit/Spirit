@@ -4,237 +4,252 @@ import myau.Myau;
 import myau.enums.BlinkModules;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
-import myau.events.CancelUseEvent;
-import myau.events.PacketEvent;
-import myau.events.RightClickMouseEvent;
-import myau.events.TickEvent;
-import myau.events.UpdateEvent;
+import myau.events.*;
+import myau.mixin.IAccessorPlayerControllerMP;
 import myau.module.BooleanSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
-import myau.util.ItemUtil;
-import myau.util.TeamUtil;
+import myau.util.*;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.settings.KeyBinding;
-import net.minecraft.entity.player.EntityPlayer;
+import java.util.Random;
+import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.ItemStack;
-import net.minecraft.network.play.client.C02PacketUseEntity;
-import net.minecraft.network.play.client.C02PacketUseEntity.Action;
-import org.lwjgl.input.Mouse;
+import net.minecraft.item.ItemSword;
+import net.minecraft.network.play.client.C07PacketPlayerDigging;
+import net.minecraft.network.play.client.C08PacketPlayerBlockPlacement;
+import net.minecraft.util.BlockPos;
+import net.minecraft.util.EnumFacing;
 
-/**
- * Autoblock — rewritten around the reference's design: instead of hand-rolling
- * the block/unblock packets, it presses/releases the real "use item" keybind
- * (vanilla sends the correct packets on its own from there), predicts
- * incoming hits via hurtTime the same tick they land, and folds in blinkManager
- * for a brief outbound-packet lag window so the block registers before the
- * hit does.
- */
 public class Autoblock extends Module {
     private static final Minecraft mc = Minecraft.getMinecraft();
 
-    public final SliderSetting  range            = register(new SliderSetting("Range", 4.0, 2.0, 6.0, 0.1));
-    public final SliderSetting  maxHurtTime      = register(new SliderSetting("Max Hurt Time", 200, 50, 500, 10));
-    public final SliderSetting  maxHoldTime      = register(new SliderSetting("Max Hold Time", 150, 50, 500, 10));
-    public final SliderSetting  lagChance        = register(new SliderSetting("Lag Chance", 100, 0, 100, 5));
-    public final SliderSetting  lagMaxDuration   = register(new SliderSetting("Lag Max Duration", 200, 50, 500, 10));
-    public final BooleanSetting preventDelayAttacks = register(new BooleanSetting("Prevent Delaying Attacks", true));
-    public final BooleanSetting blockAgainImmediately = register(new BooleanSetting("Block Again Immediately", true));
-    public final BooleanSetting forceBlockAnimation = register(new BooleanSetting("Force Block Animation", true));
-    public final BooleanSetting requireLmb       = register(new BooleanSetting("Require Left Mouse", false));
-    public final BooleanSetting requireRmb       = register(new BooleanSetting("Require Right Mouse", false));
-    public final BooleanSetting onlyWhenDamaged  = register(new BooleanSetting("Only When Damaged", false));
-    public final BooleanSetting ignoreTeammates  = register(new BooleanSetting("Ignore Teammates", true));
-
-    private boolean blocking;
-    private boolean lagging;
-    private long blockStartTick;
-    private long lagStartTick;
-    private long tickCounter;
-    private EntityPlayer currentTarget;
+    public final SliderSetting  range           = register(new SliderSetting("Range",              3.5, 1.0,  8.0,  0.1));
+    public final SliderSetting  blockDuration   = register(new SliderSetting("Block Duration (ms)", 100, 50,  500,  10));
+    public final SliderSetting  unblockDuration = register(new SliderSetting("Unblock Duration (ms)", 80, 10, 200, 10));
+    public final SliderSetting  postHitDelay    = register(new SliderSetting("Post-Hit Delay (ms)", 50, 0, 200, 10));
+    public final SliderSetting  lagChance       = register(new SliderSetting("Lag Chance (%)",     0,   0,    100,  1));
+    public final SliderSetting  lagMaxDuration  = register(new SliderSetting("Lag Max (ms)",       200, 50,   1000, 10));
+    public final BooleanSetting preventDelay    = register(new BooleanSetting("Prevent Delay",     true));
+    public final BooleanSetting blockAgain      = register(new BooleanSetting("Block Again",       true));
+    public final BooleanSetting forceAnimation  = register(new BooleanSetting("Force Animation",   false));
+    public final BooleanSetting animInRange     = register(new BooleanSetting("Anim Only In Range", true));
+    public final BooleanSetting requireLMB      = register(new BooleanSetting("Require LMB",       false));
+    public final BooleanSetting requireRMB      = register(new BooleanSetting("Require RMB",       false));
+    public final BooleanSetting requireDamaged  = register(new BooleanSetting("Only When Damaged",  false));
+    private static final Random rng = new Random();
+    private boolean blockingState  = false;
+    private boolean fakeBlockState = false;
+    private long    blockStartMs   = 0L;
+    private long    unblockStartMs = 0L;
+    private long    lastAttackMs   = 0L;
+    private boolean lagging        = false;
+    private long    lagStartMs     = 0L;
+    private long    lastDamagedMs  = 0L;
+    private int     lastHurtTime   = 0;
+    
+    private enum BlockState {
+        IDLE,      // Not blocking
+        BLOCKING,  // Currently blocking
+        UNBLOCKED  // Released block, waiting to block again
+    }
+    
+    private BlockState state = BlockState.IDLE;
 
     public Autoblock() { super("Autoblock", false); }
 
+    public boolean isBlocking() {
+        if (forceAnimation.getValue()) {
+            if (animInRange.getValue()) return fakeBlockState && ItemUtil.isHoldingSword();
+            return isEnabled() && ItemUtil.isHoldingSword();
+        }
+        return fakeBlockState && ItemUtil.isHoldingSword();
+    }
+
+    public boolean isPlayerBlocking() {
+        return (mc.thePlayer.isUsingItem() || blockingState) && ItemUtil.isHoldingSword();
+    }
+
+    public boolean isInLegitFullHoldPhase() { return false; }
+
     @Override
     public void onEnabled() {
-        tickCounter = 0L;
-        blockStartTick = 0L;
-        lagStartTick = 0L;
-        currentTarget = null;
+        if (mc.thePlayer != null) lastHurtTime = mc.thePlayer.hurtResistantTime;
+        state = BlockState.IDLE;
     }
 
     @Override
     public void onDisabled() {
-        stopBlocking();
-        releaseLag();
-        currentTarget = null;
+        if (blockingState) stopBlock();
+        if (lagging) { Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK); lagging = false; }
+        blockingState = false; fakeBlockState = false; state = BlockState.IDLE;
     }
 
     @EventTarget
     public void onUpdate(UpdateEvent event) {
-        if (event.getType() != EventType.PRE) return;
-        if (!isEnabled() || mc.thePlayer == null || mc.theWorld == null) return;
+        if (!isEnabled() || event.getType() != EventType.PRE) return;
+        if (mc.thePlayer == null || mc.theWorld == null) return;
+        if (!ItemUtil.isHoldingSword()) { cleanup(); return; }
 
-        tickCounter++;
+        int currentHurtTime = mc.thePlayer.hurtResistantTime;
+        if (currentHurtTime > lastHurtTime) lastDamagedMs = System.currentTimeMillis();
+        lastHurtTime = currentHurtTime;
 
-        if (!conditionsMet()) {
-            stopBlocking();
-            releaseLag();
+        EntityLivingBase nearestTarget = getNearestTarget();
+        boolean hasTarget = nearestTarget != null;
+        fakeBlockState = hasTarget;
+
+        if (!checkConditions() || !hasTarget) {
+            if (blockingState) stopBlock();
+            fakeBlockState = false;
+            state = BlockState.IDLE;
             return;
         }
 
-        currentTarget = findTarget();
-        boolean shouldBlock = currentTarget != null && (!onlyWhenDamaged.getValue() || shouldPredictiveBlock());
-
-        if (!shouldBlock) {
-            stopBlocking();
-            releaseLag();
+        if (lagging) {
+            long elapsed = System.currentTimeMillis() - lagStartMs;
+            if (elapsed >= lagMaxDuration.getValue()) {
+                Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                lagging = false;
+                if (!blockAgain.getValue() && blockingState) stopBlock();
+            }
             return;
         }
 
-        if (!blocking) {
-            startBlocking();
-        } else if (ticksToMs(tickCounter - blockStartTick) >= maxHoldTime.getValue()) {
-            // Periodically let go and re-press — mirrors a human re-gripping their
-            // shield rather than holding one continuous, suspiciously-long block.
-            stopBlocking();
-            if (blockAgainImmediately.getValue()) startBlocking();
-        }
+        long now = System.currentTimeMillis();
+        long timeSinceAttack = now - lastAttackMs;
 
-        maybeStartLag();
-        if (lagging && ticksToMs(tickCounter - lagStartTick) >= lagMaxDuration.getValue()) {
-            releaseLag();
+        switch (state) {
+            case IDLE:
+                // Start blocking
+                if (!isPlayerBlocking()) startBlock();
+                blockStartMs = now;
+                state = BlockState.BLOCKING;
+                break;
+                
+            case BLOCKING:
+                // Stay blocked for the configured duration
+                long blockElapsed = now - blockStartMs;
+                // Add post-hit delay: don't unblock until enough time has passed since last attack
+                boolean canUnblock = timeSinceAttack >= postHitDelay.getValue();
+                
+                if (blockElapsed >= blockDuration.getValue() && canUnblock) {
+                    // Time to unblock
+                    if (isPlayerBlocking()) {
+                        stopBlock();
+                        if (lagChance.getValue() > 0 && Math.random() * 100 < lagChance.getValue()) {
+                            Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
+                            lagging = true;
+                            lagStartMs = now;
+                        }
+                    }
+                    unblockStartMs = now;
+                    state = BlockState.UNBLOCKED;
+                }
+                break;
+                
+            case UNBLOCKED:
+                // Stay unblocked briefly, then re-block
+                long unblockElapsed = now - unblockStartMs;
+                if (unblockElapsed >= unblockDuration.getValue()) {
+                    state = BlockState.IDLE; // Will re-block on next tick
+                }
+                break;
+        }
+    }
+
+    @EventTarget
+    public void onTick(TickEvent event) {
+        if (!isEnabled() || event.getType() != EventType.POST || mc.thePlayer == null) return;
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (blockingState && held != null && !mc.thePlayer.isBlocking()) {
+            mc.thePlayer.setItemInUse(held, held.getMaxItemUseDuration());
+        }
+    }
+
+    @EventTarget
+    public void onAttack(AttackEvent event) {
+        if (!isEnabled()) return;
+        lastAttackMs = System.currentTimeMillis();
+        // Keep blocking during and after attack
+        // Just reset the block timer to maintain blocking
+        if (state == BlockState.BLOCKING) {
+            blockStartMs = System.currentTimeMillis(); // Reset timer to stay blocked
+        } else if (state != BlockState.BLOCKING) {
+            // If not blocking, start blocking immediately after attack
+            state = BlockState.IDLE; // Will start blocking on next update
         }
     }
 
     @EventTarget
     public void onPacket(PacketEvent event) {
-        if (!isEnabled() || event.getType() != EventType.SEND) return;
-        if (!lagging || !preventDelayAttacks.getValue()) return;
-        if (!(event.getPacket() instanceof C02PacketUseEntity)) return;
-
-        C02PacketUseEntity packet = (C02PacketUseEntity) event.getPacket();
-        if (packet.getAction() == Action.ATTACK) {
-            // Don't let a queued attack sit behind the lag window — release
-            // immediately so the swing actually lands on time.
-            releaseLag();
+        if (!isEnabled() || event.getType() != EventType.RECEIVE || mc.thePlayer == null) return;
+        if (event.getPacket() instanceof net.minecraft.network.play.server.S06PacketUpdateHealth) {
+            net.minecraft.network.play.server.S06PacketUpdateHealth pkt =
+                (net.minecraft.network.play.server.S06PacketUpdateHealth) event.getPacket();
+            if (pkt.getHealth() < mc.thePlayer.getHealth()) {
+                lastDamagedMs = System.currentTimeMillis();
+                // When taking damage, ensure we're blocking
+                if (state != BlockState.BLOCKING && !lagging) {
+                    state = BlockState.IDLE; // Will start blocking on next tick
+                }
+                if (lagging && preventDelay.getValue()) {
+                    Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
+                    lagging = false;
+                }
+            }
         }
     }
 
     @EventTarget
-    public void onRightClickMouse(RightClickMouseEvent event) {
-        if (shouldSuppressVanillaUse()) event.setCancelled(true);
+    public void onMove(MoveInputEvent event) {
+        if (isEnabled() && blockingState) mc.thePlayer.movementInput.jump = false;
     }
 
     @EventTarget
     public void onCancelUse(CancelUseEvent event) {
-        if (shouldSuppressVanillaUse()) event.setCancelled(true);
+        if (isEnabled() && blockingState) event.setCancelled(true);
     }
 
-    @EventTarget
-    public void onTick(TickEvent event) {
-        if (event.getType() != EventType.POST) return;
-        if (!isEnabled() || mc.thePlayer == null) return;
-
-        if ((blocking || lagging) && forceBlockAnimation.getValue()
-                && ItemUtil.isHoldingSword() && !mc.thePlayer.isUsingItem()) {
-            ItemStack held = mc.thePlayer.getHeldItem();
-            if (held != null) {
-                myau.mixin.IAccessorEntityPlayer accessor = (myau.mixin.IAccessorEntityPlayer) mc.thePlayer;
-                accessor.setItemInUse(held);
-                accessor.setItemInUseCount(held.getMaxItemUseDuration());
-            }
-        }
+    private void cleanup() {
+        if (blockingState) stopBlock();
+        blockingState = false; fakeBlockState = false; state = BlockState.IDLE;
     }
 
-    // ── Core actions ──────────────────────────────────────────────────────────
-
-    private void startBlocking() {
-        if (!ItemUtil.isHoldingSword()) return;
-        KeyBinding.setKeyBindState(mc.gameSettings.keyBindUseItem.getKeyCode(), true);
-        blocking = true;
-        blockStartTick = tickCounter;
-    }
-
-    private void stopBlocking() {
-        if (!blocking) return;
-        int key = mc.gameSettings.keyBindUseItem.getKeyCode();
-        KeyBinding.setKeyBindState(key, false);
-        if (mc.thePlayer != null && mc.thePlayer.isUsingItem()) {
-            mc.thePlayer.stopUsingItem();
-        }
-        blocking = false;
-    }
-
-    private void maybeStartLag() {
-        if (lagging) return;
-        if (lagChance.getValue() <= 0) return;
-        if (Math.random() * 100.0 > lagChance.getValue()) return;
-
-        Myau.blinkManager.setBlinkState(true, BlinkModules.AUTO_BLOCK);
-        lagging = true;
-        lagStartTick = tickCounter;
-    }
-
-    private void releaseLag() {
-        if (!lagging) return;
-        Myau.blinkManager.setBlinkState(false, BlinkModules.AUTO_BLOCK);
-        lagging = false;
-    }
-
-    // ── Conditions / targeting ───────────────────────────────────────────────
-
-    private boolean conditionsMet() {
-        if (mc.currentScreen != null) return false;
-        if (!ItemUtil.isHoldingSword()) return false;
-        if (requireLmb.getValue() && !Mouse.isButtonDown(0)) return false;
-        if (requireRmb.getValue() && !Mouse.isButtonDown(1)) return false;
+    private boolean checkConditions() {
+        if (requireLMB.getValue() && !org.lwjgl.input.Mouse.isButtonDown(0)) return false;
+        if (requireRMB.getValue() && !org.lwjgl.input.Mouse.isButtonDown(1)) return false;
+        if (requireDamaged.getValue() && System.currentTimeMillis() - lastDamagedMs > 3000L) return false;
         return true;
     }
 
-    private boolean shouldPredictiveBlock() {
-        // hurtTime counts down from ~10 the tick you're hit; catch it as close
-        // to that first tick as the Max Hurt Time slider allows.
-        int triggerTick = Math.max(1, Math.min(10, (int) (maxHurtTime.getValue() / 50.0)));
-        return mc.thePlayer.hurtTime == triggerTick;
-    }
-
-    private EntityPlayer findTarget() {
-        double rangeSq = range.getValue() * range.getValue();
-        EntityPlayer nearest = null;
-        double nearestDistSq = rangeSq;
-
-        for (Object obj : mc.theWorld.playerEntities) {
-            EntityPlayer p = (EntityPlayer) obj;
-            if (p == mc.thePlayer || p.isDead || p.deathTime > 0) continue;
-            if (TeamUtil.isFriend(p)) continue;
-            if (ignoreTeammates.getValue() && TeamUtil.isSameTeam(p)) continue;
-
-            double distSq = mc.thePlayer.getDistanceSqToEntity(p);
-            if (distSq <= nearestDistSq) {
-                nearestDistSq = distSq;
-                nearest = p;
-            }
+    private EntityLivingBase getNearestTarget() {
+        EntityLivingBase nearest = null;
+        double nearestDist = range.getValue();
+        for (Object obj : mc.theWorld.loadedEntityList) {
+            if (!(obj instanceof EntityLivingBase)) continue;
+            EntityLivingBase e = (EntityLivingBase) obj;
+            if (e == mc.thePlayer || e.isDead || e.deathTime > 0) continue;
+            double dist = RotationUtil.distanceToEntity(e);
+            if (dist <= nearestDist) { nearestDist = dist; nearest = e; }
         }
         return nearest;
     }
 
-    private boolean shouldSuppressVanillaUse() {
-        return isEnabled() && (blocking || lagging) && ItemUtil.isHoldingSword();
+    private void startBlock() {
+        ItemStack held = mc.thePlayer.getHeldItem();
+        if (held == null || !(held.getItem() instanceof ItemSword)) return;
+        ((IAccessorPlayerControllerMP) mc.playerController).callSyncCurrentPlayItem();
+        PacketUtil.sendPacket(new C08PacketPlayerBlockPlacement(held));
+        mc.thePlayer.setItemInUse(held, held.getMaxItemUseDuration());
+        blockingState = true;
     }
 
-    private double ticksToMs(long ticks) {
-    return ticks * 50.0;
-}
-
-public boolean isBlocking() {
-    return blocking;
-}
-
-@Override
-public String[] getSuffix() {
-    if (lagging) return new String[]{ "Lagging" };
-    if (blocking) return new String[]{ "Blocking" };
-    return new String[0];
+    private void stopBlock() {
+        PacketUtil.sendPacket(new C07PacketPlayerDigging(
+            C07PacketPlayerDigging.Action.RELEASE_USE_ITEM, BlockPos.ORIGIN, EnumFacing.DOWN));
+        mc.thePlayer.stopUsingItem();
+        blockingState = false;
     }
+
 }
+
