@@ -132,14 +132,24 @@ public class BedwarsTag extends Module {
             float ty = -(float) mc.fontRendererObj.FONT_HEIGHT;
             float tx = -totalW / 2f;
 
-            // Background
+            // Background — drawn with depth testing left on (unlike
+            // RenderUtil.enableRenderState(), which disables it for
+            // through-wall ESP-style rendering elsewhere in the client) so
+            // the tag box is occluded by walls just like the text below.
             if (background.getValue()) {
-                RenderUtil.enableRenderState();
+                GlStateManager.enableBlend();
+                GlStateManager.blendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
+                GlStateManager.disableTexture2D();
                 RenderUtil.drawRect(tx - 1, ty - 1, tx + totalW + 1, 0, 0x66000000);
-                RenderUtil.disableRenderState();
+                GlStateManager.enableTexture2D();
+                GlStateManager.disableBlend();
             }
 
-            GlStateManager.disableDepth();
+            // No longer disables depth testing here — the tag is now occluded
+            // by walls/terrain like a normal in-world object (matching vanilla
+            // nametag behavior), instead of rendering through them. All the
+            // info (star, name, health, tag) is unchanged — just no longer
+            // visible when a wall is actually in the way.
             // ☆8 on the left (prestige color)
             mc.fontRendererObj.drawString(starPart, tx, ty, starColor, true);
             // Name in the middle (white)
@@ -157,7 +167,6 @@ public class BedwarsTag extends Module {
                 cursor += gap;
                 mc.fontRendererObj.drawString(urchinPart, cursor, ty, urchinColor, true);
             }
-            GlStateManager.enableDepth();
 
             GlStateManager.popMatrix();
         }
