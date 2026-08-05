@@ -236,4 +236,5 @@ public String[] getSuffix() {
     if (lagging) return new String[]{ "Lagging" };
     if (blocking) return new String[]{ "Blocking" };
     return new String[0];
+    }
 }
