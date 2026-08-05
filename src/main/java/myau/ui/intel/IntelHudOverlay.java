@@ -29,6 +29,7 @@ public class IntelHudOverlay {
     private int borderRed = 255;
     private int borderGreen = 255;
     private int borderBlue = 255;
+    private int borderThickness = 2;
     private int columnLineOpacity = 26;
     private static final int ACCENT = GuiColors.ACCENT;
     private static final int TEXT_BRIGHT = 0xFFDDDDEE;
@@ -136,6 +137,10 @@ public class IntelHudOverlay {
         this.borderBlue = Math.max(0, Math.min(255, value));
     }
 
+    public void setBorderThickness(int value) {
+        this.borderThickness = Math.max(1, Math.min(8, value));
+    }
+
     public void setColumnLineOpacity(int opacity) {
         this.columnLineOpacity = Math.max(0, Math.min(255, opacity));
     }
@@ -218,6 +223,10 @@ public class IntelHudOverlay {
 
     public int getBorderBlue() {
         return borderBlue;
+    }
+
+    public int getBorderThickness() {
+        return borderThickness;
     }
 
     public int getColumnLineOpacity() {
@@ -316,14 +325,16 @@ public class IntelHudOverlay {
         int bgColor = (bgOpacity << 24) | 0x07070E;
         int borderColor = (borderOpacity << 24) | (borderRed << 16) | (borderGreen << 8) | borderBlue;
 
-        // Border — drawn as a slightly larger rounded rect behind the fill,
-        // creating a 1px ring around the panel.
+        // Border — drawn as a larger rounded rect behind the fill, creating
+        // a ring around the panel whose width is borderThickness (a 1px ring
+        // is nearly invisible at normal scale, so this now defaults to 2px
+        // and is adjustable).
         drawRoundedRect(
-                scaledX - 1,
-                scaledY - 1,
-                scaledX + width + 1,
-                scaledY + totalHeight + 1,
-                BORDER_RADIUS + 1,
+                scaledX - borderThickness,
+                scaledY - borderThickness,
+                scaledX + width + borderThickness,
+                scaledY + totalHeight + borderThickness,
+                BORDER_RADIUS + borderThickness,
                 borderColor
         );
 
