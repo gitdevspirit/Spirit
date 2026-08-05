@@ -41,38 +41,72 @@ public class LobbyIntel extends Module {
     public final KeybindSetting hudKeybind =
             register(new KeybindSetting("HUD Toggle Key", Keyboard.KEY_H));
 
-    // .bw command — which fields to include in the chat output
-    public final BooleanSetting bwShowStar =
-            register(new BooleanSetting("BW: Show Star", true));
-    public final BooleanSetting bwShowFkdr =
-            register(new BooleanSetting("BW: Show FKDR", true));
-    public final BooleanSetting bwShowWlr =
-            register(new BooleanSetting("BW: Show WLR", true));
-    public final BooleanSetting bwShowBblr =
-            register(new BooleanSetting("BW: Show BBLR", true));
-    public final BooleanSetting bwShowFinalKills =
-            register(new BooleanSetting("BW: Show Final Kills", true));
-    public final BooleanSetting bwShowFinalDeaths =
-            register(new BooleanSetting("BW: Show Final Deaths", false));
-    public final BooleanSetting bwShowKills =
-            register(new BooleanSetting("BW: Show Kills", false));
-    public final BooleanSetting bwShowDeaths =
-            register(new BooleanSetting("BW: Show Deaths", false));
-    public final BooleanSetting bwShowBedsBroken =
-            register(new BooleanSetting("BW: Show Beds Broken", true));
-    public final BooleanSetting bwShowBedsLost =
-            register(new BooleanSetting("BW: Show Beds Lost", false));
-    public final BooleanSetting bwShowWinstreak =
-            register(new BooleanSetting("BW: Show Winstreak", true));
-    public final BooleanSetting bwShowWins =
-            register(new BooleanSetting("BW: Show Wins", false));
-    public final BooleanSetting bwShowLosses =
-            register(new BooleanSetting("BW: Show Losses", false));
-    public final BooleanSetting bwShowTag =
-            register(new BooleanSetting("BW: Show Cheater Tag", true));
+    // ── .bw command — collapsible category. Toggle "▸ BW Stats" on to reveal
+    // the individual field toggles below it, instead of them always cluttering
+    // the settings list.
+    public final BooleanSetting bwCategory =
+            register(new BooleanSetting("\u25B8 BW Stats", false));
 
+    public final BooleanSetting bwShowStar =
+            register(new BooleanSetting("BW: Show Star", true, bwCategory::getValue));
+    public final BooleanSetting bwShowFkdr =
+            register(new BooleanSetting("BW: Show FKDR", true, bwCategory::getValue));
+    public final BooleanSetting bwShowWlr =
+            register(new BooleanSetting("BW: Show WLR", true, bwCategory::getValue));
+    public final BooleanSetting bwShowBblr =
+            register(new BooleanSetting("BW: Show BBLR", true, bwCategory::getValue));
+    public final BooleanSetting bwShowFinalKills =
+            register(new BooleanSetting("BW: Show Final Kills", true, bwCategory::getValue));
+    public final BooleanSetting bwShowFinalDeaths =
+            register(new BooleanSetting("BW: Show Final Deaths", false, bwCategory::getValue));
+    public final BooleanSetting bwShowKills =
+            register(new BooleanSetting("BW: Show Kills", false, bwCategory::getValue));
+    public final BooleanSetting bwShowDeaths =
+            register(new BooleanSetting("BW: Show Deaths", false, bwCategory::getValue));
+    public final BooleanSetting bwShowBedsBroken =
+            register(new BooleanSetting("BW: Show Beds Broken", true, bwCategory::getValue));
+    public final BooleanSetting bwShowBedsLost =
+            register(new BooleanSetting("BW: Show Beds Lost", false, bwCategory::getValue));
+    public final BooleanSetting bwShowWinstreak =
+            register(new BooleanSetting("BW: Show Winstreak", true, bwCategory::getValue));
+    public final BooleanSetting bwShowWins =
+            register(new BooleanSetting("BW: Show Wins", false, bwCategory::getValue));
+    public final BooleanSetting bwShowLosses =
+            register(new BooleanSetting("BW: Show Losses", false, bwCategory::getValue));
+    public final BooleanSetting bwShowTag =
+            register(new BooleanSetting("BW: Show Cheater Tag", true, bwCategory::getValue));
+
+    // ── Tab list — same field set as .bw, gated by the existing "Tab Stats"
+    // master toggle rather than a separate category (per request: these live
+    // under Tab Stats, which was already there).
+    public final BooleanSetting tabShowStar =
+            register(new BooleanSetting("Tab: Show Star", true, tabStats::getValue));
+    public final BooleanSetting tabShowFkdr =
+            register(new BooleanSetting("Tab: Show FKDR", true, tabStats::getValue));
+    public final BooleanSetting tabShowWlr =
+            register(new BooleanSetting("Tab: Show WLR", true, tabStats::getValue));
+    public final BooleanSetting tabShowBblr =
+            register(new BooleanSetting("Tab: Show BBLR", false, tabStats::getValue));
+    public final BooleanSetting tabShowFinalKills =
+            register(new BooleanSetting("Tab: Show Final Kills", false, tabStats::getValue));
+    public final BooleanSetting tabShowFinalDeaths =
+            register(new BooleanSetting("Tab: Show Final Deaths", false, tabStats::getValue));
+    public final BooleanSetting tabShowKills =
+            register(new BooleanSetting("Tab: Show Kills", false, tabStats::getValue));
+    public final BooleanSetting tabShowDeaths =
+            register(new BooleanSetting("Tab: Show Deaths", false, tabStats::getValue));
+    public final BooleanSetting tabShowBedsBroken =
+            register(new BooleanSetting("Tab: Show Beds Broken", false, tabStats::getValue));
+    public final BooleanSetting tabShowBedsLost =
+            register(new BooleanSetting("Tab: Show Beds Lost", false, tabStats::getValue));
+    public final BooleanSetting tabShowWinstreak =
+            register(new BooleanSetting("Tab: Show Winstreak", false, tabStats::getValue));
+    public final BooleanSetting tabShowWins =
+            register(new BooleanSetting("Tab: Show Wins", false, tabStats::getValue));
+    public final BooleanSetting tabShowLosses =
+            register(new BooleanSetting("Tab: Show Losses", false, tabStats::getValue));
     public final BooleanSetting tabShowTag =
-            register(new BooleanSetting("Tab: Show Cheater Tag", true));
+            register(new BooleanSetting("Tab: Show Cheater Tag", true, tabStats::getValue));
 
     public final BooleanProperty hudEnabled = new BooleanProperty("hud-enabled", true);
     public final IntProperty hudPosX = new IntProperty("hud-x", 10, 0, 3840);
@@ -82,6 +116,12 @@ public class LobbyIntel extends Module {
     public final IntProperty hudBgOpacity = new IntProperty("hud-bg-opacity", 180, 0, 255);
     public final IntProperty hudBorderOpacity =
             new IntProperty("hud-border-opacity", 100, 0, 255);
+    public final IntProperty hudBorderRed =
+            new IntProperty("hud-border-red", 255, 0, 255);
+    public final IntProperty hudBorderGreen =
+            new IntProperty("hud-border-green", 255, 0, 255);
+    public final IntProperty hudBorderBlue =
+            new IntProperty("hud-border-blue", 255, 0, 255);
     public final IntProperty hudColumnLineOpacity =
             new IntProperty("hud-column-line-opacity", 26, 0, 255);
     public final BooleanProperty hudShowHeads =
@@ -179,6 +219,9 @@ public class LobbyIntel extends Module {
         hudOverlay.setMaxPlayers(hudMaxPlayers.getValue());
         hudOverlay.setBgOpacity(hudBgOpacity.getValue());
         hudOverlay.setBorderOpacity(hudBorderOpacity.getValue());
+        hudOverlay.setBorderRed(hudBorderRed.getValue());
+        hudOverlay.setBorderGreen(hudBorderGreen.getValue());
+        hudOverlay.setBorderBlue(hudBorderBlue.getValue());
         hudOverlay.setColumnLineOpacity(hudColumnLineOpacity.getValue());
         hudOverlay.setShowHeads(hudShowHeads.getValue());
         hudOverlay.setShowStar(hudShowStar.getValue());
@@ -200,6 +243,9 @@ public class LobbyIntel extends Module {
         hudMaxPlayers.setValue(hudOverlay.getMaxPlayers());
         hudBgOpacity.setValue(hudOverlay.getBgOpacity());
         hudBorderOpacity.setValue(hudOverlay.getBorderOpacity());
+        hudBorderRed.setValue(hudOverlay.getBorderRed());
+        hudBorderGreen.setValue(hudOverlay.getBorderGreen());
+        hudBorderBlue.setValue(hudOverlay.getBorderBlue());
         hudColumnLineOpacity.setValue(hudOverlay.getColumnLineOpacity());
         hudShowHeads.setValue(hudOverlay.getShowHeads());
         hudShowStar.setValue(hudOverlay.getShowStar());
