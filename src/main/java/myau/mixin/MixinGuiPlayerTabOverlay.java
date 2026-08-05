@@ -39,19 +39,70 @@ public abstract class MixinGuiPlayerTabOverlay {
             return vanillaName;
         }
 
-        String starCode = myau.ui.intel.IntelColors.nearestCode(
-                myau.ui.intel.IntelColors.getPrestigeColor(player.star));
-        String fkdrCode = myau.ui.intel.IntelColors.nearestCode(
-                myau.ui.intel.IntelColors.getStatColor(player.fkdr, 3, 6));
-        String wlrCode = myau.ui.intel.IntelColors.nearestCode(
-                myau.ui.intel.IntelColors.getStatColor(player.wlr, 2, 4));
+        StringBuilder stats = new StringBuilder(" §8|");
 
-        StringBuilder stats = new StringBuilder(" §8| ").append(starCode).append("\u272A")
-                .append(player.star)
-                .append(" §7FKDR ").append(fkdrCode)
-                .append(String.format(java.util.Locale.ROOT, "%.1f", player.fkdr))
-                .append(" §7WLR ").append(wlrCode)
-                .append(String.format(java.util.Locale.ROOT, "%.1f", player.wlr));
+        if (lobbyIntel.tabShowStar.getValue()) {
+            String starCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getPrestigeColor(player.star));
+            stats.append(" ").append(starCode).append("\u272A").append(player.star);
+        }
+
+        if (lobbyIntel.tabShowFkdr.getValue()) {
+            String fkdrCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getStatColor(player.fkdr, 3, 6));
+            stats.append(" §7FKDR ").append(fkdrCode)
+                    .append(String.format(java.util.Locale.ROOT, "%.1f", player.fkdr));
+        }
+
+        if (lobbyIntel.tabShowWlr.getValue()) {
+            String wlrCode = myau.ui.intel.IntelColors.nearestCode(
+                    myau.ui.intel.IntelColors.getStatColor(player.wlr, 2, 4));
+            stats.append(" §7WLR ").append(wlrCode)
+                    .append(String.format(java.util.Locale.ROOT, "%.1f", player.wlr));
+        }
+
+        if (lobbyIntel.tabShowBblr.getValue()) {
+            double bblr = player.bedsLost == 0
+                    ? player.bedsBroken
+                    : (double) player.bedsBroken / player.bedsLost;
+            stats.append(" §7BBLR §f").append(String.format(java.util.Locale.ROOT, "%.1f", bblr));
+        }
+
+        if (lobbyIntel.tabShowFinalKills.getValue()) {
+            stats.append(" §7FK §f").append(player.finalKills);
+        }
+
+        if (lobbyIntel.tabShowFinalDeaths.getValue()) {
+            stats.append(" §7FD §f").append(player.finalDeaths);
+        }
+
+        if (lobbyIntel.tabShowKills.getValue()) {
+            stats.append(" §7K §f").append(player.kills);
+        }
+
+        if (lobbyIntel.tabShowDeaths.getValue()) {
+            stats.append(" §7D §f").append(player.deaths);
+        }
+
+        if (lobbyIntel.tabShowBedsBroken.getValue()) {
+            stats.append(" §7BB §f").append(player.bedsBroken);
+        }
+
+        if (lobbyIntel.tabShowBedsLost.getValue()) {
+            stats.append(" §7BL §f").append(player.bedsLost);
+        }
+
+        if (lobbyIntel.tabShowWinstreak.getValue()) {
+            stats.append(" §7WS §f").append(player.winstreak);
+        }
+
+        if (lobbyIntel.tabShowWins.getValue()) {
+            stats.append(" §7W §f").append(player.wins);
+        }
+
+        if (lobbyIntel.tabShowLosses.getValue()) {
+            stats.append(" §7L §f").append(player.losses);
+        }
 
         String tag = player.getTagBadge();
         if (!tag.isEmpty() && lobbyIntel.tabShowTag.getValue()) {
@@ -60,6 +111,10 @@ public abstract class MixinGuiPlayerTabOverlay {
             String tagCode = tag.equals("C") ? "§6"
                     : myau.ui.intel.IntelColors.nearestCode(player.getTagColor());
             stats.append(" ").append(tagCode).append(tag);
+        }
+
+        if (stats.length() <= " §8|".length()) {
+            return vanillaName;
         }
 
         return vanillaName + stats;
