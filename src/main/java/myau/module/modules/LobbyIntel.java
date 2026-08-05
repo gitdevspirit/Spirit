@@ -122,6 +122,8 @@ public class LobbyIntel extends Module {
             new IntProperty("hud-border-green", 255, 0, 255);
     public final IntProperty hudBorderBlue =
             new IntProperty("hud-border-blue", 255, 0, 255);
+    public final IntProperty hudBorderThickness =
+            new IntProperty("hud-border-thickness", 2, 1, 8);
     public final IntProperty hudColumnLineOpacity =
             new IntProperty("hud-column-line-opacity", 26, 0, 255);
     public final BooleanProperty hudShowHeads =
@@ -222,6 +224,7 @@ public class LobbyIntel extends Module {
         hudOverlay.setBorderRed(hudBorderRed.getValue());
         hudOverlay.setBorderGreen(hudBorderGreen.getValue());
         hudOverlay.setBorderBlue(hudBorderBlue.getValue());
+        hudOverlay.setBorderThickness(hudBorderThickness.getValue());
         hudOverlay.setColumnLineOpacity(hudColumnLineOpacity.getValue());
         hudOverlay.setShowHeads(hudShowHeads.getValue());
         hudOverlay.setShowStar(hudShowStar.getValue());
@@ -246,6 +249,7 @@ public class LobbyIntel extends Module {
         hudBorderRed.setValue(hudOverlay.getBorderRed());
         hudBorderGreen.setValue(hudOverlay.getBorderGreen());
         hudBorderBlue.setValue(hudOverlay.getBorderBlue());
+        hudBorderThickness.setValue(hudOverlay.getBorderThickness());
         hudColumnLineOpacity.setValue(hudOverlay.getColumnLineOpacity());
         hudShowHeads.setValue(hudOverlay.getShowHeads());
         hudShowStar.setValue(hudOverlay.getShowStar());
