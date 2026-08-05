@@ -42,6 +42,7 @@ public class ModuleRegistry {
         combatModules.add(Myau.moduleManager.getModule(JumpReset.class));
         combatModules.add(Myau.moduleManager.getModule(BlockHit.class));
         combatModules.add(Myau.moduleManager.getModule(Autoblock.class));
+        combatModules.add(Myau.moduleManager.getModule(KBDisplacement.class));
         combatModules.sort(comparator);
 
         movementModules = new ArrayList<>();
