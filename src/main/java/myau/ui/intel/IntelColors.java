@@ -7,6 +7,26 @@ package myau.ui.intel;
  */
 public final class IntelColors {
 
+    /** Maps a single legacy color code character (0-f) to its RGB value. */
+    public static int codeToColor(char code) {
+        int idx = "0123456789abcdef".indexOf(Character.toLowerCase(code));
+        return idx >= 0 ? CODE_RGB[idx] : 0;
+    }
+
+    /** Finds the first §-color code in a formatted string (e.g. a rank prefix) and returns its color, or 0 if none. */
+    public static int extractLeadingColor(String formatted) {
+        if (formatted == null) return 0;
+
+        for (int i = 0; i < formatted.length() - 1; i++) {
+            if (formatted.charAt(i) == '\u00A7') {
+                int color = codeToColor(formatted.charAt(i + 1));
+                if (color != 0) return color;
+            }
+        }
+
+        return 0;
+    }
+
     private IntelColors() {
     }
 
