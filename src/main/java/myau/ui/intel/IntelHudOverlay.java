@@ -26,6 +26,9 @@ public class IntelHudOverlay {
 
     private int bgOpacity = 200;
     private int borderOpacity = 140;
+    private int borderRed = 255;
+    private int borderGreen = 255;
+    private int borderBlue = 255;
     private int columnLineOpacity = 26;
     private static final int ACCENT = GuiColors.ACCENT;
     private static final int TEXT_BRIGHT = 0xFFDDDDEE;
@@ -121,6 +124,18 @@ public class IntelHudOverlay {
         this.borderOpacity = Math.max(0, Math.min(255, opacity));
     }
 
+    public void setBorderRed(int value) {
+        this.borderRed = Math.max(0, Math.min(255, value));
+    }
+
+    public void setBorderGreen(int value) {
+        this.borderGreen = Math.max(0, Math.min(255, value));
+    }
+
+    public void setBorderBlue(int value) {
+        this.borderBlue = Math.max(0, Math.min(255, value));
+    }
+
     public void setColumnLineOpacity(int opacity) {
         this.columnLineOpacity = Math.max(0, Math.min(255, opacity));
     }
@@ -191,6 +206,18 @@ public class IntelHudOverlay {
 
     public int getBorderOpacity() {
         return borderOpacity;
+    }
+
+    public int getBorderRed() {
+        return borderRed;
+    }
+
+    public int getBorderGreen() {
+        return borderGreen;
+    }
+
+    public int getBorderBlue() {
+        return borderBlue;
     }
 
     public int getColumnLineOpacity() {
@@ -287,7 +314,7 @@ public class IntelHudOverlay {
         int totalHeight = HEADER_HEIGHT + contentHeight;
 
         int bgColor = (bgOpacity << 24) | 0x07070E;
-        int borderColor = (borderOpacity << 24) | 0x00FFFFFF;
+        int borderColor = (borderOpacity << 24) | (borderRed << 16) | (borderGreen << 8) | borderBlue;
 
         // Border — drawn as a slightly larger rounded rect behind the fill,
         // creating a 1px ring around the panel.
@@ -315,70 +342,73 @@ public class IntelHudOverlay {
         int headerY = scaledY + 3;
         int x = scaledX + PADDING;
 
-        List<Integer> columnBoundaries = new ArrayList<>();
+        List<Integer> columnStarts = new ArrayList<>();
 
         if (showHeads) x += HEAD_SIZE + 4;
         if (showTeamColor) x += 3;
 
+        columnStarts.add(x);
         drawText("NAME", x, headerY, 0xFFFFFFFF);
         x += 120;
-        columnBoundaries.add(x);
 
         if (showStar) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("✫");
             drawText("✫", x + (35 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 35;
-            columnBoundaries.add(x);
         }
 
         if (showLevel) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("LVL");
             drawText("LVL", x + (35 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 35;
-            columnBoundaries.add(x);
         }
 
         if (showFkdr) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("FKDR");
             drawText("FKDR", x + (40 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 40;
-            columnBoundaries.add(x);
         }
 
         if (showWlr) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("WLR");
             drawText("WLR", x + (35 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 35;
-            columnBoundaries.add(x);
         }
 
         if (showStreak) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("WS");
             drawText("WS", x + (30 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 30;
-            columnBoundaries.add(x);
         }
 
         if (showUrchin) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("TAGS");
             drawText("TAGS", x + (35 - headerWidth) / 2, headerY, 0xFFFFFFFF);
             x += 35;
-            columnBoundaries.add(x);
         }
 
         if (showThreat) {
+            columnStarts.add(x);
             int headerWidth = mc.fontRendererObj.getStringWidth("THREAT");
             drawText("THREAT", x + (45 - headerWidth) / 2, headerY, 0xFFFFFFFF);
         }
 
-        // Column separator lines, spanning the content area below the header.
-        if (!columnBoundaries.isEmpty()) {
-            // Drop the last boundary — no line needed after the final column.
-            columnBoundaries.remove(columnBoundaries.size() - 1);
-
+        // Separator lines sit at every column start EXCEPT the first (NAME —
+        // nothing precedes it). Tracking starts (rather than guessing which
+        // trailing "end" boundary to drop) is correct no matter which
+        // columns are toggled on/off, including when THREAT — which never
+        // added a trailing boundary of its own — is the last visible column.
+        if (columnStarts.size() > 1) {
             int columnLineColor = (columnLineOpacity << 24) | 0x00FFFFFF;
 
-            for (int boundaryX : columnBoundaries) {
+            for (int i = 1; i < columnStarts.size(); i++) {
+                int boundaryX = columnStarts.get(i);
                 fillRect(boundaryX - 3, dividerY + 2, 1, totalHeight - HEADER_HEIGHT - 4, columnLineColor);
             }
         }
