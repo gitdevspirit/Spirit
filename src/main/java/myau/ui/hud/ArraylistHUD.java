@@ -40,7 +40,6 @@ public class ArraylistHUD {
 
         if (hud == null || !hud.isEnabled()) return;
 
-        int nameRGB = hud.getListColor().getRGB() | 0xFF000000;
         int detailRGB = hud.getColor(System.currentTimeMillis()).getRGB() | 0xFF000000;
 
         boolean shadow = hud.shadow.getValue();
@@ -86,7 +85,7 @@ public class ArraylistHUD {
             others.add(module);
         }
 
-        if (hud != null && hud.alAlphabeticalSort.getValue()) {
+        if (hud.alAlphabeticalSort.getValue()) {
             others.sort(Comparator.comparing(Module::getName, String.CASE_INSENSITIVE_ORDER));
         } else {
             others.sort(Comparator.comparingInt((Module module) -> {
@@ -126,7 +125,7 @@ public class ArraylistHUD {
         int bgY = (int) hud.alPosY.getValue();
         boolean left = hud.alLeft.getValue();
         int bgX = left ? offsetX : sr.getScaledWidth() - bgW - offsetX;
-        int spacing = (int) hud.alSpacing.getValue();
+        int rowGap = (int) hud.alSpacing.getValue();
 
         int bgColor = rgba(
                 hud.alBgRed.getValue(),
@@ -142,90 +141,71 @@ public class ArraylistHUD {
                 hud.alBgAlpha.getValue()
         );
 
+        int panelHeight = rows.size() * lineHeight + Math.max(0, rows.size() - 1) * rowGap;
+
         GlStateManager.enableTexture2D();
         GlStateManager.disableDepth();
         GlStateManager.enableBlend();
 
+        // ── Single unified panel, instead of a separate floating box per row ──
+        if (drawBg) {
+            if (rounding >= 1) {
+                RoundedUtils.drawRoundedRect(bgX, bgY, bgW, panelHeight, rounding, bgColor);
+            } else {
+                net.minecraft.client.gui.Gui.drawRect(bgX, bgY, bgX + bgW, bgY + panelHeight, bgColor);
+            }
+
+            if (hud.alGradient.getValue()) {
+                drawVerticalGradient(bgX, bgY, bgX + bgW, bgY + panelHeight, bgColor, gradientColor);
+            }
+
+            int outlineMode = hud.alOutline.getIndex();
+
+            if (outlineMode == 1) {
+                drawPanelOutline(bgX, bgY, bgW, panelHeight, rounding);
+            } else if (outlineMode == 2) {
+                int spineX = left ? bgX : bgX + bgW - 2;
+                int spineInset = Math.min((int) Math.ceil(rounding), lineHeight / 2);
+
+                net.minecraft.client.gui.Gui.drawRect(
+                        spineX, bgY + spineInset, spineX + 2, bgY + panelHeight - spineInset,
+                        hud.getListColor().getRGB() | 0xFF000000
+                );
+            }
+        }
+
         for (int i = 0; i < rows.size(); i++) {
             Row row = rows.get(i);
+
+            // Per-row wave phase, so Gradient/Rainbow color modes ripple down
+            // the list instead of every row flashing the exact same color.
+            int rowNameRGB = hud.getListColor(i * 30f).getRGB() | 0xFF000000;
 
             String display = (row.isPitSub ? "  " : "") + row.name;
             int nameW = fontWidth(display);
             int detailW = fontWidth(row.detail);
             int totalW = nameW + detailW;
 
-            int rowY = bgY + i * (lineHeight + spacing);
+            int rowY = bgY + i * (lineHeight + rowGap);
 
-            if (drawBg) {
-                drawRowBackground(
-                        bgX,
-                        rowY,
-                        bgW,
-                        lineHeight,
-                        rounding,
-                        bgColor,
-                        gradientColor,
-                        hud.alGradient.getValue()
+            // Subtle divider between rows within the same panel.
+            if (drawBg && i > 0) {
+                net.minecraft.client.gui.Gui.drawRect(
+                        bgX + 4, rowY - Math.max(1, rowGap / 2),
+                        bgX + bgW - 4, rowY - Math.max(1, rowGap / 2) + 1,
+                        0x14FFFFFF
                 );
-
-                if (hud.alOutline.getIndex() != 0) {
-                    drawRowOutline(
-                            bgX, rowY, bgW, lineHeight, rounding,
-                            nameRGB, hud.alOutline.getIndex() == 2, left
-                    );
-                }
             }
 
             int textX = left ? bgX + padX : bgX + bgW - totalW - padX;
             int textY = rowY + padY;
 
-            int textColor = row.isPitSub ? detailRGB : nameRGB;
+            int textColor = row.isPitSub ? detailRGB : rowNameRGB;
 
-            drawFontString(
-                    display,
-                    textX,
-                    textY,
-                    textColor,
-                    shadow
-            );
+            drawFontString(display, textX, textY, textColor, shadow);
 
             if (!row.detail.isEmpty()) {
-                drawFontString(
-                        row.detail,
-                        textX + nameW,
-                        textY,
-                        detailRGB,
-                        shadow
-                );
-            }
-
-            // The accent is inset from top/bottom to preserve rounded corners.
-            int accentInset = Math.min(
-                    (int) Math.ceil(rounding),
-                    lineHeight / 2
-            );
-
-            int accentTop = rowY + accentInset;
-            int accentBottom = rowY + lineHeight - accentInset;
-
-            if (accentBottom > accentTop) {
-                if (left) {
-                    net.minecraft.client.gui.Gui.drawRect(
-                            bgX,
-                            accentTop,
-                            bgX + 2,
-                            accentBottom,
-                            nameRGB
-                    );
-                } else {
-                    net.minecraft.client.gui.Gui.drawRect(
-                            bgX + bgW - 2,
-                            accentTop,
-                            bgX + bgW,
-                            accentBottom,
-                            nameRGB
-                    );
-                }
+                drawFontString(row.detail, textX + nameW, textY, detailRGB, shadow);
             }
         }
 
@@ -251,6 +231,8 @@ public class ArraylistHUD {
             case 5: key = "sans";   break;
             case 6: key = "noto";   break;
             case 7: key = "tahoma"; break;
+            case 8: key = "sf-regular"; break;
+            case 9: key = "sf-bold";    break;
             default: return null;
         }
 
@@ -288,83 +270,7 @@ public class ArraylistHUD {
                 | ((int) b & 255);
     }
 
-    private void drawRowBackground(
-            int x,
-            int y,
-            int width,
-            int height,
-            float radius,
-            int base,
-            int gradient,
-            boolean useGradient
-    ) {
-        if (radius >= 1) {
-            RoundedUtils.drawRoundedRect(x, y, width, height, radius, base);
-        } else {
-            net.minecraft.client.gui.Gui.drawRect(
-                    x,
-                    y,
-                    x + width,
-                    y + height,
-                    base
-            );
-        }
-
-        if (useGradient) {
-            int inset = Math.max(1, (int) radius);
-
-            drawHorizontalGradient(
-                    x + inset,
-                    y,
-                    x + width - inset,
-                    y + height,
-                    base,
-                    gradient
-            );
-
-            drawHorizontalGradient(
-                    x,
-                    y + inset,
-                    x + width,
-                    y + height - inset,
-                    base,
-                    gradient
-            );
-        }
-    }
-
-    private void drawRowOutline(
-            int x, int y, int width, int height, float radius,
-            int color, boolean sideOnly, boolean left
-    ) {
-        int outlineColor = (color & 0x00FFFFFF) | 0x99000000;
-        int inset = Math.max(1, (int) radius / 2);
-
-        if (sideOnly) {
-            // A single accent-style line on the aligned edge.
-            if (left) {
-                net.minecraft.client.gui.Gui.drawRect(x, y, x + 1, y + height, outlineColor);
-            } else {
-                net.minecraft.client.gui.Gui.drawRect(x + width - 1, y, x + width, y + height, outlineColor);
-            }
-            return;
-        }
-
-        // Full — thin border on all four edges (approximate for rounded corners).
-        net.minecraft.client.gui.Gui.drawRect(x + inset, y, x + width - inset, y + 1, outlineColor);
-        net.minecraft.client.gui.Gui.drawRect(x + inset, y + height - 1, x + width - inset, y + height, outlineColor);
-        net.minecraft.client.gui.Gui.drawRect(x, y + inset, x + 1, y + height - inset, outlineColor);
-        net.minecraft.client.gui.Gui.drawRect(x + width - 1, y + inset, x + width, y + height - inset, outlineColor);
-    }
-
-    private void drawHorizontalGradient(
-            int left,
-            int top,
-            int right,
-            int bottom,
-            int start,
-            int end
-    ) {
+    private void drawVerticalGradient(int left, int top, int right, int bottom, int start, int end) {
         float startRed = ((start >> 16) & 255) / 255f;
         float startGreen = ((start >> 8) & 255) / 255f;
         float startBlue = (start & 255) / 255f;
@@ -389,15 +295,19 @@ public class ArraylistHUD {
 
         GL11.glColor4f(startRed, startGreen, startBlue, startAlpha);
         GL11.glVertex2f(left, top);
-        GL11.glVertex2f(left, bottom);
+        GL11.glVertex2f(right, top);
 
         GL11.glColor4f(endRed, endGreen, endBlue, endAlpha);
         GL11.glVertex2f(right, bottom);
-        GL11.glVertex2f(right, top);
+        GL11.glVertex2f(left, bottom);
 
         GL11.glEnd();
 
         GlStateManager.enableTexture2D();
         GL11.glColor4f(1f, 1f, 1f, 1f);
+    }
+
+    private void drawPanelOutline(int x, int y, int width, int height, float radius) {
+        RoundedUtils.drawRoundedRect(x - 1, y - 1, width + 2, height + 2, radius + 1, 0x40FFFFFF);
     }
 }
