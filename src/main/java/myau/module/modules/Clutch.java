@@ -4,7 +4,6 @@ import myau.Myau;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
 import myau.events.UpdateEvent;
-import myau.module.modules.MovementFix;
 import myau.management.RotationState;
 import myau.module.BooleanSetting;
 import myau.module.KeybindSetting;
@@ -141,7 +140,7 @@ public class Clutch extends Module {
                     return;
                 }
                 RotationState.applyState(true, smoothed[0], smoothed[1], smoothed[0], 15);
-                MovementFix.forceMovementFix = true;
+                myau.management.MovementFix.forceMovementFix = true;
                 event.setRotation(smoothed[0], smoothed[1], 15);
                 return;
             }
@@ -169,7 +168,7 @@ public class Clutch extends Module {
             }
 
             RotationState.applyState(true, smoothed[0], smoothed[1], smoothed[0], 15);
-            MovementFix.forceMovementFix = true;
+            myau.management.MovementFix.forceMovementFix = true;
             event.setRotation(smoothed[0], smoothed[1], 15);
 
         } else if (event.getType() == EventType.POST) {
