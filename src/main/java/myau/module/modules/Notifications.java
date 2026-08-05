@@ -10,6 +10,7 @@ import myau.module.BooleanSetting;
 import myau.module.DropdownSetting;
 import myau.module.Module;
 import myau.module.SliderSetting;
+import myau.ui.clickgui.RoundedUtils;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.renderer.GlStateManager;
@@ -51,7 +52,8 @@ public class Notifications extends Module {
     public final BooleanSetting lowercase  = register(new BooleanSetting("Lowercase", false));
     public final BooleanSetting splitState = register(new BooleanSetting("Split State Text", true));
     public final DropdownSetting font = register(new DropdownSetting("Font", 0,
-            "Vanilla", "Client", "Bold", "Arial", "Apple", "Sans", "Noto", "Tahoma"));
+            "Vanilla", "Client", "Bold", "Arial", "Apple", "Sans", "Noto", "Tahoma",
+            "SF Regular", "SF Bold"));
     public final SliderSetting fontScale = register(new SliderSetting("Font Scale", 1.0, 0.5, 2.0, 0.05));
 
     private static final long RAINBOW_PERIOD_MS = 7500L;
@@ -137,8 +139,8 @@ public class Notifications extends Module {
             GlStateManager.translate(x, y, 0);
 
             solidRect(-2, -2, cardW + 4, H + 4, withAlpha(0xFF000000, alpha * 0.3f));
-            roundedRect(0, 0, cardW, H, CORNER_R, bg);
-            roundedRect(0, 0, ACCENT_W + CORNER_R, H, CORNER_R, accent);
+            RoundedUtils.drawRoundedRect(0, 0, cardW, H, CORNER_R, bg);
+            RoundedUtils.drawRoundedRect(0, 0, ACCENT_W + CORNER_R, H, CORNER_R, accent);
             solidRect(ACCENT_W, 0, CORNER_R, H, bg);
 
             float progress = total > 0 ? Math.max(0f, 1f - (float) age / total) : 1f;
@@ -237,6 +239,8 @@ public class Notifications extends Module {
             case 5: key = "sans";   break;
             case 6: key = "noto";   break;
             case 7: key = "tahoma"; break;
+            case 8: key = "sf-regular"; break;
+            case 9: key = "sf-bold";    break;
             default: return null;
         }
 
@@ -284,46 +288,6 @@ public class Notifications extends Module {
         GL11.glEnd();
         GL11.glEnable(GL11.GL_TEXTURE_2D);
         GL11.glColor4f(1, 1, 1, 1);
-    }
-
-    private void roundedRect(float x, float y, float w, float h, float r, int color) {
-        float a = (color >> 24 & 0xFF) / 255f;
-        float rf = (color >> 16 & 0xFF) / 255f;
-        float gf = (color >> 8  & 0xFF) / 255f;
-        float bf = (color       & 0xFF) / 255f;
-        GL11.glDisable(GL11.GL_TEXTURE_2D);
-        GL11.glEnable(GL11.GL_BLEND);
-        GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
-        GL11.glColor4f(rf, gf, bf, a);
-
-        quad(x + r, y,     x + w - r, y + h);
-        quad(x,     y + r, x + r,     y + h - r);
-        quad(x + w - r, y + r, x + w, y + h - r);
-
-        arc(x + r,     y + r,     r, 180, 270);
-        arc(x + w - r, y + r,     r, 270, 360);
-        arc(x + r,     y + h - r, r,  90, 180);
-        arc(x + w - r, y + h - r, r,   0,  90);
-
-        GL11.glEnable(GL11.GL_TEXTURE_2D);
-        GL11.glColor4f(1, 1, 1, 1);
-    }
-
-    private void quad(float x1, float y1, float x2, float y2) {
-        GL11.glBegin(GL11.GL_QUADS);
-        GL11.glVertex2f(x1, y1); GL11.glVertex2f(x2, y1);
-        GL11.glVertex2f(x2, y2); GL11.glVertex2f(x1, y2);
-        GL11.glEnd();
-    }
-
-    private void arc(float cx, float cy, float r, int start, int end) {
-        GL11.glBegin(GL11.GL_TRIANGLE_FAN);
-        GL11.glVertex2f(cx, cy);
-        for (int d = start; d <= end; d += 4) {
-            double rad = Math.toRadians(d);
-            GL11.glVertex2f(cx + (float) Math.cos(rad) * r, cy + (float) Math.sin(rad) * r);
-        }
-        GL11.glEnd();
     }
 
     private int withAlpha(int color, float alpha) {
