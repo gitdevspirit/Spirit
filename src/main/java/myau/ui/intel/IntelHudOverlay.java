@@ -325,19 +325,7 @@ public class IntelHudOverlay {
         int bgColor = (bgOpacity << 24) | 0x07070E;
         int borderColor = (borderOpacity << 24) | (borderRed << 16) | (borderGreen << 8) | borderBlue;
 
-        // Border — drawn as a larger rounded rect behind the fill, creating
-        // a ring around the panel whose width is borderThickness (a 1px ring
-        // is nearly invisible at normal scale, so this now defaults to 2px
-        // and is adjustable).
-        drawRoundedRect(
-                scaledX - borderThickness,
-                scaledY - borderThickness,
-                scaledX + width + borderThickness,
-                scaledY + totalHeight + borderThickness,
-                BORDER_RADIUS + borderThickness,
-                borderColor
-        );
-
+        // Background fill first.
         drawRoundedRect(
                 scaledX,
                 scaledY,
@@ -346,6 +334,16 @@ public class IntelHudOverlay {
                 BORDER_RADIUS,
                 bgColor
         );
+
+        // Border — drawn as four explicit stroke bars directly on top of the
+        // fill, using the same plain Gui.drawRect approach the (working)
+        // column separator lines use, instead of the previous "draw a larger
+        // rounded rect underneath and hope a ring shows through" technique,
+        // which wasn't reliably visible.
+        fillRect(scaledX, scaledY, width, borderThickness, borderColor);
+        fillRect(scaledX, scaledY + totalHeight - borderThickness, width, borderThickness, borderColor);
+        fillRect(scaledX, scaledY, borderThickness, totalHeight, borderColor);
+        fillRect(scaledX + width - borderThickness, scaledY, borderThickness, totalHeight, borderColor);
 
         int dividerY = scaledY + HEADER_HEIGHT;
         fillRect(scaledX + 2, dividerY, width - 4, 1, 0x33FFFFFF);
