@@ -559,7 +559,7 @@ public class IntelHudOverlay {
             String displayText = "";
             int displayColor = TEXT_DIM;
 
-            if (player.cheater) {
+            if (player.cheater || player.isBlacklisted()) {
                 displayText = player.getTagBadge();
                 displayColor = player.getTagColor();
             }
