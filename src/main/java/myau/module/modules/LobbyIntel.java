@@ -475,15 +475,11 @@ public class LobbyIntel extends Module {
 
             if (!realNames.isEmpty()) {
                 IntelManager manager = IntelManager.getInstance();
-                manager.getPlayers().clear();
 
-                for (String name : realNames) {
-                    String self = mc.thePlayer != null ? mc.thePlayer.getName() : "";
+                String self = mc.thePlayer != null ? mc.thePlayer.getName() : "";
+                realNames.removeIf(name -> name.equalsIgnoreCase(self));
 
-                    if (!name.equalsIgnoreCase(self)) {
-                        manager.addManualPlayer(name);
-                    }
-                }
+                manager.loadFromWho(realNames);
 
                 ChatUtil.sendFormatted(
                         "&7[Intel] &aLoaded "
