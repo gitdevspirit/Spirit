@@ -14,14 +14,21 @@ import java.util.Map;
 
 public class BlacklistManager {
 
-    private static final BlacklistManager INSTANCE = new BlacklistManager();
-
+    // These must be declared BEFORE INSTANCE. Static fields initialize in
+    // source order — INSTANCE's constructor calls load(), which uses FILE
+    // and GSON. If INSTANCE were declared first, FILE and GSON would still
+    // be null when load() runs, throwing a NullPointerException that gets
+    // caught and printed but otherwise silently fails — meaning the
+    // blacklist would never actually load from disk on startup (only
+    // saving would work, making it look like it "resets" every restart).
     private static final File FILE = new File(
             Minecraft.getMinecraft().mcDataDir,
             "config/Myau/blacklist.json"
     );
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+
+    private static final BlacklistManager INSTANCE = new BlacklistManager();
 
     public static class Entry {
         public String name;
