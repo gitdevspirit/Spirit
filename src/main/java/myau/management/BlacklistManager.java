@@ -23,11 +23,14 @@ public class BlacklistManager {
     private static final File FILE = new File("./config/Myau/blacklist.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private static final class Entry {
-        String name;
-        String reason;
+    public static final class Entry {
+        public String name;
+        public String reason;
 
-        Entry(String name, String reason) {
+        public Entry() {
+        }
+
+        public Entry(String name, String reason) {
             this.name = name;
             this.reason = reason;
         }
@@ -92,20 +95,25 @@ public class BlacklistManager {
         try {
             File dir = FILE.getParentFile();
 
-            if (dir != null) {
-                dir.mkdirs();
+            if (dir != null && !dir.exists() && !dir.mkdirs()) {
+                System.err.println("[Blacklist] Failed to create directory: " + dir.getAbsolutePath());
             }
 
             try (FileWriter writer = new FileWriter(FILE)) {
                 GSON.toJson(entries, writer);
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.err.println("[Blacklist] Failed to save " + FILE.getAbsolutePath() + ": " + e);
+            e.printStackTrace();
         }
     }
 
     private synchronized void load() {
         try {
-            if (!FILE.exists()) return;
+            if (!FILE.exists()) {
+                System.out.println("[Blacklist] No existing file at " + FILE.getAbsolutePath() + " — starting empty.");
+                return;
+            }
 
             try (FileReader reader = new FileReader(FILE)) {
                 Type type = new TypeToken<LinkedHashMap<String, Entry>>() {}.getType();
@@ -114,9 +122,14 @@ public class BlacklistManager {
                 if (loaded != null) {
                     entries.clear();
                     entries.putAll(loaded);
+                    System.out.println("[Blacklist] Loaded " + entries.size() + " entries from " + FILE.getAbsolutePath());
+                } else {
+                    System.err.println("[Blacklist] " + FILE.getAbsolutePath() + " parsed to null — file may be empty or corrupt.");
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            System.err.println("[Blacklist] Failed to load " + FILE.getAbsolutePath() + ": " + e);
+            e.printStackTrace();
         }
     }
 }
