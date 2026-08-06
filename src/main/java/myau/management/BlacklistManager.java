@@ -140,26 +140,3 @@ public class BlacklistManager {
         e.printStackTrace();
     }
 }
-        try {
-            if (!FILE.exists()) {
-                return;
-            }
-
-            try (FileReader reader = new FileReader(FILE)) {
-
-                Type type = new TypeToken<Map<String, Entry>>() {}.getType();
-
-                Map<String, Entry> loaded = GSON.fromJson(reader, type);
-
-                if (loaded != null) {
-                    entries.putAll(loaded);
-                }
-
-                System.out.println("[Blacklist] Loaded " + entries.size() + " players.");
-            }
-
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-}
