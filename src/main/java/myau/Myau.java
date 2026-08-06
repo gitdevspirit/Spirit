@@ -78,6 +78,8 @@ public class Myau {
         commandManager.register(new myau.command.commands.IntelPathCommand());
         commandManager.register(new myau.command.commands.RoleCommand());
         commandManager.register(new myau.command.commands.BedwarsStatsCommand());
+        commandManager.register(new myau.command.commands.BlacklistCommand());
+        commandManager.register(new myau.command.commands.UnblacklistCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
