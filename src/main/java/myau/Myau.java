@@ -37,6 +37,7 @@ public class Myau {
     public static BlinkManager blinkManager;
     public static DelayManager delayManager;
     public static LagManager lagManager;
+    public static myau.module.modules.MovementFix movementFix;
     public static PlayerStateManager playerStateManager;
     public static FriendManager friendManager;
     public static TargetManager targetManager;
