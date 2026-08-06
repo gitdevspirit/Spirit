@@ -1,7 +1,6 @@
 package myau.command.commands;
 
 import myau.command.Command;
-import myau.management.BlacklistManager;
 
 public class UnblacklistCommand extends Command {
 
