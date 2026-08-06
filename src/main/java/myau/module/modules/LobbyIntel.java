@@ -292,6 +292,8 @@ public class LobbyIntel extends Module {
 
     @EventTarget
     public void onRender2D(Render2DEvent event) {
+        IntelManager.getInstance().checkRetryMissingStats();
+
         if (mc.currentScreen == null && hudOverlay.isEnabled()) {
             hudOverlay.render();
         }
