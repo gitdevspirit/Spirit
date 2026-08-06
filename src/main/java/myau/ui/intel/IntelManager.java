@@ -546,6 +546,8 @@ public class IntelManager {
     }
 
     private void fetchHypixel(IntelPlayer player) {
+        player.lastStatAttemptMs = System.currentTimeMillis();
+
         boolean gotStats = false;
 
         if (!hypixelApiKey.isEmpty()) {
@@ -557,6 +559,58 @@ public class IntelManager {
         }
 
         player.loading = false;
+    }
+
+    private long lastRetryCheckMs = 0;
+    private static final long RETRY_INTERVAL_MS = 10_000L;
+
+    /**
+     * Called periodically (throttled internally) from the render loop.
+     * Re-queues a stat fetch for any player that came back with no Bedwars
+     * stats at all (fetch failed / API hiccup / etc.), once per 10s, instead
+     * of leaving them permanently blank after a single failed attempt.
+     */
+    public void checkRetryMissingStats() {
+        long now = System.currentTimeMillis();
+
+        if (now - lastRetryCheckMs < 1000) return;
+        lastRetryCheckMs = now;
+
+        for (IntelPlayer player : combined()) {
+            if (player.loading) continue;
+
+            boolean hasStats = player.star != 0
+                    || player.finalKills != 0
+                    || player.wins != 0
+                    || player.fkdr != 0
+                    || player.wlr != 0;
+
+            if (hasStats) continue;
+            if (now - player.lastStatAttemptMs < RETRY_INTERVAL_MS) continue;
+
+            final IntelPlayer current = player;
+
+            pool.submit(() -> {
+                try {
+                    fetchHypixel(current);
+                    current.computeThreat();
+                } catch (Exception exception) {
+                    current.loading = false;
+                    dbg("[Intel] retry stats fetch failed for " + current.name
+                            + ": " + exception);
+                } finally {
+                    List<IntelPlayer> refreshed = combined();
+
+                    if (gui != null) {
+                        gui.setPlayers(refreshed);
+                    }
+
+                    if (hudOverlay != null) {
+                        hudOverlay.setPlayers(refreshed);
+                    }
+                }
+            });
+        }
     }
 
     private boolean fetchSlothpixel(IntelPlayer player) {
