@@ -32,7 +32,7 @@ public class Myau {
     public static String clientName = "&7[&bSpirit&7]&r ";
     public static String version;
     public static RotationManager rotationManager;
-    public static myau.management.MovementFix movementFix;
+    public static myau.module.modules.MovementFix movementFix;
     public static FloatManager floatManager;
     public static BlinkManager blinkManager;
     public static DelayManager delayManager;
@@ -51,7 +51,7 @@ public class Myau {
 
     public void init() {
         rotationManager = new RotationManager();
-        movementFix = new myau.management.MovementFix();
+        movementFix = new myau.module.modules.MovementFix();
         floatManager = new FloatManager();
         blinkManager = new BlinkManager();
         delayManager = new DelayManager();
@@ -78,6 +78,8 @@ public class Myau {
         commandManager.register(new myau.command.commands.IntelPathCommand());
         commandManager.register(new myau.command.commands.RoleCommand());
         commandManager.register(new myau.command.commands.BedwarsStatsCommand());
+        commandManager.register(new myau.command.commands.BlacklistCommand());
+        commandManager.register(new myau.command.commands.UnblacklistCommand());
         commandManager.register(new ConfigCommand(commandManager));
         EventManager.register(commandManager);
 
