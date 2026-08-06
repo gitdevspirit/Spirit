@@ -475,30 +475,18 @@ public class IntelHudOverlay {
 
         if (player.threatScore >= 75) {
             nameColor = ACCENT;
-        } else if (player.tabNameColor != 0) {
-            // Exact color read straight from the tab list — team color in a
-            // match, rank color in the lobby, whichever Hypixel is actually
-            // showing right now.
-            nameColor = player.tabNameColor;
-        } else if (showTeamColor && inMatch) {
-            // Fallback for players tabNameColor hasn't been captured for yet.
-            nameColor = getTeamColor(player.team);
-        } else if (player.rankPrefix != null && !player.rankPrefix.isEmpty()) {
-            int rankColor = IntelColors.extractLeadingColor(player.rankPrefix);
+        } else if (inMatch) {
+            // In an active match — team color, exact tab color if we've got
+            // it, otherwise the fallback team-name lookup.
+            nameColor = player.tabNameColor != 0 ? player.tabNameColor : getTeamColor(player.team);
+        } else {
+            // In the lobby — fixed rank-tier color: green for VIP/VIP+,
+            // aqua for MVP/MVP+, gold for MVP++. No rank = default color.
+            int rankColor = getRankTierColor(player.rankPrefix);
             if (rankColor != 0) nameColor = rankColor;
         }
 
-        // Lobby (not in an active match yet) — show the actual rank prefix
-        // text (e.g. "[MVP+]") in front of the name, same as it appears in
-        // the real tab list. Once in a match, team is already conveyed by
-        // the colored accent bar + name color above, so just show the name.
-        String displayName = (!inMatch && player.rankPrefix != null && !player.rankPrefix.isEmpty())
-                ? player.rankPrefix + " " + player.name
-                : player.name;
-
-        displayName = mc.fontRendererObj.trimStringToWidth(displayName, 116);
-
-        drawText(displayName, currentX, y + 4, nameColor);
+        drawText(player.name, currentX, y + 4, nameColor);
         currentX += 120;
 
         if (showStar) {
@@ -697,6 +685,19 @@ public class IntelHudOverlay {
             GlStateManager.popMatrix();
         } catch (Exception ignored) {
         }
+    }
+
+    /** Fixed rank-tier color: green for VIP/VIP+, aqua for MVP/MVP+, gold for MVP++. */
+    private int getRankTierColor(String rankPrefix) {
+        if (rankPrefix == null || rankPrefix.isEmpty()) return 0;
+
+        String plain = rankPrefix.replaceAll("(?i)\u00A7[0-9a-fk-or]", "").toUpperCase();
+
+        if (plain.contains("MVP++")) return 0xFFFFAA00; // gold
+        if (plain.contains("MVP"))   return 0xFF55FFFF; // aqua
+        if (plain.contains("VIP"))   return 0xFF55FF55; // green
+
+        return 0;
     }
 
     private int getTeamColor(String team) {
