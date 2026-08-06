@@ -333,6 +333,13 @@ public class IntelManager {
         players.clear();
         players.addAll(newRoster);
 
+        // Blacklist check — fire once per lobby-join for newly-seen players
+        // only (needsFetch), not on every rescan of players already known
+        // this session.
+        for (IntelPlayer player : needsFetch) {
+            notifyBlacklisted(player);
+        }
+
         if (gui != null) {
             for (NetworkPlayerInfo info : minecraft.getNetHandler().getPlayerInfoMap()) {
                 if (isNpc(info)) continue;
@@ -923,6 +930,44 @@ public class IntelManager {
     public String getCachedUuid(String name) {
         synchronized (uuidCache) {
             return uuidCache.get(name);
+        }
+    }
+
+    private void notifyBlacklisted(IntelPlayer player) {
+        try {
+            myau.management.BlacklistManager blacklist =
+                    myau.management.BlacklistManager.getInstance();
+
+            if (!blacklist.isBlacklisted(player.name)) {
+                return;
+            }
+
+            String reason = blacklist.getReason(player.name);
+
+            myau.util.ChatUtil.sendFormatted(
+                    "&c[Blacklist] &f" + player.name
+                            + " &fis on your blacklist &7(" + reason + ")&f."
+            );
+
+            if (Myau.notificationManager == null) {
+                return;
+            }
+
+            Notifications notifications = (Notifications) Myau.moduleManager.modules
+                    .get(Notifications.class);
+
+            if (notifications == null || !notifications.isEnabled()) {
+                return;
+            }
+
+            long duration = (long) (notifications.duration.getValue() * 1000.0);
+
+            Myau.notificationManager.add(
+                    "\u26D4 " + player.name + " blacklisted: " + reason,
+                    duration,
+                    0xFFFF6644
+            );
+        } catch (Exception ignored) {
         }
     }
 
