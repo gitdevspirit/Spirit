@@ -27,6 +27,31 @@ public final class IntelColors {
         return 0;
     }
 
+    /**
+     * Returns whatever §-color is actually in effect at a given character
+     * index of a formatted string — i.e. the exact color Minecraft would be
+     * rendering right at that spot. Used to read the true color of a
+     * player's name straight from their tab-list display name (which
+     * already reflects team color in a match, or rank color in the lobby),
+     * rather than reconstructing it via separate heuristics.
+     */
+    public static int colorAtIndex(String formatted, int index) {
+        if (formatted == null || index <= 0) return 0;
+
+        int active = 0;
+        int limit = Math.min(index, formatted.length());
+
+        for (int i = 0; i < limit - 1; i++) {
+            if (formatted.charAt(i) == '\u00A7') {
+                int color = codeToColor(formatted.charAt(i + 1));
+                if (color != 0) active = color;
+                i++; // skip the code character itself
+            }
+        }
+
+        return active;
+    }
+
     private IntelColors() {
     }
 
