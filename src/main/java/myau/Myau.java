@@ -32,12 +32,11 @@ public class Myau {
     public static String clientName = "&7[&bSpirit&7]&r ";
     public static String version;
     public static RotationManager rotationManager;
-    public static MovementFix movementFix;
+    public static myau.module.modules.MovementFix movementFix;
     public static FloatManager floatManager;
     public static BlinkManager blinkManager;
     public static DelayManager delayManager;
     public static LagManager lagManager;
-    public static myau.module.modules.MovementFix movementFix;
     public static PlayerStateManager playerStateManager;
     public static FriendManager friendManager;
     public static TargetManager targetManager;
