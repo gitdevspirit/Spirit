@@ -148,17 +148,20 @@ public class IntelPlayer {
             String badge = getTagBadge();
 
             // Known tag types get a fixed baseline threat regardless of the
-            // (often sparse) reason text — Sniper specifically sits high
-            // since a sniper who slips into a fight is a serious threat.
+            // (often sparse) reason text — these are now hard floors (see
+            // below), not just starting points that keyword-averaging could
+            // drag down. Raised significantly across the board: a tag
+            // classification itself is a strong signal and shouldn't end up
+            // rated lower than an untagged high-stat player.
             double typeBase;
             switch (badge) {
-                case "S":  typeBase = 90; break;
-                case "BC": typeBase = 85; break;
-                case "CC": typeBase = 65; break;
-                case "C":  typeBase = 50; break;
-                case "!":  typeBase = 30; break;
-                case "R":  typeBase = 25; break;
-                default:   typeBase = 40; break;
+                case "S":  typeBase = 92; break; // sniper
+                case "BC": typeBase = 95; break; // blatant
+                case "CC": typeBase = 85; break; // confirmed
+                case "C":  typeBase = 72; break; // closet
+                case "!":  typeBase = 40; break; // caution
+                case "R":  typeBase = 30; break; // replay under review
+                default:   typeBase = 55; break;
             }
 
             java.util.List<Double> found = new java.util.ArrayList<>();
@@ -195,7 +198,14 @@ public class IntelPlayer {
                 }
 
                 average /= found.size();
-                cheatScore = average * 0.7 + typeBase * 0.3;
+
+                // Blend for extra nuance from specific keyword matches, but
+                // the tag's own baseline is always a floor — matching a
+                // couple of low-severity keywords (e.g. "queue", "autoclick")
+                // should never make a Confirmed/Blatant/Closet tag rate
+                // lower than its baseline severity implies.
+                double blended = average * 0.7 + typeBase * 0.3;
+                cheatScore = Math.max(typeBase, blended);
             }
 
             cheatScore = Math.max(cheatScore, 20);
