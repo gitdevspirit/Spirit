@@ -51,7 +51,7 @@ public class Myau {
 
     public void init() {
         rotationManager = new RotationManager();
-        movementFix = new MovementFix();
+        movementFix = new myau.module.modules.MovementFix();
         floatManager = new FloatManager();
         blinkManager = new BlinkManager();
         delayManager = new DelayManager();
