@@ -105,9 +105,6 @@ public class BlacklistManager {
         }
     }
 
-    private synchronized void load() {
-        entries.clear();
-
         private synchronized void load() {
     entries.clear();
 
