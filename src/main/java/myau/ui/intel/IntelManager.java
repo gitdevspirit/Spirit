@@ -318,6 +318,7 @@ public class IntelManager {
             }
 
             player.rankPrefix = extractRankPrefix(info, name);
+            player.tabNameColor = extractTabNameColor(info, name);
 
             newRoster.add(player);
 
@@ -1100,6 +1101,28 @@ public class IntelManager {
             return formatted.substring(0, idx).trim();
         } catch (Exception exception) {
             return "";
+        }
+    }
+
+    /**
+     * The exact §-color Minecraft is actually rendering the player's raw
+     * username with in the tab list — team color if they're in a match,
+     * rank color if they're in the lobby, whatever Hypixel's own packet
+     * says, rather than reconstructing it ourselves.
+     */
+    private int extractTabNameColor(NetworkPlayerInfo info, String rawName) {
+        try {
+            if (info.getDisplayName() == null || rawName == null) return 0;
+
+            String formatted = info.getDisplayName().getFormattedText();
+            if (formatted == null) return 0;
+
+            int idx = formatted.indexOf(rawName);
+            if (idx < 0) return 0;
+
+            return IntelColors.colorAtIndex(formatted, idx);
+        } catch (Exception exception) {
+            return 0;
         }
     }
 
