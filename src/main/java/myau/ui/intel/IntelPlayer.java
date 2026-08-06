@@ -59,8 +59,20 @@ public class IntelPlayer {
      * Material Design icon id and never contains classification words) plus
      * urchinReason and urchinTag as fallbacks, in case the classification
      * word only shows up in one of them for a given tag source.
+     *
+     * Also folds in this client's own personal blacklist ("B") — checked live
+     * against BlacklistManager rather than cached, so adding/removing someone
+     * mid-lobby updates immediately without needing to re-scan.
      */
     public String getTagBadge() {
+        String cheaterBadge = getCheaterBadge();
+        if (isBlacklisted()) {
+            return cheaterBadge.isEmpty() ? "B" : cheaterBadge + "/B";
+        }
+        return cheaterBadge;
+    }
+
+    private String getCheaterBadge() {
         if (!cheater) return "";
 
         String basis = (
@@ -81,18 +93,28 @@ public class IntelPlayer {
         return "C";
     }
 
-    /** ARGB color matching {@link #getTagBadge()}'s classification. */
+    /** ARGB color matching {@link #getTagBadge()}'s classification. Blacklist-only players get blue. */
     public int getTagColor() {
-        String badge = getTagBadge();
-        switch (badge) {
+        String cheaterBadge = getCheaterBadge();
+        switch (cheaterBadge) {
             case "BC": return 0xFFFF3344; // blatant — red
             case "CC": return 0xFFDD44DD; // confirmed — magenta
             case "S":  return 0xFFFF1122; // sniper — bright red
             case "!":  return 0xFFFFCC44; // caution — amber
             case "R":  return 0xFF44DD66; // replays needed — green
             case "C":  return 0xFFFF8844; // closet / unclassified — orange
-            default:   return 0xFFAAAAAA;
         }
+        if (isBlacklisted()) return 0xFF4A9EFF; // blacklisted, not otherwise tagged — blue
+        return 0xFFAAAAAA;
+    }
+
+    /** Live lookup against this client's personal blacklist — never stale. */
+    public boolean isBlacklisted() {
+        return myau.management.BlacklistManager.getInstance().isBlacklisted(name);
+    }
+
+    public String getBlacklistReason() {
+        return myau.management.BlacklistManager.getInstance().getReason(name);
     }
 
     private static final Object[][] KEYWORD_SCORES = {
@@ -212,6 +234,13 @@ public class IntelPlayer {
             threatScore = Math.max(cheatScore, statsScore);
         } else {
             threatScore = statsScore;
+        }
+
+        // Personal blacklist is a strong, deliberate signal — floor it high
+        // regardless of stats/tags so a blacklisted player never blends into
+        // the crowd on threat color alone.
+        if (isBlacklisted()) {
+            threatScore = Math.max(threatScore, 65);
         }
 
         loading = false;
