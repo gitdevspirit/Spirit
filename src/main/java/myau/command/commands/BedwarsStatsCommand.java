@@ -48,7 +48,7 @@ public class BedwarsStatsCommand extends Command {
             reply("&cNo Bedwars stats found for &f" + ign
                     + "&c (nicked, never played, or API unreachable).");
 
-            if (player.cheater && intel != null && intel.bwShowTag.getValue()) {
+            if ((player.cheater || player.isBlacklisted()) && intel != null && intel.bwShowTag.getValue()) {
                 String badge = player.getTagBadge();
                 String detail = player.urchinTag != null ? player.urchinTag : badge;
                 reply("&d[" + badge + "] &7" + detail);
@@ -131,7 +131,7 @@ public class BedwarsStatsCommand extends Command {
 
         reply(line.toString().trim());
 
-        if (player.cheater && intel != null && intel.bwShowTag.getValue()) {
+        if ((player.cheater || player.isBlacklisted()) && intel != null && intel.bwShowTag.getValue()) {
             String badge = player.getTagBadge();
             String detail = player.urchinTag != null ? player.urchinTag : badge;
             String tagCode = badge.equals("C") ? "§6"
