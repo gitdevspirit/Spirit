@@ -427,6 +427,24 @@ public class LobbyIntel extends Module {
             });
         }
 
+        if (autoScan.getValue() && message.contains("The game starts in 1 second")) {
+            IntelManager.dbg("[Intel] 1-second warning detected — sending /who in 1s.");
+
+            new Thread(() -> {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ignored) {
+                    return;
+                }
+
+                mc.addScheduledTask(() -> {
+                    if (mc.thePlayer != null) {
+                        mc.thePlayer.sendChatMessage("/who");
+                    }
+                });
+            }, "lobbyintel-delayed-who").start();
+        }
+
         if (message.contains("FINAL KILL!")) {
             Pattern killPattern = Pattern.compile(
                     "^([A-Za-z0-9_]+) (?:was |fell |drowned|died|hit |got )"
