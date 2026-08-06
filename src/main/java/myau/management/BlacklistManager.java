@@ -105,36 +105,29 @@ public class BlacklistManager {
         }
     }
 
-        private synchronized void load() {
-    entries.clear();
+    private synchronized void load() {
+        entries.clear();
 
-    System.out.println("=========== BLACKLIST LOAD ===========");
-    System.out.println("File exists: " + FILE.exists());
-    System.out.println("Path: " + FILE.getAbsolutePath());
-
-    try {
-        if (!FILE.exists()) {
-            return;
-        }
-
-        try (FileReader reader = new FileReader(FILE)) {
-
-            Type type = new TypeToken<Map<String, Entry>>() {}.getType();
-
-            Map<String, Entry> loaded = GSON.fromJson(reader, type);
-
-            System.out.println("Loaded: " + loaded);
-
-            if (loaded != null) {
-                entries.putAll(loaded);
+        try {
+            if (!FILE.exists()) {
+                return;
             }
 
-            System.out.println("Entries size: " + entries.size());
-            System.out.println("[Blacklist] Loaded " + entries.size() + " players.");
-        }
+            try (FileReader reader = new FileReader(FILE)) {
 
-    } catch (Exception e) {
-        e.printStackTrace();
-    }
+                Type type = new TypeToken<Map<String, Entry>>() {}.getType();
+
+                Map<String, Entry> loaded = GSON.fromJson(reader, type);
+
+                if (loaded != null) {
+                    entries.putAll(loaded);
+                }
+
+                System.out.println("[Blacklist] Loaded " + entries.size() + " players.");
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+    }
 }
