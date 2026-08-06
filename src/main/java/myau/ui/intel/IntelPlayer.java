@@ -8,6 +8,8 @@ public class IntelPlayer {
     public String  team;
     /** Hypixel rank prefix (e.g. "§b[MVP§9+§b]"), extracted from the tab-list display name. */
     public String  rankPrefix = "";
+    /** Whatever §-color is actually active for this player's name in the tab list — team color in a match, rank color in the lobby. 0 if not yet captured. */
+    public int     tabNameColor = 0;
     public boolean loading    = true;
     /** Timestamp of the last stat-fetch attempt, used to throttle automatic retries. */
     public long lastStatAttemptMs = System.currentTimeMillis();
