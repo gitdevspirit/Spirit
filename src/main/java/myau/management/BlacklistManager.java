@@ -3,6 +3,7 @@ package myau.management;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
+import net.minecraft.client.Minecraft;
 
 import java.io.File;
 import java.io.FileReader;
@@ -12,18 +13,22 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Personal player blacklist with a reason attached to each entry, persisted
- * to disk so it survives a full game restart. Player names are stored
- * lowercase internally for lookups, but the original-cased name used with
- * .blacklist is preserved for display.
+ * Personal player blacklist with persistent storage.
  */
 public class BlacklistManager {
 
     private static final BlacklistManager INSTANCE = new BlacklistManager();
-    private static final File FILE = new File("./config/Myau/blacklist.json");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private static final class Entry {
+    private static final File FILE = new File(
+            Minecraft.getMinecraft().mcDataDir,
+            "config/Myau/blacklist.json"
+    );
+
+    private static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .create();
+
+    private static class Entry {
         String name;
         String reason;
 
@@ -33,7 +38,7 @@ public class BlacklistManager {
         }
     }
 
-    // key = lowercase name
+    // key = lowercase player name
     private final Map<String, Entry> entries = new LinkedHashMap<>();
 
     public static BlacklistManager getInstance() {
@@ -44,16 +49,18 @@ public class BlacklistManager {
         load();
     }
 
-    /** Returns true if this was a new entry (false if it just updated an existing reason). */
     public synchronized boolean add(String name, String reason) {
         String key = name.toLowerCase();
+
         boolean isNew = !entries.containsKey(key);
 
-        String finalReason = (reason == null || reason.trim().isEmpty())
-                ? "No reason given"
-                : reason.trim();
+        if (reason == null || reason.trim().isEmpty()) {
+            reason = "No reason given";
+        } else {
+            reason = reason.trim();
+        }
 
-        entries.put(key, new Entry(name, finalReason));
+        entries.put(key, new Entry(name, reason));
         save();
 
         return isNew;
@@ -79,44 +86,63 @@ public class BlacklistManager {
     }
 
     public synchronized Map<String, String> getAllReasons() {
-        Map<String, String> result = new LinkedHashMap<>();
+        Map<String, String> map = new LinkedHashMap<>();
 
         for (Entry entry : entries.values()) {
-            result.put(entry.name, entry.reason);
+            map.put(entry.name, entry.reason);
         }
 
-        return result;
+        return map;
     }
 
     private synchronized void save() {
         try {
-            File dir = FILE.getParentFile();
+            File parent = FILE.getParentFile();
 
-            if (dir != null) {
-                dir.mkdirs();
+            if (parent != null && !parent.exists()) {
+                parent.mkdirs();
             }
 
             try (FileWriter writer = new FileWriter(FILE)) {
                 GSON.toJson(entries, writer);
             }
-        } catch (Exception ignored) {
+
+            System.out.println("[Myau] Saved blacklist (" + entries.size() + " players)");
+            System.out.println("[Myau] File: " + FILE.getAbsolutePath());
+
+        } catch (Exception e) {
+            System.err.println("[Myau] Failed to save blacklist!");
+            e.printStackTrace();
         }
     }
 
     private synchronized void load() {
         try {
-            if (!FILE.exists()) return;
+            if (!FILE.exists()) {
+                System.out.println("[Myau] No blacklist file found.");
+                return;
+            }
 
             try (FileReader reader = new FileReader(FILE)) {
-                Type type = new TypeToken<LinkedHashMap<String, Entry>>() {}.getType();
+
+                Type type = new TypeToken<LinkedHashMap<String, Entry>>() {
+                }.getType();
+
                 Map<String, Entry> loaded = GSON.fromJson(reader, type);
 
+                entries.clear();
+
                 if (loaded != null) {
-                    entries.clear();
                     entries.putAll(loaded);
                 }
             }
-        } catch (Exception ignored) {
+
+            System.out.println("[Myau] Loaded blacklist (" + entries.size() + " players)");
+            System.out.println("[Myau] File: " + FILE.getAbsolutePath());
+
+        } catch (Exception e) {
+            System.err.println("[Myau] Failed to load blacklist!");
+            e.printStackTrace();
         }
     }
 }
