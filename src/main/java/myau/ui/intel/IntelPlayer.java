@@ -74,6 +74,7 @@ public class IntelPlayer {
         if (basis.contains("closet"))    return "C";
         if (basis.contains("sniper"))    return "S";
         if (basis.contains("caution"))   return "!";
+        if (basis.contains("replay"))    return "R";
 
         // Flagged by Coral but none of the known severity words matched —
         // still show a code rather than a static placeholder.
@@ -88,6 +89,7 @@ public class IntelPlayer {
             case "CC": return 0xFFDD44DD; // confirmed — magenta
             case "S":  return 0xFFFF1122; // sniper — bright red
             case "!":  return 0xFFFFCC44; // caution — amber
+            case "R":  return 0xFF44DD66; // replays needed — green
             case "C":  return 0xFFFF8844; // closet / unclassified — orange
             default:   return 0xFFAAAAAA;
         }
@@ -133,25 +135,30 @@ public class IntelPlayer {
     };
 
     public void computeThreat() {
+        // FKDR is weighted as the dominant factor in the stats-based score.
         double statsScore = 0;
-        statsScore += Math.min(40, fkdr * 6.0);
-        statsScore += Math.min(20, wlr * 5.0);
-        statsScore += Math.min(20, winstreak * 0.8);
-        statsScore += Math.min(10, level / 100.0 * 10);
-        statsScore += Math.min(10, finalKills / 1000.0 * 10);
+        statsScore += Math.min(55, fkdr * 9.0);
+        statsScore += Math.min(15, wlr * 4.0);
+        statsScore += Math.min(15, winstreak * 0.6);
+        statsScore += Math.min(8, level / 100.0 * 8);
+        statsScore += Math.min(7, finalKills / 1200.0 * 7);
         statsScore = Math.min(100, statsScore);
 
         if (cheater) {
-            double typeBase = 40;
+            String badge = getTagBadge();
 
-            if (urchinType != null) {
-                if (urchinType.contains("blatant")) typeBase = 80;
-                else if (urchinType.contains("confirmed")) typeBase = 65;
-                else if (urchinType.contains("closet")) typeBase = 50;
-                else if (urchinType.contains("sniper")) typeBase = 45;
-                else if (urchinType.contains("account")) typeBase = 35;
-                else if (urchinType.contains("caution")) typeBase = 30;
-                else if (urchinType.contains("info")) typeBase = 20;
+            // Known tag types get a fixed baseline threat regardless of the
+            // (often sparse) reason text — Sniper specifically sits high
+            // since a sniper who slips into a fight is a serious threat.
+            double typeBase;
+            switch (badge) {
+                case "S":  typeBase = 90; break;
+                case "BC": typeBase = 85; break;
+                case "CC": typeBase = 65; break;
+                case "C":  typeBase = 50; break;
+                case "!":  typeBase = 30; break;
+                case "R":  typeBase = 25; break;
+                default:   typeBase = 40; break;
             }
 
             java.util.List<Double> found = new java.util.ArrayList<>();
@@ -174,7 +181,11 @@ public class IntelPlayer {
 
             double cheatScore;
 
-            if (found.isEmpty()) {
+            if (badge.equals("S")) {
+                // Sniper is a fixed, deterministic threat level — don't let
+                // keyword-average blending pull it down.
+                cheatScore = typeBase;
+            } else if (found.isEmpty()) {
                 cheatScore = typeBase;
             } else {
                 double average = 0;
