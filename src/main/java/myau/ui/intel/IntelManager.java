@@ -273,6 +273,106 @@ public class IntelManager {
         return result;
     }
 
+    /**
+     * Loads the lobby roster from a /who response instead of the tab list.
+     * Populates the same `players` list scanLobby() does (not manualPlayers)
+     * so everything downstream that reads from getPlayers() — BedwarsTag,
+     * the GUI, the HUD overlay, the tab list — sees these players uniformly.
+     * Previously this went through addManualPlayer() into a separate list,
+     * which is why BedwarsTag (which only reads getPlayers()) never showed
+     * stats/tags for anyone loaded via /who.
+     */
+    public void loadFromWho(List<String> names) {
+        Map<String, IntelPlayer> existingByName = new HashMap<>();
+
+        for (IntelPlayer existing : players) {
+            existingByName.put(existing.name.toLowerCase(), existing);
+        }
+
+        for (IntelPlayer existing : manualPlayers) {
+            existingByName.putIfAbsent(existing.name.toLowerCase(), existing);
+        }
+
+        List<IntelPlayer> newRoster = new ArrayList<>();
+        List<IntelPlayer> needsFetch = new ArrayList<>();
+
+        for (String name : names) {
+            if (name == null || name.isEmpty()) continue;
+
+            IntelPlayer existing = existingByName.get(name.toLowerCase());
+            IntelPlayer player;
+
+            if (existing != null) {
+                player = existing;
+            } else {
+                player = new IntelPlayer(name, null);
+                needsFetch.add(player);
+            }
+
+            newRoster.add(player);
+        }
+
+        manualPlayers.clear();
+        players.clear();
+        players.addAll(newRoster);
+
+        if (gui != null) {
+            gui.setPlayers(new ArrayList<>(players));
+        }
+
+        if (hudOverlay != null) {
+            hudOverlay.setPlayers(new ArrayList<>(players));
+        }
+
+        if (!needsFetch.isEmpty()) {
+            final List<IntelPlayer> batch = new ArrayList<>(needsFetch);
+
+            pool.submit(() -> {
+                try {
+                    fetchUrchinBatch(batch);
+                    fetchGhostBatch(batch);
+
+                    for (IntelPlayer player : batch) {
+                        if (player.cheater || player.ghostTagged) {
+                            notifyCheater(player);
+                        }
+                    }
+                } catch (Exception exception) {
+                    dbg("[Intel] /who tag batch failed: " + exception);
+                } finally {
+                    List<IntelPlayer> refreshed = new ArrayList<>(players);
+
+                    if (gui != null) gui.setPlayers(refreshed);
+                    if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+                }
+            });
+        }
+
+        for (IntelPlayer player : needsFetch) {
+            final IntelPlayer current = player;
+
+            pool.submit(() -> {
+                try {
+                    fetchHypixel(current);
+                    current.computeThreat();
+                } catch (Exception exception) {
+                    current.loading = false;
+                    dbg("[Intel] /who stats fetch failed for " + current.name
+                            + ": " + exception);
+                } finally {
+                    List<IntelPlayer> refreshed = new ArrayList<>(players);
+
+                    if (gui != null) gui.setPlayers(refreshed);
+                    if (hudOverlay != null) hudOverlay.setPlayers(refreshed);
+                }
+            });
+        }
+
+        for (IntelPlayer player : needsFetch) {
+            notifyBlacklisted(player);
+        }
+    }
+
     public void scanLobby() {
         fetching = true;
 
