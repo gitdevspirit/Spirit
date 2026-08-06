@@ -983,13 +983,6 @@ public class IntelGui extends GuiScreen {
     }
 
     // Derives 0=low/1=medium/2=high from the averaged threat score already computed
-    private int urchinThreatLevel(IntelPlayer p) {
-        double t = p.threatScore;
-        if (t >= 65) return 2;
-        if (t >= 40) return 1;
-        return 0;
-    }
-
     /** Word-boundary safe — "ac" won't match "place" or "black" */
     private boolean hasWord(String text, String word) {
         int idx = text.indexOf(word);
@@ -1043,7 +1036,7 @@ public class IntelGui extends GuiScreen {
         // {severity, reason_kws[], type_kws[], short_label, advice}
         {3, new String[]{"aimbot"},                      new String[]{}, "Aimbot",       "don't fight in the open — rush bed"},
         {3, new String[]{"blatant scaffold","scaffold","bridg"}, new String[]{"blatant"}, "Blatant scaffold", "rush bed before they bridge across"},
-        {3, new String[]{"ab","autoblock","full hop","hopping"}, new String[]{""},        "Autoblock/hop",    "avoid sword fights, use bow"},
+        {3, new String[]{"ab","autoblock","full hop","hopping"}, new String[]{},        "Autoblock/hop",    "avoid sword fights, use bow"},
         {3, new String[]{"hop"},                         new String[]{}, "Hop",          "don't rely on void traps"},
         {3, new String[]{"fly","bhop","bunnyhop","speed"},new String[]{}, "Movement",    "fortify bed immediately"},
         {3, new String[]{"esp","visual","xray","x-ray","wallhack"}, new String[]{}, "ESP","cover bed on all sides"},
@@ -1060,46 +1053,73 @@ public class IntelGui extends GuiScreen {
 
     private String recommend(IntelPlayer p) {
         if (p.cheater && p.urchinTag != null) {
+            // Lead with a clear, badge-driven message — this is reliable
+            // (the badge classification itself is the source of truth) unlike
+            // guessing from Coral's often-terse reason text, which is what
+            // caused every tag to show "Autoblock/hop" regardless of actual
+            // type (a stray new String[]{""} in the old keyword table
+            // matched every reason string, since "".contains("") is always true).
+            String badge = p.getTagBadge();
+            String badgeMessage;
+
+            switch (badge) {
+                case "BC":
+                    badgeMessage = "HIGH THREAT | Blatant cheater — be wary, might be hopping. Rush bed and disengage.";
+                    break;
+                case "S":
+                    badgeMessage = "HIGH THREAT | Sniper — stay alert, probably hopping! Use covered tunnels.";
+                    break;
+                case "CC":
+                    badgeMessage = "HIGH THREAT | Confirmed cheater. Avoid prolonged fights — focus bed destruction.";
+                    break;
+                case "C":
+                    badgeMessage = "MEDIUM THREAT | Using closet cheats — be wary.";
+                    break;
+                case "!":
+                    badgeMessage = "LOW THREAT | Flagged with caution. Play with extra awareness.";
+                    break;
+                case "R":
+                    badgeMessage = "INFO | Replay under review — not yet confirmed either way.";
+                    break;
+                default:
+                    badgeMessage = "LOW THREAT | Flagged by Urchin. Play with extra awareness.";
+                    break;
+            }
+
+            // Append any additional specific keyword detail from the reason
+            // text (e.g. "esp", "aimbot") as a secondary note, since that's
+            // still useful nuance when it's actually present — but it no
+            // longer drives the primary message.
             String type   = p.urchinType   != null ? p.urchinType   : "";
             String reason = p.urchinReason != null ? p.urchinReason : "";
 
-            // Collect ALL matching cheat tiers, sorted by severity desc
-            java.util.List<Object[]> matches = new java.util.ArrayList<>();
+            java.util.List<String> extras = new java.util.ArrayList<>();
             for (Object[] tier : CHEAT_ADVICE) {
                 String[] rWords = (String[]) tier[1];
                 String[] tWords = (String[]) tier[2];
                 boolean matched = false;
+
                 for (String kw : rWords) {
+                    if (kw.isEmpty()) continue;
                     boolean hit = (kw.contains(" ") || kw.length() > 6)
                             ? reason.contains(kw) : hasWord(reason, kw);
                     if (hit) { matched = true; break; }
                 }
-                if (!matched) for (String kw : tWords) if (type.contains(kw)) { matched = true; break; }
-                if (matched) matches.add(tier);
-            }
 
-            if (!matches.isEmpty()) {
-                // Threat header based on averaged score
-                int tl = urchinThreatLevel(p);
-                String header = tl == 2 ? "HIGH THREAT" : tl == 1 ? "MEDIUM THREAT" : "LOW THREAT";
-
-                // List every detected cheat with its advice, highest severity first
-                StringBuilder sb = new StringBuilder(header).append(" | ");
-                java.util.List<String> parts = new java.util.ArrayList<>();
-                for (Object[] m : matches) {
-                    String label  = (String) m[3];
-                    String advice = (String) m[4];
-                    parts.add(label + ": " + advice);
+                if (!matched) {
+                    for (String kw : tWords) {
+                        if (!kw.isEmpty() && type.contains(kw)) { matched = true; break; }
+                    }
                 }
-                sb.append(String.join(". ", parts)).append(".");
-                return sb.toString();
+
+                if (matched) extras.add((String) tier[3]);
             }
 
-            // Generic fallback
-            int tl = urchinThreatLevel(p);
-            if (tl == 2) return "HIGH THREAT | Blatant cheater. Do not engage. Rush bed and escape.";
-            if (tl == 1) return "MEDIUM THREAT | Confirmed cheater. Avoid prolonged fights. Focus bed destruction.";
-            return "LOW THREAT | Flagged by Urchin. Play with extra awareness.";
+            if (!extras.isEmpty()) {
+                return badgeMessage + " Also flagged for: " + String.join(", ", extras) + ".";
+            }
+
+            return badgeMessage;
         }
         if (p.threatScore >= 75) return "High priority. Rush their bed early before they gear up. Avoid 1v1 without advantage.";
         if (p.threatScore >= 50) return "Solid player. Contest mid early and engage with armor advantage.";
