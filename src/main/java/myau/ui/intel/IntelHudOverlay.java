@@ -474,11 +474,15 @@ public class IntelHudOverlay {
 
         if (player.threatScore >= 75) {
             nameColor = ACCENT;
+        } else if (player.tabNameColor != 0) {
+            // Exact color read straight from the tab list — team color in a
+            // match, rank color in the lobby, whichever Hypixel is actually
+            // showing right now.
+            nameColor = player.tabNameColor;
         } else if (showTeamColor && player.team != null && !player.team.isEmpty()) {
-            // Active match — color the name by team, matching BedwarsTag.
+            // Fallback for players tabNameColor hasn't been captured for yet.
             nameColor = getTeamColor(player.team);
         } else if (player.rankPrefix != null && !player.rankPrefix.isEmpty()) {
-            // Lobby (no team yet) — color the name by Hypixel rank.
             int rankColor = IntelColors.extractLeadingColor(player.rankPrefix);
             if (rankColor != 0) nameColor = rankColor;
         }
