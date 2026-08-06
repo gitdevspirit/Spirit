@@ -136,3 +136,5 @@ public class BlacklistManager {
     } catch (Exception e) {
         e.printStackTrace();
     }
+        }
+}
