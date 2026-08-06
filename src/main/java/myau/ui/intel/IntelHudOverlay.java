@@ -471,6 +471,7 @@ public class IntelHudOverlay {
         }
 
         int nameColor = player.cheater ? 0xFFFF4444 : TEXT_BRIGHT;
+        boolean inMatch = player.team != null && !player.team.isEmpty();
 
         if (player.threatScore >= 75) {
             nameColor = ACCENT;
@@ -479,7 +480,7 @@ public class IntelHudOverlay {
             // match, rank color in the lobby, whichever Hypixel is actually
             // showing right now.
             nameColor = player.tabNameColor;
-        } else if (showTeamColor && player.team != null && !player.team.isEmpty()) {
+        } else if (showTeamColor && inMatch) {
             // Fallback for players tabNameColor hasn't been captured for yet.
             nameColor = getTeamColor(player.team);
         } else if (player.rankPrefix != null && !player.rankPrefix.isEmpty()) {
@@ -487,7 +488,17 @@ public class IntelHudOverlay {
             if (rankColor != 0) nameColor = rankColor;
         }
 
-        drawText(player.name, currentX, y + 4, nameColor);
+        // Lobby (not in an active match yet) — show the actual rank prefix
+        // text (e.g. "[MVP+]") in front of the name, same as it appears in
+        // the real tab list. Once in a match, team is already conveyed by
+        // the colored accent bar + name color above, so just show the name.
+        String displayName = (!inMatch && player.rankPrefix != null && !player.rankPrefix.isEmpty())
+                ? player.rankPrefix + " " + player.name
+                : player.name;
+
+        displayName = mc.fontRendererObj.trimStringToWidth(displayName, 116);
+
+        drawText(displayName, currentX, y + 4, nameColor);
         currentX += 120;
 
         if (showStar) {
