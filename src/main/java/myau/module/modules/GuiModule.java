@@ -2,14 +2,15 @@ package myau.module.modules;
 
 import myau.module.Module;
 import myau.ui.clickgui.ModuleRegistry;
-import myau.ui.clickgui.Rise6ClickGui;
+import myau.ui.clickgui.VapeClickGui;
 import net.minecraft.client.Minecraft;
 import org.lwjgl.input.Keyboard;
+
+import java.util.Arrays;
 
 public class GuiModule extends Module {
 
     private static final Minecraft mc = Minecraft.getMinecraft();
-    private Rise6ClickGui clickGui;
 
     public GuiModule() {
         super("ClickGui", false);
@@ -18,23 +19,21 @@ public class GuiModule extends Module {
 
     @Override
     public void onEnabled() {
-        // GUI modules disable themselves immediately
         setEnabled(false);
-
-        // Initialize module lists (replaces old ClickGui constructor)
         ModuleRegistry.init();
 
-        // Create Rise6ClickGui instance using the new registry
-        clickGui = new Rise6ClickGui(
+        VapeClickGui gui = new VapeClickGui(
+            Arrays.asList("Combat", "Movement", "Player", "Render", "Misc", "Blatant"),
+            Arrays.asList(
                 ModuleRegistry.combatModules,
                 ModuleRegistry.movementModules,
                 ModuleRegistry.playerModules,
                 ModuleRegistry.renderModules,
                 ModuleRegistry.miscModules,
                 ModuleRegistry.blatantModules
+            )
         );
 
-        // Open the GUI
-        mc.displayGuiScreen(clickGui);
+        mc.displayGuiScreen(gui);
     }
 }
