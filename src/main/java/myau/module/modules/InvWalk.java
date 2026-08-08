@@ -122,7 +122,7 @@ public class InvWalk extends Module {
     @EventTarget(Priority.LOWEST)
     public void onUpdate(UpdateEvent event) {
         if (!isEnabled() || event.getType() != EventType.PRE) return;
-        if (mc.currentScreen instanceof myau.ui.clickgui.Rise6ClickGui && guiEnabled.getValue()) {
+        if (mc.currentScreen instanceof myau.ui.clickgui.VapeClickGui && guiEnabled.getValue()) {
             pressMovementKeys(true); return;
         }
         if (canInvWalk()) {
