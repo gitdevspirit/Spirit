@@ -13,7 +13,7 @@ import net.minecraft.util.ChatStyle;
 import net.minecraft.util.IChatComponent;
 import myau.util.ChatUtil;
 import myau.mixin.IAccessorKeyBinding;
-import myau.ui.clickgui.Rise6ClickGui;
+import myau.ui.clickgui.VapeClickGui;
 import myau.mixin.IAccessorRenderManager;
 import myau.event.EventTarget;
 import myau.event.types.EventType;
@@ -845,7 +845,7 @@ public class Pit extends Module {
         }
 
         if (!isEnabled()) return;
-        if (mc.currentScreen instanceof Rise6ClickGui && !hudPreview.getValue()) return;
+        if (mc.currentScreen instanceof VapeClickGui && !hudPreview.getValue()) return;
 
         // ── Bounty Tracker HUD (renders even in singleplayer) ─────────────────
         if (bountyTracker.getValue()) {
