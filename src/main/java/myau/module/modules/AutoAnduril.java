@@ -48,7 +48,7 @@ public class AutoAnduril extends Module {
         }
         InvWalk invWalk = (InvWalk) Myau.moduleManager.modules.get(InvWalk.class);
         return mc.currentScreen == null
-                || mc.currentScreen instanceof myau.ui.clickgui.Rise6ClickGui
+                || mc.currentScreen instanceof myau.ui.clickgui.VapeClickGui
                 || invWalk.isEnabled() && invWalk.canInvWalk();
     }
 
